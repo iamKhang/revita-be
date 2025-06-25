@@ -12,7 +12,6 @@ import { PrismaClient } from '@prisma/client';
     }),
   ],
   controllers: [AuthController],
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
   providers: [AuthService, { provide: 'PRISMA', useValue: new PrismaClient() }],
   exports: [AuthService],
 })
