@@ -6,10 +6,41 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "darwin-arm64"]
+
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DOCTOR
+  PATIENT
+  SYSTEM_ADMIN
+  CLINIC_ADMIN
+  RECEPTIONIST
+}
+
+model User {
+  id         String   @id @default(uuid())
+  name       String   @default("No Name")
+  dateOfBirth DateTime
+  gender     String   @default("other")
+  avatarUrl  String?
+  address    String?
+  idCard     String?
+  role       Role
+  auth       Auth?
+}
+
+model Auth {
+  id        String  @id @default(uuid())
+  phone     String
+  email     String
+  googleId  String?
+  password  String
+  user      User    @relation(fields: [userId], references: [id])
+  userId    String  @unique
 }
