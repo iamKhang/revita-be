@@ -15,32 +15,271 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Định nghĩa enum cho các vai trò
 enum Role {
   DOCTOR
   PATIENT
+  RECEPTIONIST
   SYSTEM_ADMIN
   CLINIC_ADMIN
-  RECEPTIONIST
 }
 
+// Bảng User chứa thông tin cơ bản của người dùng
 model User {
-  id         String   @id @default(uuid())
-  name       String   @default("No Name")
-  dateOfBirth DateTime
-  gender     String   @default("other")
-  avatarUrl  String?
-  address    String?
-  idCard     String?
-  role       Role
-  auth       Auth?
+  id           String      @id @default(uuid())
+  name         String
+  dateOfBirth  DateTime @map("date_of_birth") 
+  gender       String
+  avatar       String?
+  address      String
+  citizenId       String   @unique @map("citizen_id") // Số CMND/CCCD
+  role         Role
+  auth         Auth?
+  doctor       Doctor?
+  patient      Patient?
+  receptionist Receptionist?
+  systemAdmin  SystemAdmin?
+  clinicAdmin  ClinicAdmin?
+  invoices     Invoice[]
+  appointments Appointment[] @relation("Booker")
+
+  @@map("users") // Tùy chỉnh tên bảng trong cơ sở dữ liệu
 }
 
+// Bảng Auth cho thông tin đăng nhập
 model Auth {
-  id        String  @id @default(uuid())
-  phone     String
-  email     String
-  googleId  String?
-  password  String
-  user      User    @relation(fields: [userId], references: [id])
-  userId    String  @unique
+  id           String      @id @default(uuid())
+  userId       String      @unique @map("user_id")
+  phone        String?  @unique
+  email        String?  @unique
+  googleId     String?  @unique @map("google_id") // Lưu ID từ Google
+  password     String?
+  accessToken  String?  @map("access_token") // Lưu access token từ Google 
+  refreshToken String?  @map("refresh_token") // Lưu refresh token để làm mới access token
+  tokenExpiry  DateTime?  @map("token_expiry") // Thời gian hết hạn của access token
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@map("auths")
+}
+
+// Bảng Doctor cho thông tin bác sĩ
+model Doctor {
+  id              String      @id @default(uuid())
+  doctorCode      String      @map("doctor_code")
+  userId          String      @unique @map("user_id")
+  clinicId        String      @map("clinic_id")
+  degrees         Json     // Sửa từ String[] sang Json
+  specialties     DoctorSpecialty[]
+  yearsExperience Int      @map("years_experience")
+  rating          Float    @map("rating")
+  workHistory     String   @map("work_history")
+  description     String   @map("description")
+  user            User     @relation(fields: [userId], references: [id])
+  clinic          Clinic   @relation(fields: [clinicId], references: [id])
+  schedules       Schedule[]
+  appointments    Appointment[]
+  medicalRecords  MedicalRecord[]
+
+  @@map("doctors")
+}
+
+// Bảng Patient cho thông tin bệnh nhân
+model Patient {
+  id                String      @id @default(uuid())
+  patientCode       String      @map("patient_code")
+  address           String?
+  userId            String?     @unique
+  user              User?    @relation(fields: [userId], references: [id])
+  occupation        String?  @map("occupation") // Nghề nghiệp
+  emergencyContact  Json     @map("emergency_contact") // Liên hệ khẩn cấp
+  healthInsurance   String?  @map("health_insurance") // Bảo hiểm y tế
+  loyaltyPoints     Int      @default(0) @map("loyalty_points") // Điểm thưởng
+  appointments      Appointment[]
+  medicalRecords    MedicalRecord[]
+
+  @@map("patients")
+}
+
+// Bảng Receptionist cho lễ tân/phụ tá
+model Receptionist {
+  id       String      @id @default(uuid())
+  userId   String      @unique @map("user_id")
+  clinicId String      @map("clinic_id")
+  user     User     @relation(fields: [userId], references: [id])
+  clinic   Clinic   @relation(fields: [clinicId], references: [id])
+
+  @@map("receptionists")
+}
+
+// Bảng SystemAdmin cho admin hệ thống
+model SystemAdmin {
+  id     String      @id @default(uuid())
+  systemAdminCode String   @map("system_admin_code")
+  userId String      @unique @map("user_id")
+  user   User     @relation(fields: [userId], references: [id])
+
+  @@map("system_admins")
+}
+
+// Bảng ClinicAdmin cho admin phòng khám
+model ClinicAdmin {
+  id       String      @id @default(uuid())
+  clinicAdminCode String   @map("clinic_admin_code")
+  userId   String      @unique @map("user_id")
+  clinicId String      @map("clinic_id")
+  user     User     @relation(fields: [userId], references: [id])
+  clinic   Clinic   @relation(fields: [clinicId], references: [id])
+
+  @@map("clinic_admins")
+}
+
+// Bảng Clinic cho thông tin phòng khám
+model Clinic {
+  id            String      @id @default(uuid())
+  clinicCode    String   @map("clinic_code")
+  name          String   @map("name")
+  address       String   @map("address")
+  phone         String   @map("phone")
+  email         String   @map("email")
+  receptionists Receptionist[]
+  specialties   Specialty[]
+  doctors       Doctor[]
+  services      Service[] @relation("ClinicServices")
+  appointments  Appointment[]
+  clinicAdmins  ClinicAdmin[]
+
+  @@map("clinics")
+}
+
+// Bảng Specialty cho chuyên khoa
+model Specialty {
+  id          String      @id @default(uuid()) @map("id")
+  name        String
+  clinicId    String      @map("clinic_id")
+  clinic      Clinic   @relation(fields: [clinicId], references: [id])
+  doctors     DoctorSpecialty[]
+  services    Service[]
+  appointments Appointment[]
+  templates   Template[]
+
+  @@map("specialties")
+}
+
+// Bảng trung gian DoctorSpecialty cho quan hệ nhiều-nhiều
+model DoctorSpecialty {
+  doctorId    String      @map("doctor_id")
+  specialtyId String      @map("specialty_id")
+  doctor      Doctor    @relation(fields: [doctorId], references: [id])
+  specialty   Specialty @relation(fields: [specialtyId], references: [id])
+  @@unique([doctorId, specialtyId])
+
+  @@map("doctor_specialties")
+}
+
+// Bảng Service cho dịch vụ
+model Service {
+  id          String      @id @default(uuid())
+  serviceCode String   @map("service_code")
+  name        String   @map("name")
+  price       Float    @map("price")
+  description String   @map("description")
+  specialtyId String      @map("specialty_id")
+  specialty   Specialty @relation(fields: [specialtyId], references: [id])
+  clinicId    String      @map("clinic_id")
+  clinic      Clinic   @relation("ClinicServices", fields: [clinicId], references: [id]) // Thêm quan hệ đối ứng
+  appointments Appointment[]
+
+  @@map("services")
+}
+
+// Bảng Schedule cho lịch làm việc của bác sĩ
+model Schedule {
+  id          String      @id @default(uuid())
+  doctorId    String      @map("doctor_id")
+  month       Int      @map("month") // Tháng (1-12)
+  year        Int      @map("year") // Năm
+  dayOfWeek   String   @map("day_of_week") // Ngày trong tuần, ví dụ: "Thứ 2", "Thứ 4"
+  startTime   String   @map("start_time") // Thời gian bắt đầu, ví dụ: "08:00"
+  endTime     String   @map("end_time") // Thời gian kết thúc, ví dụ: "14:00"
+  doctor      Doctor   @relation(fields: [doctorId], references: [id])
+
+  @@map("schedules")
+}
+
+// Bảng Appointment cho lịch hẹn
+model Appointment {
+  id          String      @id @default(uuid())
+  appointmentCode String   @map("appointment_code")
+  bookerId    String      @map("booker_id")
+  patientId   String      @map("patient_id")
+  clinicId    String      @map("clinic_id")
+  specialtyId String      @map("specialty_id")
+  doctorId    String      @map("doctor_id")
+  serviceId   String      @map("service_id")
+  status      String   @map("status")
+  date        DateTime @map("date")
+  startTime   String   @map("start_time")
+  endTime     String   @map("end_time")
+  booker      User     @relation("Booker", fields: [bookerId], references: [id])
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  clinic      Clinic   @relation(fields: [clinicId], references: [id])
+  specialty   Specialty @relation(fields: [specialtyId], references: [id])
+  doctor      Doctor   @relation(fields: [doctorId], references: [id])
+  service     Service  @relation(fields: [serviceId], references: [id])
+  invoiceId   String?     @map("invoice_id")
+  invoice     Invoice? @relation(fields: [invoiceId], references: [id])
+  medicalRecords MedicalRecord[]
+
+  @@map("appointments")
+}
+
+// Bảng Invoice cho thông tin thanh toán
+model Invoice {
+  id            String      @id @default(uuid())
+  invoiceCode   String   @map("invoice_code")
+  userId        String      @map("user_id")
+  totalAmount   Float    @map("total_amount")
+  paymentMethod String   @map("payment_method")
+  paymentStatus String   @map("payment_status")
+  createdAt     DateTime @default(now()) @map("created_at")
+  user          User     @relation(fields: [userId], references: [id])
+  appointments  Appointment[]
+
+  @@map("invoices")
+}
+
+// Bảng Template cho mẫu bệnh án
+model Template {
+  id          String      @id @default(uuid())
+  templateCode String   @map("template_code")
+  name        String   // Tên template, ví dụ: "Nội khoa", "Răng hàm mặt"
+  fields      Json     // Cấu trúc động của template, ví dụ: danh sách fields
+  isActive    Boolean  @default(true) // Trạng thái sử dụng
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  specialtyId String
+  specialty   Specialty @relation(fields: [specialtyId], references: [id])
+  medicalRecords MedicalRecord[] // Liên kết với bệnh án sử dụng template này
+
+  @@map("templates")
+}
+
+// Bảng MedicalRecord cho bệnh án
+model MedicalRecord {
+  id          String      @id @default(uuid())
+  medicalRecordCode String   @map("medical_record_code")
+  templateId  String
+  patientId   String
+  doctorId    String
+  appointmentId String?  // Liên kết với lịch hẹn (tùy chọn)
+  content     Json     // Nội dung bệnh án theo template
+  isActive    Boolean  @default(true) // Trạng thái sử dụng
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  template    Template @relation(fields: [templateId], references: [id])
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  doctor      Doctor   @relation(fields: [doctorId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@map("medical_records")
 }
