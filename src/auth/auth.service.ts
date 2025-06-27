@@ -67,10 +67,11 @@ export class AuthService {
   }
 
   async googleLogin(googleUser: GoogleUser) {
-    // Kiểm tra xem user đã tồn tại chưa
+    console.log('🔍 Processing Google login for:', googleUser.email);
+    // Kiểm tra xem user đã tồn tại chưa (tìm theo email hoặc googleId)
     let auth = await this.prisma.auth.findFirst({
       where: {
-        OR: [{ googleId: googleUser.googleId }, { email: googleUser.email }],
+        OR: [{ email: googleUser.email }, { googleId: googleUser.googleId }],
       },
       include: {
         user: true,
@@ -78,12 +79,13 @@ export class AuthService {
     });
 
     if (!auth) {
+      console.log('✅ Creating new user for:', googleUser.email);
       // Tạo user mới nếu chưa tồn tại
       const newUser = await this.prisma.user.create({
         data: {
           name: `${googleUser.firstName} ${googleUser.lastName}`,
           dateOfBirth: new Date(), // Có thể cập nhật sau
-          gender: 'Unknown', // Có thể cập nhật sau
+          gender: 'other', // Có thể cập nhật sau
           address: '', // Có thể cập nhật sau
           // citizenId: null, // Không cần set vì giờ có thể null
           role: 'PATIENT', // Mặc định là PATIENT
@@ -104,7 +106,12 @@ export class AuthService {
       });
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       auth = newUser.auth as any;
+      console.log('✅ New user created with ID:', newUser.id);
     } else {
+      console.log(
+        '✅ User already exists, updating auth info for:',
+        googleUser.email,
+      );
       // Cập nhật thông tin Google nếu user đã tồn tại
       await this.prisma.auth.update({
         where: { id: auth.id },
@@ -115,6 +122,15 @@ export class AuthService {
           tokenExpiry: new Date(Date.now() + 3600 * 1000), // 1 giờ
         },
       });
+      // Cập nhật avatar nếu có thay đổi
+      if (auth.user.avatar !== googleUser.picture) {
+        await this.prisma.user.update({
+          where: { id: auth.userId },
+          data: {
+            avatar: googleUser.picture,
+          },
+        });
+      }
     }
 
     if (!auth) {
