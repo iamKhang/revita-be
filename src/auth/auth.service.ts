@@ -9,6 +9,16 @@ interface JwtPayload {
   email?: string;
 }
 
+interface GoogleUser {
+  email: string;
+  firstName: string;
+  lastName: string;
+  picture: string;
+  accessToken: string;
+  refreshToken: string;
+  googleId: string;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -36,6 +46,87 @@ export class AuthService {
     if (!auth) throw new UnauthorizedException('Invalid credentials');
 
     const payload = { sub: auth.userId, phone: auth.phone, email: auth.email };
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: {
+        id: true,
+        name: true,
+        dateOfBirth: true,
+        gender: true,
+        avatar: true,
+        address: true,
+        citizenId: true,
+        role: true,
+      },
+    });
+
+    return { accessToken, refreshToken, user };
+  }
+
+  async googleLogin(googleUser: GoogleUser) {
+    // Kiểm tra xem user đã tồn tại chưa
+    let auth = await this.prisma.auth.findFirst({
+      where: {
+        OR: [{ googleId: googleUser.googleId }, { email: googleUser.email }],
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!auth) {
+      // Tạo user mới nếu chưa tồn tại
+      const newUser = await this.prisma.user.create({
+        data: {
+          name: `${googleUser.firstName} ${googleUser.lastName}`,
+          dateOfBirth: new Date(), // Có thể cập nhật sau
+          gender: 'Unknown', // Có thể cập nhật sau
+          address: '', // Có thể cập nhật sau
+          // citizenId: null, // Không cần set vì giờ có thể null
+          role: 'PATIENT', // Mặc định là PATIENT
+          avatar: googleUser.picture,
+          auth: {
+            create: {
+              email: googleUser.email,
+              googleId: googleUser.googleId,
+              accessToken: googleUser.accessToken,
+              refreshToken: googleUser.refreshToken,
+              tokenExpiry: new Date(Date.now() + 3600 * 1000), // 1 giờ
+            },
+          },
+        },
+        include: {
+          auth: true,
+        },
+      });
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      auth = newUser.auth as any;
+    } else {
+      // Cập nhật thông tin Google nếu user đã tồn tại
+      await this.prisma.auth.update({
+        where: { id: auth.id },
+        data: {
+          googleId: googleUser.googleId,
+          accessToken: googleUser.accessToken,
+          refreshToken: googleUser.refreshToken,
+          tokenExpiry: new Date(Date.now() + 3600 * 1000), // 1 giờ
+        },
+      });
+    }
+
+    if (!auth) {
+      throw new UnauthorizedException('Failed to create or update user');
+    }
+
+    // Tạo JWT tokens
+    const payload = {
+      sub: auth.userId,
+      phone: auth.phone,
+      email: auth.email,
+    };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 

@@ -32,7 +32,7 @@ model User {
   gender       String
   avatar       String?
   address      String
-  citizenId       String   @unique @map("citizen_id") // Số CMND/CCCD
+  citizenId    String?     @unique @map("citizen_id") // Số CMND/CCCD - có thể null
   role         Role
   auth         Auth?
   doctor       Doctor?
