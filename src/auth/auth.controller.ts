@@ -13,23 +13,46 @@ import { AuthService } from './auth.service';
 import { GoogleAuthGuard } from './google.guard';
 import { Request, Response } from 'express';
 import axios from 'axios';
+import {
+  LoginDto,
+  RefreshTokenDto,
+  GoogleTokenDto,
+  AuthResponseDto,
+  UserDto,
+  TokenResponseDto,
+  AuthCallbackDto,
+  ErrorResponseDto,
+} from '../dto/auth.dto';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 
+@ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() body: { identifier: string; password: string }) {
-    return this.authService.login(body.identifier, body.password);
+  @ApiOperation({ summary: 'Đăng nhập với email/phone và mật khẩu' })
+  @ApiBody({ type: LoginDto })
+  @ApiResponse({ status: 200, description: 'Đăng nhập thành công', type: AuthResponseDto })
+  @ApiResponse({ status: 401, description: 'Thông tin đăng nhập không hợp lệ' })
+  async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
+    return this.authService.login(loginDto.identifier, loginDto.password);
   }
 
   @Post('refresh')
-  async refresh(@Body() body: { refreshToken: string }) {
-    return this.authService.refresh(body.refreshToken);
+  @ApiOperation({ summary: 'Làm mới access token bằng refresh token' })
+  @ApiBody({ type: RefreshTokenDto })
+  @ApiResponse({ status: 200, description: 'Làm mới token thành công', type: TokenResponseDto })
+  @ApiResponse({ status: 401, description: 'Refresh token không hợp lệ' })
+  async refresh(@Body() refreshDto: RefreshTokenDto): Promise<TokenResponseDto> {
+    return this.authService.refresh(refreshDto.refreshToken);
   }
 
   @Get('me')
-  async getMe(@Headers('authorization') authHeader: string): Promise<any> {
+  @ApiOperation({ summary: 'Lấy thông tin người dùng hiện tại' })
+  @ApiResponse({ status: 200, description: 'Lấy thông tin người dùng thành công', type: UserDto })
+  @ApiResponse({ status: 401, description: 'Thiếu hoặc không hợp lệ authorization header' })
+  async getMe(@Headers('authorization') authHeader: string): Promise<UserDto | ErrorResponseDto> {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return { error: 'Missing or invalid Authorization header' };
     }
@@ -39,12 +62,14 @@ export class AuthController {
 
   @Get('google')
   @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Khởi tạo xác thực Google OAuth2' })
   async googleAuth() {
     // Guard sẽ xử lý việc redirect đến Google
   }
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Xử lý callback Google OAuth2' })
   async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const user = req.user as any;
@@ -61,12 +86,16 @@ export class AuthController {
   }
 
   @Post('google/token')
-  async googleToken(@Body() body: { code: string }) {
+  @ApiOperation({ summary: 'Đổi authorization code của Google lấy tokens' })
+  @ApiBody({ type: GoogleTokenDto })
+  @ApiResponse({ status: 200, description: 'Đăng nhập Google thành công', type: AuthResponseDto })
+  @ApiResponse({ status: 400, description: 'Authorization code không hợp lệ' })
+  async googleToken(@Body() googleTokenDto: GoogleTokenDto): Promise<AuthResponseDto> {
     try {
       console.log('🔍 Starting Google OAuth2 token exchange...');
-      console.log('📝 Received code:', body.code);
+      console.log('📝 Received code:', googleTokenDto.code);
       // Decode URL encoded authorization code
-      const decodedCode = decodeURIComponent(body.code);
+      const decodedCode = decodeURIComponent(googleTokenDto.code);
       console.log('🔓 Decoded code:', decodedCode);
 
       // Exchange authorization code for tokens
@@ -162,7 +191,10 @@ export class AuthController {
   }
 
   @Get('callback')
-  authCallback(@Query() query: any) {
+  @ApiOperation({ summary: 'Xử lý OAuth2 callback với tokens' })
+  @ApiResponse({ status: 200, description: 'Xử lý callback thành công', type: AuthCallbackDto })
+  @ApiResponse({ status: 400, description: 'Thiếu tokens hoặc dữ liệu người dùng không hợp lệ' })
+  authCallback(@Query() query: any): AuthCallbackDto | ErrorResponseDto {
     // Xử lý callback từ Google OAuth2 redirect
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { accessToken, refreshToken, user } = query;
