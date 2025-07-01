@@ -90,12 +90,28 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({ summary: 'Xử lý callback Google OAuth2' })
-  async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
+  async googleAuthCallback(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query('platform') platform?: string,
+    @Query('redirect_uri') redirectUri?: string,
+  ) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const user = req.user as any;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const result = await this.authService.googleLogin(user);
-    // Redirect về frontend với tokens
+
+    if (platform === 'mobile' && redirectUri) {
+      // Redirect về deep link cho mobile
+      const queryParams = new URLSearchParams({
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        user: encodeURIComponent(JSON.stringify(result.user)),
+      });
+      return res.redirect(`${redirectUri}?${queryParams.toString()}`);
+    }
+
+    // Redirect về frontend với tokens (web)
     const redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const queryParams = new URLSearchParams({
       accessToken: result.accessToken,
