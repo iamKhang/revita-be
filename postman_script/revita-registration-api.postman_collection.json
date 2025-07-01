@@ -1,0 +1,270 @@
+{
+	"info": {
+		"_postman_id": "revita-registration-api",
+		"name": "Revita Registration API",
+		"description": "Collection để test đầy đủ quy trình đăng ký người dùng trong hệ thống Revita",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Register Step 1 - Phone",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 200) {",
+							"    const responseJson = pm.response.json();",
+							"    pm.environment.set('sessionId', responseJson.sessionId);",
+							"    pm.test('Session ID được tạo', function () {",
+							"        pm.expect(responseJson.sessionId).to.not.be.undefined;",
+							"    });",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"phone\": \"0987654321\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/register/step1",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"register",
+						"step1"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "1. Register Step 1 - Email",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 200) {",
+							"    const responseJson = pm.response.json();",
+							"    pm.environment.set('sessionId', responseJson.sessionId);",
+							"    pm.test('Session ID được tạo', function () {",
+							"        pm.expect(responseJson.sessionId).to.not.be.undefined;",
+							"    });",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"test@example.com\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/register/step1",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"register",
+						"step1"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "2. Verify OTP",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('OTP verification successful', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"if (pm.response.code === 200) {",
+							"    const responseJson = pm.response.json();",
+							"    pm.test('Verification message received', function () {",
+							"        pm.expect(responseJson.message).to.include('thành công');",
+							"    });",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"otp\": \"123456\",\n    \"sessionId\": \"{{sessionId}}\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/register/verify-otp",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"register",
+						"verify-otp"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "3. Complete Registration",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Registration completed successfully', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"if (pm.response.code === 201) {",
+							"    const responseJson = pm.response.json();",
+							"    pm.environment.set('userId', responseJson.userId);",
+							"    pm.test('User ID received', function () {",
+							"        pm.expect(responseJson.userId).to.not.be.undefined;",
+							"    });",
+							"    pm.test('Success message received', function () {",
+							"        pm.expect(responseJson.message).to.include('thành công');",
+							"    });",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Nguyễn Văn A\",\n    \"dateOfBirth\": \"1990-01-01\",\n    \"gender\": \"Nam\",\n    \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n    \"citizenId\": \"123456789012\",\n    \"avatar\": \"https://example.com/avatar.jpg\",\n    \"password\": \"password123\",\n    \"sessionId\": \"{{sessionId}}\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/register/complete",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"register",
+						"complete"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "4. Resend OTP",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('OTP resent successfully', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"if (pm.response.code === 200) {",
+							"    const responseJson = pm.response.json();",
+							"    pm.test('Resend message received', function () {",
+							"        pm.expect(responseJson.message).to.include('gửi');",
+							"    });",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"sessionId\": \"{{sessionId}}\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/register/resend-otp",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"register",
+						"resend-otp"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000",
+			"type": "string"
+		}
+	]
+}
