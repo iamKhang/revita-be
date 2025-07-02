@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
+import { LoginService } from './login.service';
+import { LoginController } from './login.controller';
 import { GoogleStrategy } from './google.strategy';
 import { PrismaClient } from '@prisma/client';
 
@@ -14,12 +14,12 @@ import { PrismaClient } from '@prisma/client';
       signOptions: { expiresIn: '15m' },
     }),
   ],
-  controllers: [AuthController],
+  controllers: [LoginController],
   providers: [
-    AuthService,
+    LoginService,
     GoogleStrategy,
     { provide: 'PRISMA', useValue: new PrismaClient() },
   ],
-  exports: [AuthService],
+  exports: [LoginService],
 })
-export class AuthModule {}
+export class LoginModule {}

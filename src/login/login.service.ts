@@ -20,7 +20,7 @@ interface GoogleUser {
 }
 
 @Injectable()
-export class AuthService {
+export class LoginService {
   constructor(
     private readonly jwtService: JwtService,
     @Inject('PRISMA') private readonly prisma: PrismaClient,

@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsOptional, IsDateString, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsDateString,
+  IsIn,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CompleteRegistrationDto {
@@ -21,10 +27,12 @@ export class CompleteRegistrationDto {
   @ApiProperty({
     description: 'Giới tính',
     example: 'Nam',
-    enum: ['Nam', 'Nữ', 'Khác'],
+    enum: ['male', 'female', 'other'],
   })
   @IsString({ message: 'Giới tính phải là chuỗi' })
-  @IsIn(['Nam', 'Nữ', 'Khác'], { message: 'Giới tính phải là Nam, Nữ hoặc Khác' })
+  @IsIn(['male', 'female', 'other'], {
+    message: 'Giới tính phải là male, female hoặc other',
+  })
   @IsNotEmpty({ message: 'Giới tính không được để trống' })
   gender: string;
 

@@ -9,7 +9,7 @@ import {
   UseGuards,
   Query,
 } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { LoginService } from './login.service';
 import { GoogleAuthGuard } from './google.guard';
 import { Request, Response } from 'express';
 import axios from 'axios';
@@ -22,13 +22,13 @@ import {
   TokenResponseDto,
   AuthCallbackDto,
   ErrorResponseDto,
-} from '../dto/auth.dto';
+} from './dto/login.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Authentication')
 @Controller('auth')
-export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+export class LoginController {
+  constructor(private readonly authService: LoginService) {}
 
   @Post('login')
   @ApiOperation({ summary: 'Đăng nhập với email/phone và mật khẩu' })
