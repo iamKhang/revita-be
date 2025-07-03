@@ -104,6 +104,18 @@ export class LoginService {
           auth: true,
         },
       });
+      // Tạo patient mới liên kết với user vừa tạo
+      await this.prisma.patient.create({
+        data: {
+          userId: newUser.id,
+          patientCode: `PT${Date.now()}`,
+          address: newUser.address,
+          occupation: '',
+          emergencyContact: {},
+          healthInsurance: '',
+          loyaltyPoints: 0,
+        },
+      });
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       auth = newUser.auth as any;
       console.log('✅ New user created with ID:', newUser.id);
