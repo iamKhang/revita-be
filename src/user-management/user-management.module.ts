@@ -6,9 +6,21 @@ import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
 import { UserService } from './user.service';
 import { PrismaClient } from '@prisma/client';
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
 
 @Module({
-  imports: [ClinicAdminModule, ReceptionistModule, DoctorModule, PatientModule],
+  imports: [
+    ClinicAdminModule,
+    ReceptionistModule,
+    DoctorModule,
+    PatientModule,
+    PassportModule,
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+      signOptions: { expiresIn: '15m' },
+    }),
+  ],
   controllers: [AdminController],
   providers: [
     UserService,

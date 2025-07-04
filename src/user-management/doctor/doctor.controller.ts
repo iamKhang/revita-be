@@ -15,8 +15,9 @@ import { RolesGuard } from '../../rbac/roles.guard';
 import { PrismaClient } from '@prisma/client';
 import { CreateMedicalRecordDto } from '../dto/create-medical-record.dto';
 import { UpdateMedicalRecordDto } from '../dto/update-medical-record.dto';
+import { JwtAuthGuard } from '../../login/jwt-auth.guard';
 
-@UseGuards(RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('doctors/:doctorId')
 export class DoctorController {
   private prisma = new PrismaClient();

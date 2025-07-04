@@ -16,8 +16,9 @@ import { PrismaClient } from '@prisma/client';
 import { CreatePatientDto } from '../dto/create-patient.dto';
 import { UpdatePatientDto } from '../dto/update-patient.dto';
 import { BookAppointmentDto } from '../dto/book-appointment.dto';
+import { JwtAuthGuard } from 'src/login/jwt-auth.guard';
 
-@UseGuards(RolesGuard)
+@UseGuards(RolesGuard, JwtAuthGuard)
 @Controller()
 export class ReceptionistController {
   private prisma = new PrismaClient();

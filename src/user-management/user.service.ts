@@ -114,10 +114,21 @@ export class UserService {
     });
   }
 
-  async softDelete(userId: string) {
-    return this.prisma.user.update({
+  async delete(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.role === Role.PATIENT) {
+      await this.prisma.patient.deleteMany({ where: { userId } });
+    } else if (user.role === Role.DOCTOR) {
+      await this.prisma.doctor.deleteMany({ where: { userId } });
+    } else if (user.role === Role.RECEPTIONIST) {
+      await this.prisma.receptionist.deleteMany({ where: { userId } });
+    } else if (user.role === Role.CLINIC_ADMIN) {
+      await this.prisma.clinicAdmin.deleteMany({ where: { userId } });
+    }
+    await this.prisma.auth.deleteMany({ where: { userId } });
+    return this.prisma.user.deleteMany({
       where: { id: userId },
-      data: { role: Role.PATIENT },
     });
   }
 }

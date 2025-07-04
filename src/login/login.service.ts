@@ -45,7 +45,14 @@ export class LoginService {
     const auth = await this.validateUser(phoneOrEmail, password);
     if (!auth) throw new UnauthorizedException('Invalid credentials');
 
-    const payload = { sub: auth.userId, phone: auth.phone, email: auth.email };
+    const payload = {
+      sub: auth.userId,
+      phone: auth.phone,
+      email: auth.email,
+      // Get role from user table directly since auth.user is not available
+      role: (await this.prisma.user.findUnique({ where: { id: auth.userId } }))
+        ?.role,
+    };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
@@ -108,7 +115,7 @@ export class LoginService {
       await this.prisma.patient.create({
         data: {
           userId: newUser.id,
-          patientCode: `PT${Date.now()}`,
+          patientCode: `PAT${Date.now()}`,
           address: newUser.address,
           occupation: '',
           emergencyContact: {},
@@ -154,6 +161,7 @@ export class LoginService {
       sub: auth.userId,
       phone: auth.phone,
       email: auth.email,
+      role: auth.user.role,
     };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });

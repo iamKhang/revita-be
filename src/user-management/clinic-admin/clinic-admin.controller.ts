@@ -17,8 +17,9 @@ import { PrismaClient } from '@prisma/client';
 import { CreateDoctorDto } from '../dto/create-doctor.dto';
 import { UpdateDoctorDto } from '../dto/update-doctor.dto';
 import { CreateReceptionistDto } from '../dto/create-receptionist.dto';
+import { JwtAuthGuard } from '../../login/jwt-auth.guard';
 
-@UseGuards(RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('clinics/:clinicId')
 export class ClinicAdminController {
   private prisma = new PrismaClient();

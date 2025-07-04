@@ -14,8 +14,9 @@ import { Role } from '../../rbac/roles.enum';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { UserService } from '../user.service';
 import { CreateUserDto, UpdateUserDto } from '../dto/user.dto';
+import { JwtAuthGuard } from '../../login/jwt-auth.guard';
 
-@UseGuards(RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('admin')
 export class AdminController {
   constructor(private readonly userService: UserService) {}
@@ -50,6 +51,6 @@ export class AdminController {
   @Delete('users/:userId')
   @Roles(Role.SYSTEM_ADMIN)
   async deleteUser(@Param('userId') userId: string) {
-    return this.userService.softDelete(userId);
+    return this.userService.delete(userId);
   }
 }
