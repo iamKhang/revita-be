@@ -194,30 +194,6 @@
         },
         "url": { "raw": "{{base_url}}/doctors/{{doctorId}}/medical-records", "host": ["{{base_url}}"], "path": ["doctors", "{{doctorId}}", "medical-records"] }
       }
-    },
-    {
-      "name": "Patient - Self register",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json", "type": "text" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"name\": \"Patient B\",\n  \"dateOfBirth\": \"2001-01-01\",\n  \"gender\": \"female\",\n  \"address\": \"456 Patient St\",\n  \"password\": \"password123\"\n}"
-        },
-        "url": { "raw": "{{base_url}}/patients/register", "host": ["{{base_url}}"], "path": ["patients", "register"] }
-      }
-    },
-    {
-      "name": "Patient - View profile",
-      "request": {
-        "method": "GET",
-        "header": [
-          { "key": "Authorization", "value": "Bearer {{patient_token}}", "type": "text" }
-        ],
-        "url": { "raw": "{{base_url}}/patients/me", "host": ["{{base_url}}"], "path": ["patients", "me"] }
-      }
     }
   ],
   "variable": [
