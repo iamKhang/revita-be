@@ -1,0 +1,205 @@
+{
+  "info": {
+    "name": "Doctor Schedule Management Tests",
+    "description": "Test collection for doctor schedule management endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{doctorAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "doctorAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "doctorId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Create Monthly Schedule",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"month\": 12,\n  \"year\": 2024,\n  \"workingDays\": [\n    {\n      \"workingDate\": \"2024-12-03\",\n      \"sessions\": [\n        {\n          \"startTime\": \"08:00\",\n          \"endTime\": \"12:00\",\n          \"sessionType\": \"morning\",\n          \"description\": \"Khám bệnh tổng quát\"\n        },\n        {\n          \"startTime\": \"14:00\",\n          \"endTime\": \"17:00\",\n          \"sessionType\": \"afternoon\",\n          \"description\": \"Khám chuyên khoa\"\n        }\n      ]\n    },\n    {\n      \"workingDate\": \"2024-12-05\",\n      \"sessions\": [\n        {\n          \"startTime\": \"09:00\",\n          \"endTime\": \"11:00\",\n          \"sessionType\": \"morning\",\n          \"description\": \"Tư vấn sức khỏe\"\n        }\n      ]\n    },\n    {\n      \"workingDate\": \"2024-12-10\",\n      \"sessions\": [\n        {\n          \"startTime\": \"08:00\",\n          \"endTime\": \"12:00\",\n          \"sessionType\": \"morning\"\n        },\n        {\n          \"startTime\": \"17:00\",\n          \"endTime\": \"20:00\",\n          \"sessionType\": \"evening\",\n          \"description\": \"Ca tối\"\n        }\n      ]\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/doctors/{{doctorId}}/schedule/monthly",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctors", "{{doctorId}}", "schedule", "monthly"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Create Schedule Request - Add Hours",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestType\": \"ADD_HOURS\",\n  \"requestDate\": \"2024-12-15\",\n  \"startTime\": \"18:00\",\n  \"endTime\": \"20:00\",\n  \"reason\": \"Có ca cấp cứu cần hỗ trợ\",\n  \"description\": \"Bệnh nhân cần phẫu thuật khẩn cấp, cần thêm giờ để hỗ trợ\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/doctors/{{doctorId}}/schedule/request",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctors", "{{doctorId}}", "schedule", "request"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Create Schedule Request - Cancel Hours",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestType\": \"CANCEL_HOURS\",\n  \"requestDate\": \"2024-12-20\",\n  \"startTime\": \"14:00\",\n  \"endTime\": \"17:00\",\n  \"reason\": \"Có việc gia đình đột xuất\",\n  \"description\": \"Cần về quê gấp do gia đình có việc\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/doctors/{{doctorId}}/schedule/request",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctors", "{{doctorId}}", "schedule", "request"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "4. Create Schedule Request - Full Day Off",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestType\": \"FULL_DAY_OFF\",\n  \"requestDate\": \"2024-12-25\",\n  \"reason\": \"Nghỉ lễ Giáng sinh\",\n  \"description\": \"Xin nghỉ lễ Giáng sinh\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/doctors/{{doctorId}}/schedule/request",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctors", "{{doctorId}}", "schedule", "request"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "5. Get My Monthly Schedule Submissions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/doctors/{{doctorId}}/schedule/monthly?month=12&year=2024&status=PENDING",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctors", "{{doctorId}}", "schedule", "monthly"],
+          "query": [
+            {
+              "key": "month",
+              "value": "12"
+            },
+            {
+              "key": "year",
+              "value": "2024"
+            },
+            {
+              "key": "status",
+              "value": "PENDING"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "6. Get My Working Days",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/doctors/{{doctorId}}/schedule/working-days?startDate=2024-12-01&endDate=2024-12-31&activeOnly=true",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctors", "{{doctorId}}", "schedule", "working-days"],
+          "query": [
+            {
+              "key": "startDate",
+              "value": "2024-12-01"
+            },
+            {
+              "key": "endDate",
+              "value": "2024-12-31"
+            },
+            {
+              "key": "activeOnly",
+              "value": "true"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "7. Get My Schedule Requests",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/doctors/{{doctorId}}/schedule/requests?status=PENDING&page=1&limit=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctors", "{{doctorId}}", "schedule", "requests"],
+          "query": [
+            {
+              "key": "status",
+              "value": "PENDING"
+            },
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

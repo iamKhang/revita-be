@@ -1,0 +1,291 @@
+{
+  "info": {
+    "name": "Clinic Admin Schedule Management Tests",
+    "description": "Test collection for clinic admin schedule management endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{clinicAdminAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "clinicAdminAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "clinicId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "submissionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "requestId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Get Clinic Monthly Schedule Submissions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/clinics/{{clinicId}}/schedule/monthly?month=12&year=2024&status=PENDING",
+          "host": ["{{baseUrl}}"],
+          "path": ["clinics", "{{clinicId}}", "schedule", "monthly"],
+          "query": [
+            {
+              "key": "month",
+              "value": "12"
+            },
+            {
+              "key": "year",
+              "value": "2024"
+            },
+            {
+              "key": "status",
+              "value": "PENDING"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Get Clinic Working Days",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/clinics/{{clinicId}}/schedule/working-days?startDate=2024-12-01&endDate=2024-12-31&activeOnly=true",
+          "host": ["{{baseUrl}}"],
+          "path": ["clinics", "{{clinicId}}", "schedule", "working-days"],
+          "query": [
+            {
+              "key": "startDate",
+              "value": "2024-12-01"
+            },
+            {
+              "key": "endDate",
+              "value": "2024-12-31"
+            },
+            {
+              "key": "activeOnly",
+              "value": "true"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Get Clinic Schedule Requests",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/clinics/{{clinicId}}/schedule/requests?status=PENDING&page=1&limit=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["clinic-admin", "schedule", "requests"],
+          "query": [
+            {
+              "key": "status",
+              "value": "PENDING"
+            },
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Approve Monthly Schedule",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": ""
+        },
+        "url": {
+          "raw": "{{baseUrl}}/clinics/{{clinicId}}/schedule/monthly/{{submissionId}}/approve",
+          "host": ["{{baseUrl}}"],
+          "path": ["clinic-admin", "schedule", "monthly", "{{submissionId}}", "approve"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "4. Reject Monthly Schedule",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"Lịch làm việc không phù hợp với nhu cầu phòng khám\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/clinics/{{clinicId}}/schedule/monthly/{{submissionId}}/reject",
+          "host": ["{{baseUrl}}"],
+          "path": ["clinic-admin", "schedule", "monthly", "{{submissionId}}", "reject"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "5. Process Schedule Request - Approve Add Hours",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"APPROVED\",\n  \"adminNote\": \"Đã duyệt yêu cầu thêm giờ làm\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/clinics/{{clinicId}}/schedule/requests/{{requestId}}/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["clinic-admin", "schedule", "requests", "{{requestId}}", "process"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "6. Process Schedule Request - Approve Cancel Hours with Conflict",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"APPROVED\",\n  \"adminNote\": \"Đã duyệt yêu cầu hủy giờ làm và hủy lịch hẹn bệnh nhân\",\n  \"conflictAction\": \"CANCEL_APPOINTMENTS\",\n  \"affectedAppointments\": [\"appointment-id-1\", \"appointment-id-2\"]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/clinics/{{clinicId}}/schedule/requests/{{requestId}}/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["clinic-admin", "schedule", "requests", "{{requestId}}", "process"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "7. Process Schedule Request - Reject",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"REJECTED\",\n  \"adminNote\": \"Không thể duyệt yêu cầu do xung đột với lịch phòng khám\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/clinics/{{clinicId}}/schedule/requests/{{requestId}}/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["clinic-admin", "schedule", "requests", "{{requestId}}", "process"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "8. Get Specific Doctor Schedules",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/clinics/{{clinicId}}/schedule/monthly?doctorId=doctor-uuid-here&month=12&year=2024",
+          "host": ["{{baseUrl}}"],
+          "path": ["clinic-admin", "schedule", "monthly"],
+          "query": [
+            {
+              "key": "doctorId",
+              "value": "doctor-uuid-here"
+            },
+            {
+              "key": "month",
+              "value": "12"
+            },
+            {
+              "key": "year",
+              "value": "2024"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "9. Get Specific Doctor Schedule Requests",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/clinics/{{clinicId}}/schedule/requests?doctorId=doctor-uuid-here&requestType=ADD_HOURS&status=PENDING",
+          "host": ["{{baseUrl}}"],
+          "path": ["clinic-admin", "schedule", "requests"],
+          "query": [
+            {
+              "key": "doctorId",
+              "value": "doctor-uuid-here"
+            },
+            {
+              "key": "requestType",
+              "value": "ADD_HOURS"
+            },
+            {
+              "key": "status",
+              "value": "PENDING"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

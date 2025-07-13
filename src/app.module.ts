@@ -5,10 +5,11 @@ import { LoginModule } from './login/login.module';
 import { RegisterModule } from './register/register.module';
 import { RolesGuard } from './rbac/roles.guard';
 import { UserManagementModule } from './user-management/user-management.module';
+import { ScheduleModule } from './schedule/schedule.module';
 import { JwtStrategy } from './login/jwt.strategy';
 
 @Module({
-  imports: [LoginModule, RegisterModule, UserManagementModule],
+  imports: [LoginModule, RegisterModule, UserManagementModule, ScheduleModule],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
 })

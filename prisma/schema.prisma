@@ -24,6 +24,28 @@ enum Role {
   CLINIC_ADMIN
 }
 
+// Enum cho trạng thái lịch làm việc
+enum ScheduleStatus {
+  PENDING    // Chờ duyệt
+  APPROVED   // Đã duyệt
+  REJECTED   // Từ chối
+}
+
+// Enum cho loại yêu cầu thay đổi lịch
+enum RequestType {
+  MONTHLY_SCHEDULE  // Lịch cố định hàng tháng
+  ADD_HOURS        // Thêm giờ làm
+  CANCEL_HOURS     // Hủy giờ làm
+  FULL_DAY_OFF     // Nghỉ cả ngày
+}
+
+// Enum cho trạng thái yêu cầu
+enum RequestStatus {
+  PENDING    // Chờ xử lý
+  APPROVED   // Đã duyệt
+  REJECTED   // Từ chối
+}
+
 // Bảng User chứa thông tin cơ bản của người dùng
 model User {
   id           String      @id @default(uuid())
@@ -76,9 +98,11 @@ model Doctor {
   description     String   @map("description")
   user            User     @relation(fields: [userId], references: [id])
   clinic          Clinic   @relation(fields: [clinicId], references: [id])
-  schedules       Schedule[]
   appointments    Appointment[]
   medicalRecords  MedicalRecord[]
+  monthlySubmissions MonthlyScheduleSubmission[]
+  workingDays     DoctorWorkingDay[]
+  scheduleRequests ScheduleRequest[]
 
   @@map("doctors")
 }
@@ -129,6 +153,8 @@ model ClinicAdmin {
   clinicId String      @map("clinic_id")
   user     User     @relation(fields: [userId], references: [id])
   clinic   Clinic   @relation(fields: [clinicId], references: [id])
+  approvedSubmissions MonthlyScheduleSubmission[]
+  processedRequests ScheduleRequest[]
 
   @@map("clinic_admins")
 }
@@ -192,19 +218,6 @@ model Service {
   @@map("services")
 }
 
-// Bảng Schedule cho lịch làm việc của bác sĩ
-model Schedule {
-  id          String      @id @default(uuid())
-  doctorId    String      @map("doctor_id")
-  month       Int      @map("month") // Tháng (1-12)
-  year        Int      @map("year") // Năm
-  dayOfWeek   String   @map("day_of_week") // Ngày trong tuần, ví dụ: "Thứ 2", "Thứ 4"
-  startTime   String   @map("start_time") // Thời gian bắt đầu, ví dụ: "08:00"
-  endTime     String   @map("end_time") // Thời gian kết thúc, ví dụ: "14:00"
-  doctor      Doctor   @relation(fields: [doctorId], references: [id])
-
-  @@map("schedules")
-}
 
 // Bảng Appointment cho lịch hẹn
 model Appointment {
@@ -282,4 +295,93 @@ model MedicalRecord {
   appointment Appointment? @relation(fields: [appointmentId], references: [id])
 
   @@map("medical_records")
+}
+
+// Bảng MonthlyScheduleSubmission - Đơn gửi lịch làm việc hàng tháng
+model MonthlyScheduleSubmission {
+  id          String      @id @default(uuid())
+  doctorId    String      @map("doctor_id")
+  month       Int         // Tháng (1-12)
+  year        Int         // Năm
+  status      ScheduleStatus @default(PENDING)
+  submittedAt DateTime    @default(now()) @map("submitted_at")
+  approvedAt  DateTime?   @map("approved_at")
+  approvedBy  String?     @map("approved_by") // ID của clinic admin duyệt
+  rejectedReason String?  @map("rejected_reason") // Lý do từ chối
+
+  // Relations
+  doctor      Doctor      @relation(fields: [doctorId], references: [id])
+  clinicAdmin ClinicAdmin? @relation(fields: [approvedBy], references: [id])
+  workingDays DoctorWorkingDay[] // Các ngày làm việc trong tháng này
+
+  @@unique([doctorId, month, year]) // Mỗi bác sĩ chỉ có 1 đơn gửi lịch/tháng
+  @@map("monthly_schedule_submissions")
+}
+
+// Bảng DoctorWorkingDay - Ngày làm việc cụ thể của bác sĩ
+model DoctorWorkingDay {
+  id          String      @id @default(uuid())
+  doctorId    String      @map("doctor_id")
+  submissionId String     @map("submission_id") // Liên kết với đơn gửi lịch tháng
+  workingDate DateTime    @map("working_date") // Ngày làm việc cụ thể (YYYY-MM-DD)
+  isActive    Boolean     @default(true) @map("is_active") // Có hiệu lực không (để xử lý khi có thay đổi)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  doctor      Doctor      @relation(fields: [doctorId], references: [id])
+  submission  MonthlyScheduleSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  sessions    WorkingSession[] // Các ca làm việc trong ngày này
+
+  @@unique([doctorId, workingDate]) // Mỗi bác sĩ chỉ có 1 record cho mỗi ngày
+  @@map("doctor_working_days")
+}
+
+// Bảng WorkingSession - Ca làm việc trong ngày
+model WorkingSession {
+  id          String      @id @default(uuid())
+  workingDayId String     @map("working_day_id")
+  startTime   String      @map("start_time") // Giờ bắt đầu (HH:mm)
+  endTime     String      @map("end_time")   // Giờ kết thúc (HH:mm)
+  sessionType String?     @map("session_type") // Loại ca: "morning", "afternoon", "evening", "night"
+  description String?     // Mô tả ca làm việc
+  isActive    Boolean     @default(true) @map("is_active") // Có hiệu lực không
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  workingDay  DoctorWorkingDay @relation(fields: [workingDayId], references: [id], onDelete: Cascade)
+
+  @@map("working_sessions")
+}
+
+// Bảng ScheduleRequest cho các yêu cầu thay đổi lịch (cả cố định và đột xuất)
+model ScheduleRequest {
+  id            String      @id @default(uuid())
+  requestCode   String      @unique @map("request_code") // Mã yêu cầu duy nhất
+  doctorId      String      @map("doctor_id")
+  requestType   RequestType @map("request_type")
+  status        RequestStatus @default(PENDING)
+
+  // Thông tin thời gian yêu cầu
+  requestDate   DateTime    @map("request_date") // Ngày yêu cầu thay đổi
+  startTime     String?     @map("start_time")   // Giờ bắt đầu (format: "HH:mm")
+  endTime       String?     @map("end_time")     // Giờ kết thúc (format: "HH:mm")
+
+  // Thông tin bổ sung
+  reason        String?     // Lý do yêu cầu
+  description   String?     // Mô tả chi tiết
+
+  // Thông tin xử lý
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  processedAt   DateTime?   @map("processed_at")
+  processedBy   String?     @map("processed_by") // ID của clinic admin xử lý
+  adminNote     String?     @map("admin_note")   // Ghi chú của admin
+
+  // Quan hệ
+  doctor        Doctor      @relation(fields: [doctorId], references: [id])
+  clinicAdmin   ClinicAdmin? @relation(fields: [processedBy], references: [id])
+
+  @@map("schedule_requests")
 }
