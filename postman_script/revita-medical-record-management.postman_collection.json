@@ -1,0 +1,136 @@
+{
+  "info": {
+    "name": "Medical Record API (Full)",
+    "_postman_id": "medical-record-api-collection-full",
+    "description": "Test đầy đủ các API của MedicalRecordController",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000" },
+    { "key": "jwt_token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Create Medical Record",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{jwt_token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"patientId\": \"b3b6e2e2-1234-4cde-8f1a-123456789abc\",\n  \"templateId\": \"a1a1e2e2-5678-4cde-8f1a-abcdef123456\",\n  \"content\": {\n    \"symptom\": \"Sốt, ho\",\n    \"diagnosis\": \"Cảm cúm\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/medical-records",
+          "host": ["{{base_url}}"],
+          "path": ["medical-records"]
+        }
+      }
+    },
+    {
+      "name": "Get All Medical Records",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{jwt_token}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/medical-records",
+          "host": ["{{base_url}}"],
+          "path": ["medical-records"]
+        }
+      }
+    },
+    {
+      "name": "Get All Templates",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{jwt_token}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/medical-records/templates",
+          "host": ["{{base_url}}"],
+          "path": ["medical-records", "templates"]
+        }
+      }
+    },
+    {
+      "name": "Get Template By Id",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{jwt_token}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/medical-records/templates/{{templateId}}",
+          "host": ["{{base_url}}"],
+          "path": ["medical-records", "templates", "{{templateId}}"]
+        }
+      }
+    },
+    {
+      "name": "Get Template By Medical Record",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{jwt_token}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/medical-records/{{medicalRecordId}}/template",
+          "host": ["{{base_url}}"],
+          "path": ["medical-records", "{{medicalRecordId}}", "template"]
+        }
+      }
+    },
+    {
+      "name": "Get Medical Record By Id",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{jwt_token}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/medical-records/{{medicalRecordId}}",
+          "host": ["{{base_url}}"],
+          "path": ["medical-records", "{{medicalRecordId}}"]
+        }
+      }
+    },
+    {
+      "name": "Update Medical Record",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{jwt_token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"content\": {\n    \"symptom\": \"Sốt nhẹ\",\n    \"diagnosis\": \"Cảm lạnh\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/medical-records/{{medicalRecordId}}",
+          "host": ["{{base_url}}"],
+          "path": ["medical-records", "{{medicalRecordId}}"]
+        }
+      }
+    },
+    {
+      "name": "Delete Medical Record",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{jwt_token}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/medical-records/{{medicalRecordId}}",
+          "host": ["{{base_url}}"],
+          "path": ["medical-records", "{{medicalRecordId}}"]
+        }
+      }
+    }
+  ]
+}

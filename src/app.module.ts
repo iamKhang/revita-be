@@ -6,9 +6,15 @@ import { RegisterModule } from './register/register.module';
 import { RolesGuard } from './rbac/roles.guard';
 import { UserManagementModule } from './user-management/user-management.module';
 import { JwtStrategy } from './login/jwt.strategy';
+import { MedicalRecordModule } from './medical-record/medical-record.module';
 
 @Module({
-  imports: [LoginModule, RegisterModule, UserManagementModule],
+  imports: [
+    LoginModule,
+    RegisterModule,
+    UserManagementModule,
+    MedicalRecordModule,
+  ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
 })
