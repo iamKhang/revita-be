@@ -1,4 +1,9 @@
-import { IsUUID, IsNotEmpty, IsObject, IsOptional } from 'class-validator';
+import { IsUUID } from 'class-validator';
+import { IsNotEmpty } from 'class-validator';
+import { IsObject } from 'class-validator';
+import { IsOptional } from 'class-validator';
+import { IsEnum } from 'class-validator';
+import { MedicalRecordStatus } from '@prisma/client';
 
 export class CreateMedicalRecordDto {
   @IsUUID()
@@ -12,6 +17,11 @@ export class CreateMedicalRecordDto {
   @IsUUID()
   @IsOptional()
   doctorId?: string;
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+  @IsEnum(MedicalRecordStatus)
+  @IsOptional()
+  status?: MedicalRecordStatus;
 
   @IsObject()
   @IsNotEmpty()

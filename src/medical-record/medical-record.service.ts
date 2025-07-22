@@ -9,6 +9,7 @@ import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
 import { UpdateMedicalRecordDto } from './dto/update-medical-record.dto';
 import { Role } from '../rbac/roles.enum';
 import { JwtUserPayload } from './dto/jwt-user-payload.dto';
+import { Prisma, MedicalRecordStatus } from '@prisma/client';
 
 @Injectable()
 export class MedicalRecordService {
@@ -57,12 +58,19 @@ export class MedicalRecordService {
       templateId: dto.templateId,
       content: dto.content,
       medicalRecordCode: `MR${Date.now()}`,
+      status: MedicalRecordStatus.DRAFT,
+      doctorId,
     };
-    if (doctorId) {
-      data.doctorId = doctorId;
-    }
-    console.log("DATA: ",data);
-    return await this.prisma.medicalRecord.create({ data });
+    const created = await this.prisma.medicalRecord.create({ data });
+    // Lưu lịch sử tạo mới
+    await this.prisma.medicalRecordHistory.create({
+      data: {
+        medicalRecordId: created.id,
+        changedBy: user.id,
+        changes: { action: 'CREATE', data: created },
+      },
+    });
+    return created;
   }
 
   async findAll(user: JwtUserPayload) {
@@ -102,35 +110,60 @@ export class MedicalRecordService {
       where: { id },
     });
     if (!record) throw new NotFoundException('Không tìm thấy hồ sơ');
-     
     if (user.role === Role.PATIENT) {
       throw new ForbiddenException('Bạn không có quyền sửa hồ sơ');
     }
-     
     if (user.role === Role.DOCTOR && record.doctorId !== user.doctor?.id) {
       throw new ForbiddenException('Chỉ bác sĩ tạo hồ sơ hoặc admin được sửa');
     }
+    // Kiểm soát luồng chuyển trạng thái
+    let newStatus = record.status as MedicalRecordStatus;
+    if (dto.status && dto.status !== record.status) {
+      if (
+        (record.status === MedicalRecordStatus.DRAFT && dto.status === MedicalRecordStatus.IN_PROGRESS) ||
+        (record.status === MedicalRecordStatus.IN_PROGRESS && dto.status === MedicalRecordStatus.COMPLETED)
+      ) {
+        newStatus = dto.status;
+      } else {
+        throw new ForbiddenException('Chuyển trạng thái không hợp lệ');
+      }
+    }
+    // Lưu lịch sử trước khi update
+    await this.prisma.medicalRecordHistory.create({
+      data: {
+        medicalRecordId: id,
+        changedBy: user.id,
+        changes: { action: 'UPDATE', before: record, after: { ...record, ...dto, status: newStatus } },
+      },
+    });
     return await this.prisma.medicalRecord.update({
       where: { id },
-      data: dto.content ? { content: dto.content } : {},
+      data: {
+        ...(dto.content ? { content: dto.content } : {}),
+        status: newStatus,
+      },
     });
   }
 
   async remove(id: string, user: JwtUserPayload) {
-     
     const record = await this.prisma.medicalRecord.findUnique({
       where: { id },
     });
     if (!record) throw new NotFoundException('Không tìm thấy hồ sơ');
-     
     if (user.role === Role.PATIENT) {
       throw new ForbiddenException('Bạn không có quyền xoá hồ sơ');
     }
-     
     if (user.role === Role.DOCTOR && record.doctorId !== user.doctor?.id) {
       throw new ForbiddenException('Chỉ bác sĩ tạo hồ sơ hoặc admin được xoá');
     }
-     
+    // Lưu lịch sử trước khi xóa
+    await this.prisma.medicalRecordHistory.create({
+      data: {
+        medicalRecordId: id,
+        changedBy: user.id,
+        changes: { action: 'DELETE', data: record },
+      },
+    });
     return await this.prisma.medicalRecord.delete({
       where: { id },
     });

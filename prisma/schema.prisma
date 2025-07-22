@@ -276,10 +276,27 @@ model MedicalRecord {
   isActive    Boolean  @default(true) // Trạng thái sử dụng
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  status      MedicalRecordStatus @default(DRAFT)
+  histories   MedicalRecordHistory[]
   template    Template @relation(fields: [templateId], references: [id])
   patient     Patient  @relation(fields: [patientId], references: [id])
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
   appointment Appointment? @relation(fields: [appointmentId], references: [id])
 
   @@map("medical_records")
+}
+
+enum MedicalRecordStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+}
+
+model MedicalRecordHistory {
+  id              String   @id @default(uuid())
+  medicalRecordId String
+  changedBy       String   // UserId
+  changedAt       DateTime @default(now())
+  changes         Json     // Nội dung thay đổi (có thể lưu diff hoặc toàn bộ snapshot)
+  medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id])
 }
