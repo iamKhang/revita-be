@@ -1,6 +1,8 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaClient, Role } from '@prisma/client';
 import { RedisService } from '../cache/redis.service';
+import { EmailService } from '../email/email.service';
+import { SmsService } from '../sms/sms.service';
 import { RegisterStep1Dto } from './dto/register-step1.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto';
@@ -12,6 +14,8 @@ export class RegisterService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly redisService: RedisService,
+    private readonly emailService: EmailService,
+    private readonly smsService: SmsService,
   ) {}
 
   /**
@@ -59,14 +63,24 @@ export class RegisterService {
     // Lưu OTP với key là sessionId
     await this.redisService.setOtp(`otp:${sessionId}`, otp, 300); // 5 phút
 
-    // In OTP ra console (thay thế cho việc gửi SMS/Email)
-    console.log(`🔐 OTP cho ${phone || email}: ${otp}`);
-    console.log(`📱 Session ID: ${sessionId}`);
+    // Gửi OTP qua SMS hoặc Email
+    let sendSuccess = false;
+    if (phone) {
+      sendSuccess = await this.smsService.sendOtp(phone, otp);
+    } else if (email) {
+      sendSuccess = await this.emailService.sendOtp(email, otp);
+    }
+
+    if (!sendSuccess) {
+      // Nếu gửi thất bại, vẫn log ra console để development
+      console.log(`🔐 OTP cho ${phone || email}: ${otp} (Gửi thất bại, hiển thị để test)`);
+      console.log(`📱 Session ID: ${sessionId}`);
+    }
 
     return {
       sessionId,
-      message: phone 
-        ? `Mã OTP đã được gửi đến số điện thoại ${phone}` 
+      message: phone
+        ? `Mã OTP đã được gửi đến số điện thoại ${phone}`
         : `Mã OTP đã được gửi đến email ${email}`,
     };
   }
@@ -180,6 +194,14 @@ export class RegisterService {
       // Xóa session sau khi đăng ký thành công
       await this.redisService.deleteSession(sessionId);
 
+      // Gửi email/SMS chào mừng
+      if (sessionData.email) {
+        await this.emailService.sendWelcomeEmail(sessionData.email, name);
+      }
+      if (sessionData.phone) {
+        await this.smsService.sendWelcomeSms(sessionData.phone, name);
+      }
+
       return {
         message: 'Đăng ký thành công',
         userId: result.id,
@@ -213,16 +235,26 @@ export class RegisterService {
 
     // Tạo OTP mới
     const otp = this.generateOtp();
-    
+
     // Lưu OTP mới
     await this.redisService.setOtp(`otp:${sessionId}`, otp, 300); // 5 phút
 
-    // In OTP ra console
-    console.log(`🔐 OTP mới cho ${sessionData.phone || sessionData.email}: ${otp}`);
+    // Gửi OTP mới qua SMS hoặc Email
+    let sendSuccess = false;
+    if (sessionData.phone) {
+      sendSuccess = await this.smsService.sendOtp(sessionData.phone, otp);
+    } else if (sessionData.email) {
+      sendSuccess = await this.emailService.sendOtp(sessionData.email, otp);
+    }
+
+    if (!sendSuccess) {
+      // Nếu gửi thất bại, vẫn log ra console để development
+      console.log(`🔐 OTP mới cho ${sessionData.phone || sessionData.email}: ${otp} (Gửi thất bại, hiển thị để test)`);
+    }
 
     return {
-      message: sessionData.phone 
-        ? `Mã OTP mới đã được gửi đến số điện thoại ${sessionData.phone}` 
+      message: sessionData.phone
+        ? `Mã OTP mới đã được gửi đến số điện thoại ${sessionData.phone}`
         : `Mã OTP mới đã được gửi đến email ${sessionData.email}`,
     };
   }
