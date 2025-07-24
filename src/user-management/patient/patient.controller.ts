@@ -24,6 +24,8 @@ export class PatientController {
   async updateProfile(@Req() req: any, @Body() body: UpdatePatientDto) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const userId = req.user?.id;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    console.log(req.user);
     if (!userId) throw new NotFoundException('User not found');
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     await this.prisma.user.update({ where: { id: userId }, data: body });

@@ -8,6 +8,7 @@ import { UserService } from './user.service';
 import { PrismaClient } from '@prisma/client';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
+import { UserController } from './user.controller';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { JwtModule } from '@nestjs/jwt';
       signOptions: { expiresIn: '15m' },
     }),
   ],
-  controllers: [AdminController],
+  controllers: [AdminController, UserController],
   providers: [
     UserService,
     {
