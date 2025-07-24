@@ -1,0 +1,596 @@
+{
+  "info": {
+    "_postman_id": "revita-full-api-collection",
+    "name": "Revita Full API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Full API collection for Revita medical system, including login, Google OAuth, register, user, admin, patient, doctor, receptionist, clinic-admin, medical-record, and app endpoints."
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login (username/password)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "description": "Đăng nhập bằng email/phone và mật khẩu."
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/auth/refresh", "host": ["{{base_url}}"], "path": ["auth", "refresh"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "description": "Làm mới access token bằng refresh token."
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/auth/me", "host": ["{{base_url}}"], "path": ["auth", "me"] },
+            "description": "Lấy thông tin người dùng hiện tại."
+          }
+        },
+        {
+          "name": "Google OAuth2: Start",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/auth/google", "host": ["{{base_url}}"], "path": ["auth", "google"] },
+            "description": "Bắt đầu xác thực Google OAuth2 (redirect, dùng trình duyệt)."
+          }
+        },
+        {
+          "name": "Google OAuth2: Callback",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/auth/google/callback?platform=web",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "google", "callback"],
+              "query": [
+                { "key": "platform", "value": "web" }
+              ]
+            },
+            "description": "Xử lý callback Google OAuth2 (redirect, dùng trình duyệt)."
+          }
+        },
+        {
+          "name": "Google OAuth2: Exchange Code for Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/auth/google/token", "host": ["{{base_url}}"], "path": ["auth", "google", "token"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{google_code}}\"\n}"
+            },
+            "description": "Đổi authorization code lấy tokens (dùng cho mobile/app hoặc SPA)."
+          }
+        },
+        {
+          "name": "Google OAuth2: Frontend Callback",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/auth/callback?accessToken={{token}}&refreshToken={{refresh_token}}&user={{user_json}}",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "callback"],
+              "query": [
+                { "key": "accessToken", "value": "{{token}}" },
+                { "key": "refreshToken", "value": "{{refresh_token}}" },
+                { "key": "user", "value": "{{user_json}}" }
+              ]
+            },
+            "description": "Frontend nhận redirect từ backend, lấy token và user info."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Register",
+      "item": [
+        {
+          "name": "Step 1: Register Phone/Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/register/step1", "host": ["{{base_url}}"], "path": ["register", "step1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"\",\n  \"email\": \"\"\n}"
+            },
+            "description": "Bước 1: Đăng ký với số điện thoại hoặc email."
+          }
+        },
+        {
+          "name": "Step 2: Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/register/verify-otp", "host": ["{{base_url}}"], "path": ["register", "verify-otp"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otp\": \"123456\",\n  \"sessionId\": \"session_123456789\"\n}"
+            },
+            "description": "Bước 2: Xác thực mã OTP."
+          }
+        },
+        {
+          "name": "Step 3: Complete Registration",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/register/complete", "host": ["{{base_url}}"], "path": ["register", "complete"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nguyễn Văn A\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"password\": \"password123\",\n  \"sessionId\": \"session_123456789\"\n}"
+            },
+            "description": "Bước 3: Hoàn tất đăng ký."
+          }
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/register/resend-otp", "host": ["{{base_url}}"], "path": ["register", "resend-otp"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"session_123456789\"\n}"
+            },
+            "description": "Gửi lại mã OTP cho session đang hoạt động."
+          }
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Update My Info",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nguyễn Văn A\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\"\n}"
+            },
+            "description": "Cập nhật thông tin cá nhân user."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/users", "host": ["{{base_url}}"], "path": ["admin", "users"] },
+            "description": "Lấy danh sách user. Query: role (optional)"
+          }
+        },
+        {
+          "name": "Get User By Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/users/:userId", "host": ["{{base_url}}"], "path": ["admin", "users", ":userId"] },
+            "description": "Lấy user theo id."
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/users", "host": ["{{base_url}}"], "path": ["admin", "users"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo DTO */ }" },
+            "description": "Tạo user mới."
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/users/:userId", "host": ["{{base_url}}"], "path": ["admin", "users", ":userId"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo DTO */ }" },
+            "description": "Cập nhật user."
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/users/:userId", "host": ["{{base_url}}"], "path": ["admin", "users", ":userId"] },
+            "description": "Xóa user."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Patient",
+      "item": [
+        {
+          "name": "Update My Patient Info",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/patients/me", "host": ["{{base_url}}"], "path": ["patients", "me"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo UpdatePatientDto */ }" },
+            "description": "Cập nhật thông tin cá nhân bệnh nhân."
+          }
+        },
+        {
+          "name": "Get My Medical Records",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/patients/me/medical-records", "host": ["{{base_url}}"], "path": ["patients", "me", "medical-records"] },
+            "description": "Lấy danh sách bệnh án của bệnh nhân."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Doctor",
+      "item": [
+        {
+          "name": "Get Appointments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/doctors/:doctorId/appointments", "host": ["{{base_url}}"], "path": ["doctors", ":doctorId", "appointments"] },
+            "description": "Lấy danh sách lịch hẹn của bác sĩ."
+          }
+        },
+        {
+          "name": "Get Medical Records",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/doctors/:doctorId/medical-records", "host": ["{{base_url}}"], "path": ["doctors", ":doctorId", "medical-records"] },
+            "description": "Lấy danh sách bệnh án của bác sĩ."
+          }
+        },
+        {
+          "name": "Create Medical Record",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/doctors/:doctorId/medical-records", "host": ["{{base_url}}"], "path": ["doctors", ":doctorId", "medical-records"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo CreateMedicalRecordDto */ }" },
+            "description": "Tạo bệnh án mới cho bác sĩ."
+          }
+        },
+        {
+          "name": "Update Medical Record",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/doctors/:doctorId/medical-records/:recordId", "host": ["{{base_url}}"], "path": ["doctors", ":doctorId", "medical-records", ":recordId"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo UpdateMedicalRecordDto */ }" },
+            "description": "Cập nhật bệnh án cho bác sĩ."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Receptionist",
+      "item": [
+        {
+          "name": "Register Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/receptionists/patients", "host": ["{{base_url}}"], "path": ["patients"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo CreatePatientDto */ }" },
+            "description": "Tạo bệnh nhân mới."
+          }
+        },
+        {
+          "name": "Update Patient",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/receptionists/patients/:patientId", "host": ["{{base_url}}"], "path": ["patients", ":patientId"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo UpdatePatientDto */ }" },
+            "description": "Cập nhật thông tin bệnh nhân."
+          }
+        },
+        {
+          "name": "Book Appointment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/receptionists/appointments", "host": ["{{base_url}}"], "path": ["appointments"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo BookAppointmentDto */ }" },
+            "description": "Đặt lịch hẹn cho bệnh nhân."
+          }
+        },
+        {
+          "name": "List Patients by Clinic",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/receptionists/clinics/:clinicId/patients", "host": ["{{base_url}}"], "path": ["clinics", ":clinicId", "patients"] },
+            "description": "Lấy danh sách bệnh nhân theo clinic."
+          }
+        },
+        {
+          "name": "List Appointments by Clinic",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/receptionists/clinics/:clinicId/appointments", "host": ["{{base_url}}"], "path": ["clinics", ":clinicId", "appointments"] },
+            "description": "Lấy danh sách lịch hẹn theo clinic."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clinic Admin",
+      "item": [
+        {
+          "name": "Get Doctors",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/clinics/:clinicId/doctors", "host": ["{{base_url}}"], "path": ["clinics", ":clinicId", "doctors"] },
+            "description": "Lấy danh sách bác sĩ của phòng khám."
+          }
+        },
+        {
+          "name": "Create Doctor",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/clinics/:clinicId/doctors", "host": ["{{base_url}}"], "path": ["clinics", ":clinicId", "doctors"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo CreateDoctorDto */ }" },
+            "description": "Tạo bác sĩ mới cho phòng khám."
+          }
+        },
+        {
+          "name": "Update Doctor",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/clinics/:clinicId/doctors/:doctorId", "host": ["{{base_url}}"], "path": ["clinics", ":clinicId", "doctors", ":doctorId"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo UpdateDoctorDto */ }" },
+            "description": "Cập nhật thông tin bác sĩ."
+          }
+        },
+        {
+          "name": "Delete Doctor",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/clinics/:clinicId/doctors/:doctorId", "host": ["{{base_url}}"], "path": ["clinics", ":clinicId", "doctors", ":doctorId"] },
+            "description": "Xóa bác sĩ khỏi phòng khám."
+          }
+        },
+        {
+          "name": "Get Receptionists",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/clinics/:clinicId/receptionists", "host": ["{{base_url}}"], "path": ["clinics", ":clinicId", "receptionists"] },
+            "description": "Lấy danh sách lễ tân của phòng khám."
+          }
+        },
+        {
+          "name": "Create Receptionist",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/clinics/:clinicId/receptionists", "host": ["{{base_url}}"], "path": ["clinics", ":clinicId", "receptionists"] },
+            "body": { "mode": "raw", "raw": "{ /* Tham khảo CreateReceptionistDto */ }" },
+            "description": "Tạo lễ tân mới cho phòng khám."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Medical Record",
+      "item": [
+        {
+          "name": "Create Medical Record",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/medical-records", "host": ["{{base_url}}"], "path": ["medical-records"] },
+            "body": { "mode": "raw", "raw": "{\n  \"patientId\": \"string\",\n  \"templateId\": \"string\",\n  \"doctorId\": \"string\",\n  \"status\": \"DRAFT\",\n  \"content\": {\n    \"field1\": \"value\"\n  }\n}" },
+            "description": "Tạo hồ sơ bệnh án mới."
+          }
+        },
+        {
+          "name": "Get All Medical Records",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/medical-records", "host": ["{{base_url}}"], "path": ["medical-records"] },
+            "description": "Lấy tất cả hồ sơ bệnh án (theo quyền)."
+          }
+        },
+        {
+          "name": "Get Medical Record By Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/medical-records/:id", "host": ["{{base_url}}"], "path": ["medical-records", ":id"] },
+            "description": "Lấy chi tiết một hồ sơ bệnh án."
+          }
+        },
+        {
+          "name": "Update Medical Record",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/medical-records/:id", "host": ["{{base_url}}"], "path": ["medical-records", ":id"] },
+            "body": { "mode": "raw", "raw": "{\n  \"content\": {\n    \"field1\": \"new value\"\n  },\n  \"status\": \"IN_PROGRESS\"\n}" },
+            "description": "Cập nhật hồ sơ bệnh án (chỉ bác sĩ tạo hoặc admin)."
+          }
+        },
+        {
+          "name": "Delete Medical Record",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/medical-records/:id", "host": ["{{base_url}}"], "path": ["medical-records", ":id"] },
+            "description": "Xóa hồ sơ bệnh án (chỉ bác sĩ tạo hoặc admin)."
+          }
+        },
+        {
+          "name": "Get All Templates",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/medical-records/templates", "host": ["{{base_url}}"], "path": ["medical-records", "templates"] },
+            "description": "Lấy danh sách template bệnh án."
+          }
+        },
+        {
+          "name": "Get Template By Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/medical-records/templates/:templateId", "host": ["{{base_url}}"], "path": ["medical-records", "templates", ":templateId"] },
+            "description": "Lấy chi tiết template theo id."
+          }
+        },
+        {
+          "name": "Get Template By Medical Record",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/medical-records/:id/template", "host": ["{{base_url}}"], "path": ["medical-records", ":id", "template"] },
+            "description": "Lấy template của một hồ sơ bệnh án."
+          }
+        }
+      ]
+    },
+    {
+      "name": "App",
+      "item": [
+        {
+          "name": "Hello",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/", "host": ["{{base_url}}"], "path": [""] },
+            "description": "Lời chào từ server."
+          }
+        }
+      ]
+    }
+  ]
+} 

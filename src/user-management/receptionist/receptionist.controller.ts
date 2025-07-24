@@ -19,7 +19,7 @@ import { BookAppointmentDto } from '../dto/book-appointment.dto';
 import { JwtAuthGuard } from 'src/login/jwt-auth.guard';
 
 @UseGuards(RolesGuard, JwtAuthGuard)
-@Controller()
+@Controller('receptionists')
 export class ReceptionistController {
   private prisma = new PrismaClient();
 
