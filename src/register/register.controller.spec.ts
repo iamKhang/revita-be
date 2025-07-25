@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RegisterController } from './register.controller';
 import { RegisterService } from './register.service';
-import { RedisService } from './redis.service';
+import { RedisService } from 'src/cache/redis.service';
 import { PrismaClient } from '@prisma/client';
 
 describe('RegisterController', () => {
