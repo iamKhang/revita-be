@@ -1,0 +1,216 @@
+{
+  "info": {
+    "name": "Revita Registration Flow",
+    "description": "Complete registration flow test for Revita Healthcare",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Register Step 1 - Phone",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has sessionId', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('sessionId');",
+              "    pm.environment.set('sessionId', responseJson.sessionId);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"0987654321\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/register/step1",
+          "host": ["{{baseUrl}}"],
+          "path": ["register", "step1"]
+        }
+      }
+    },
+    {
+      "name": "2. Register Step 1 - Email",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has sessionId', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('sessionId');",
+              "    pm.environment.set('sessionId_email', responseJson.sessionId);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"test@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/register/step1",
+          "host": ["{{baseUrl}}"],
+          "path": ["register", "step1"]
+        }
+      }
+    },
+    {
+      "name": "3. Verify OTP",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('OTP verified successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson.message).to.include('thành công');",
+              "    pm.environment.set('verified_sessionId', responseJson.sessionId);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"otp\": \"{{test_otp}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/register/verify-otp",
+          "host": ["{{baseUrl}}"],
+          "path": ["register", "verify-otp"]
+        }
+      }
+    },
+    {
+      "name": "4. Resend OTP",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('OTP resent successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson.message).to.include('OTP mới đã được gửi');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/register/resend-otp",
+          "host": ["{{baseUrl}}"],
+          "path": ["register", "resend-otp"]
+        }
+      }
+    },
+    {
+      "name": "5. Complete Registration",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Registration completed successfully', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson.message).to.include('thành công');",
+              "    pm.expect(responseJson).to.have.property('userId');",
+              "    pm.environment.set('userId', responseJson.userId);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{verified_sessionId}}\",\n  \"name\": \"Nguyễn Văn Test\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường Test, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/register/complete",
+          "host": ["{{baseUrl}}"],
+          "path": ["register", "complete"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sessionId_email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "verified_sessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "test_otp",
+      "value": "123456",
+      "type": "string"
+    }
+  ]
+}
