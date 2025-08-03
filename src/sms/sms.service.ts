@@ -28,40 +28,42 @@ export class SmsService {
       
       const message = this.generateOtpSmsMessage(otp);
 
-      const command = new PublishCommand({
-        TopicArn: process.env.AWS_SNS_TOPIC_ARN,
-        Message: JSON.stringify({
-          default: message,
-          sms: message,
-        }),
-        MessageStructure: 'json',
-        MessageAttributes: {
-          'AWS.SNS.SMS.SenderID': {
-            DataType: 'String',
-            StringValue: 'Revita',
+      // Chỉ gửi SMS thực tế trong môi trường PRODUCTION
+      if (process.env.NODE_ENV === 'production') {
+        const command = new PublishCommand({
+          TopicArn: process.env.AWS_SNS_TOPIC_ARN,
+          Message: JSON.stringify({
+            default: message,
+            sms: message,
+          }),
+          MessageStructure: 'json',
+          MessageAttributes: {
+            'AWS.SNS.SMS.SenderID': {
+              DataType: 'String',
+              StringValue: 'Revita',
+            },
+            'AWS.SNS.SMS.SMSType': {
+              DataType: 'String',
+              StringValue: 'Transactional',
+            },
           },
-          'AWS.SNS.SMS.SMSType': {
-            DataType: 'String',
-            StringValue: 'Transactional',
-          },
-        },
-        Subject: 'OTP Verification - Revita Healthcare',
-      });
+          Subject: 'OTP Verification - Revita Healthcare',
+        });
 
-      const result = await this.snsClient.send(command);
+        const result = await this.snsClient.send(command);
 
-      if (result.MessageId) {
-        this.logger.log(`OTP SMS sent successfully to ${formattedPhone}. Message ID: ${result.MessageId}`);
-        
-        // Log OTP to console for development
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`🔐 OTP cho SMS ${formattedPhone}: ${otp}`);
+        if (result.MessageId) {
+          this.logger.log(`OTP SMS sent successfully to ${formattedPhone}. Message ID: ${result.MessageId}`);
+          return true;
+        } else {
+          this.logger.error('Failed to send OTP SMS: No message ID returned');
+          return false;
         }
-        
-        return true;
       } else {
-        this.logger.error('Failed to send OTP SMS: No message ID returned');
-        return false;
+        // Môi trường development/test: chỉ log tin nhắn, không gửi thật
+        this.logger.log(`[${process.env.NODE_ENV?.toUpperCase() || 'NON-PRODUCTION'}] SMS simulation - OTP to ${formattedPhone}: ${message}`);
+        console.log(`🔐 OTP cho SMS ${formattedPhone}: ${otp}`);
+        return true;
       }
     } catch (error) {
       this.logger.error('Error sending OTP SMS:', error);
@@ -79,34 +81,42 @@ export class SmsService {
       const formattedPhone = this.formatPhoneNumber(phoneNumber);
       const message = this.generateWelcomeSmsMessage(name);
 
-      const command = new PublishCommand({
-        TopicArn: process.env.AWS_SNS_TOPIC_ARN,
-        Message: JSON.stringify({
-          default: message,
-          sms: message,
-        }),
-        MessageStructure: 'json',
-        MessageAttributes: {
-          'AWS.SNS.SMS.SenderID': {
-            DataType: 'String',
-            StringValue: 'Revita',
+      // Chỉ gửi SMS thực tế trong môi trường PRODUCTION
+      if (process.env.NODE_ENV === 'production') {
+        const command = new PublishCommand({
+          TopicArn: process.env.AWS_SNS_TOPIC_ARN,
+          Message: JSON.stringify({
+            default: message,
+            sms: message,
+          }),
+          MessageStructure: 'json',
+          MessageAttributes: {
+            'AWS.SNS.SMS.SenderID': {
+              DataType: 'String',
+              StringValue: 'Revita',
+            },
+            'AWS.SNS.SMS.SMSType': {
+              DataType: 'String',
+              StringValue: 'Promotional',
+            },
           },
-          'AWS.SNS.SMS.SMSType': {
-            DataType: 'String',
-            StringValue: 'Promotional',
-          },
-        },
-        Subject: 'Welcome - Revita Healthcare',
-      });
+          Subject: 'Welcome - Revita Healthcare',
+        });
 
-      const result = await this.snsClient.send(command);
+        const result = await this.snsClient.send(command);
 
-      if (result.MessageId) {
-        this.logger.log(`Welcome SMS sent successfully to ${formattedPhone}. Message ID: ${result.MessageId}`);
-        return true;
+        if (result.MessageId) {
+          this.logger.log(`Welcome SMS sent successfully to ${formattedPhone}. Message ID: ${result.MessageId}`);
+          return true;
+        } else {
+          this.logger.error('Failed to send welcome SMS: No message ID returned');
+          return false;
+        }
       } else {
-        this.logger.error('Failed to send welcome SMS: No message ID returned');
-        return false;
+        // Môi trường development/test: chỉ log tin nhắn, không gửi thật
+        this.logger.log(`[${process.env.NODE_ENV?.toUpperCase() || 'NON-PRODUCTION'}] SMS simulation - Welcome to ${formattedPhone}: ${message}`);
+        console.log(`📱 Welcome SMS cho ${formattedPhone}: ${message}`);
+        return true;
       }
     } catch (error) {
       this.logger.error('Error sending welcome SMS:', error);
