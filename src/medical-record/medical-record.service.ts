@@ -74,36 +74,75 @@ export class MedicalRecordService {
   }
 
   async findAll(user: JwtUserPayload) {
+    const include = {
+      patient: true,
+      doctor: true,
+    };
+
     if (user.role === Role.PATIENT) {
+      if (!user.patient?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
+      }
+      
       return await this.prisma.medicalRecord.findMany({
-        where: { patientId: user.patient?.id },
+        where: { patientId: user.patient.id },
+        include,
       });
     }
+
     if (user.role === Role.DOCTOR) {
+      if (!user.doctor?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      }
+      
       return await this.prisma.medicalRecord.findMany({
-        where: { doctorId: user.doctor?.id },
+        where: { doctorId: user.doctor.id },
+        include,
       });
     }
-    return await this.prisma.medicalRecord.findMany();
+
+    // Cho admin và clinic admin - có thể xem tất cả
+    return await this.prisma.medicalRecord.findMany({ include });
   }
 
+
   async findOne(id: string, user: JwtUserPayload) {
-     
     const record = await this.prisma.medicalRecord.findUnique({
       where: { id },
+      include: {
+        patient: true,
+        doctor: true,
+      },
     });
-    if (!record) throw new NotFoundException('Không tìm thấy hồ sơ');
-     
-    if (user.role === Role.PATIENT && record.patientId !== user.patient?.id) {
-      throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
+
+    if (!record) {
+      throw new NotFoundException('Không tìm thấy hồ sơ');
     }
-     
-    if (user.role === Role.DOCTOR && record.doctorId !== user.doctor?.id) {
-      throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
+
+    if (user.role === Role.PATIENT) {
+      if (!user.patient?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
+      }
+      
+      if (record.patientId !== user.patient.id) {
+        throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
+      }
     }
-     
+
+    if (user.role === Role.DOCTOR) {
+      if (!user.doctor?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      }
+      
+      if (record.doctorId !== user.doctor.id) {
+        throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
+      }
+    }
+
     return record;
   }
+
+
 
   async update(id: string, dto: UpdateMedicalRecordDto, user: JwtUserPayload) {
     const record = await this.prisma.medicalRecord.findUnique({
@@ -113,8 +152,14 @@ export class MedicalRecordService {
     if (user.role === Role.PATIENT) {
       throw new ForbiddenException('Bạn không có quyền sửa hồ sơ');
     }
-    if (user.role === Role.DOCTOR && record.doctorId !== user.doctor?.id) {
-      throw new ForbiddenException('Chỉ bác sĩ tạo hồ sơ hoặc admin được sửa');
+    if (user.role === Role.DOCTOR) {
+      if (!user.doctor?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      }
+      
+      if (record.doctorId !== user.doctor.id) {
+        throw new ForbiddenException('Chỉ bác sĩ tạo hồ sơ hoặc admin được sửa');
+      }
     }
     // Kiểm soát luồng chuyển trạng thái
     let newStatus = record.status as MedicalRecordStatus;
@@ -153,8 +198,14 @@ export class MedicalRecordService {
     if (user.role === Role.PATIENT) {
       throw new ForbiddenException('Bạn không có quyền xoá hồ sơ');
     }
-    if (user.role === Role.DOCTOR && record.doctorId !== user.doctor?.id) {
-      throw new ForbiddenException('Chỉ bác sĩ tạo hồ sơ hoặc admin được xoá');
+    if (user.role === Role.DOCTOR) {
+      if (!user.doctor?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      }
+      
+      if (record.doctorId !== user.doctor.id) {
+        throw new ForbiddenException('Chỉ bác sĩ tạo hồ sơ hoặc admin được xoá');
+      }
     }
     // Lưu lịch sử trước khi xóa
     await this.prisma.medicalRecordHistory.create({
