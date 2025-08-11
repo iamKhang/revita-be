@@ -5,8 +5,13 @@ import * as bcrypt from 'bcryptjs';
 
 interface JwtPayload {
   sub: string;
-  phone: string;
-  email?: string;
+  phone: string | null;
+  email?: string | null;
+  role?: string;
+  patient?: { id: string; patientCode: string };
+  doctor?: { id: string; doctorCode: string };
+  receptionist?: { id: string };
+  clinicAdmin?: { id: string };
 }
 
 interface GoogleUser {
@@ -45,17 +50,7 @@ export class LoginService {
     const auth = await this.validateUser(phoneOrEmail, password);
     if (!auth) throw new UnauthorizedException('Invalid credentials');
 
-    const payload = {
-      sub: auth.userId,
-      phone: auth.phone,
-      email: auth.email,
-      // Get role from user table directly since auth.user is not available
-      role: (await this.prisma.user.findUnique({ where: { id: auth.userId } }))
-        ?.role,
-    };
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
-
+    // Lấy thông tin user và role
     const user = await this.prisma.user.findUnique({
       where: { id: auth.userId },
       select: {
@@ -69,6 +64,54 @@ export class LoginService {
         role: true,
       },
     });
+
+    if (!user) throw new UnauthorizedException('User not found');
+
+    // Tạo payload cơ bản
+    const payload: JwtPayload = {
+      sub: auth.userId,
+      phone: auth.phone,
+      email: auth.email,
+      role: user.role,
+    };
+
+    // Thêm thông tin tương ứng với role
+    if (user.role === 'PATIENT') {
+      const patient = await this.prisma.patient.findUnique({
+        where: { userId: auth.userId },
+        select: { id: true, patientCode: true },
+      });
+      if (patient) {
+        payload.patient = patient;
+      }
+    } else if (user.role === 'DOCTOR') {
+      const doctor = await this.prisma.doctor.findUnique({
+        where: { userId: auth.userId },
+        select: { id: true, doctorCode: true },
+      });
+      if (doctor) {
+        payload.doctor = doctor;
+      }
+    } else if (user.role === 'RECEPTIONIST') {
+      const receptionist = await this.prisma.receptionist.findUnique({
+        where: { userId: auth.userId },
+        select: { id: true },
+      });
+      if (receptionist) {
+        payload.receptionist = receptionist;
+      }
+    } else if (user.role === 'CLINIC_ADMIN') {
+      const clinicAdmin = await this.prisma.clinicAdmin.findUnique({
+        where: { userId: auth.userId },
+        select: { id: true },
+      });
+      if (clinicAdmin) {
+        payload.clinicAdmin = clinicAdmin;
+      }
+    }
+
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
     return { accessToken, refreshToken, user };
   }
@@ -156,13 +199,49 @@ export class LoginService {
       throw new UnauthorizedException('Failed to create or update user');
     }
 
-    // Tạo JWT tokens
-    const payload = {
+    // Tạo JWT tokens với thông tin role tương ứng
+    const payload: JwtPayload = {
       sub: auth.userId,
       phone: auth.phone,
       email: auth.email,
       role: auth.user.role,
     };
+
+    // Thêm thông tin tương ứng với role
+    if (auth.user.role === 'PATIENT') {
+      const patient = await this.prisma.patient.findUnique({
+        where: { userId: auth.userId },
+        select: { id: true, patientCode: true },
+      });
+      if (patient) {
+        payload.patient = patient;
+      }
+    } else if (auth.user.role === 'DOCTOR') {
+      const doctor = await this.prisma.doctor.findUnique({
+        where: { userId: auth.userId },
+        select: { id: true, doctorCode: true },
+      });
+      if (doctor) {
+        payload.doctor = doctor;
+      }
+    } else if (auth.user.role === 'RECEPTIONIST') {
+      const receptionist = await this.prisma.receptionist.findUnique({
+        where: { userId: auth.userId },
+        select: { id: true },
+      });
+      if (receptionist) {
+        payload.receptionist = receptionist;
+      }
+    } else if (auth.user.role === 'CLINIC_ADMIN') {
+      const clinicAdmin = await this.prisma.clinicAdmin.findUnique({
+        where: { userId: auth.userId },
+        select: { id: true },
+      });
+      if (clinicAdmin) {
+        payload.clinicAdmin = clinicAdmin;
+      }
+    }
+
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
