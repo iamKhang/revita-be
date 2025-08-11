@@ -20,44 +20,34 @@ enum Role {
   DOCTOR
   PATIENT
   RECEPTIONIST
-  SYSTEM_ADMIN
-  CLINIC_ADMIN
+  ADMIN
 }
 
-// Bảng User chứa thông tin cơ bản của người dùng
-model User {
+// Bảng Auth cho thông tin đăng nhập và thông tin cơ bản
+model Auth {
   id           String      @id @default(uuid())
+  phone        String?     @unique
+  email        String?     @unique
+  googleId     String?     @unique @map("google_id") // Lưu ID từ Google
+  password     String?
+  accessToken  String?     @map("access_token") // Lưu access token từ Google 
+  refreshToken String?     @map("refresh_token") // Lưu refresh token để làm mới access token
+  tokenExpiry  DateTime?   @map("token_expiry") // Thời gian hết hạn của access token
+  // Thông tin cơ bản từ User
   name         String
-  dateOfBirth  DateTime @map("date_of_birth") 
+  dateOfBirth  DateTime    @map("date_of_birth") 
   gender       String
   avatar       String?
   address      String
   citizenId    String?     @unique @map("citizen_id") // Số CMND/CCCD - có thể null
   role         Role
-  auth         Auth?
+  // Quan hệ với các bảng chuyên biệt
   doctor       Doctor?
   patient      Patient?
   receptionist Receptionist?
-  systemAdmin  SystemAdmin?
-  clinicAdmin  ClinicAdmin?
+  admin        Admin?
   invoices     Invoice[]
   appointments Appointment[] @relation("Booker")
-
-  @@map("users") // Tùy chỉnh tên bảng trong cơ sở dữ liệu
-}
-
-// Bảng Auth cho thông tin đăng nhập
-model Auth {
-  id           String      @id @default(uuid())
-  userId       String      @unique @map("user_id")
-  phone        String?  @unique
-  email        String?  @unique
-  googleId     String?  @unique @map("google_id") // Lưu ID từ Google
-  password     String?
-  accessToken  String?  @map("access_token") // Lưu access token từ Google 
-  refreshToken String?  @map("refresh_token") // Lưu refresh token để làm mới access token
-  tokenExpiry  DateTime?  @map("token_expiry") // Thời gian hết hạn của access token
-  user         User     @relation(fields: [userId], references: [id])
 
   @@map("auths")
 }
@@ -66,7 +56,7 @@ model Auth {
 model Doctor {
   id              String      @id @default(uuid())
   doctorCode      String      @map("doctor_code")
-  userId          String      @unique @map("user_id")
+  authId          String      @unique @map("auth_id")
   clinicId        String      @map("clinic_id")
   degrees         Json     // Sửa từ String[] sang Json
   specialties     DoctorSpecialty[]
@@ -74,7 +64,7 @@ model Doctor {
   rating          Float    @map("rating")
   workHistory     String   @map("work_history")
   description     String   @map("description")
-  user            User     @relation(fields: [userId], references: [id])
+  auth            Auth     @relation(fields: [authId], references: [id])
   clinic          Clinic   @relation(fields: [clinicId], references: [id])
   schedules       Schedule[]
   appointments    Appointment[]
@@ -83,54 +73,62 @@ model Doctor {
   @@map("doctors")
 }
 
-// Bảng Patient cho thông tin bệnh nhân
+// Bảng Patient cho thông tin bệnh nhân (người đăng ký)
 model Patient {
   id                String      @id @default(uuid())
   patientCode       String      @map("patient_code")
+  authId            String?     @unique @map("auth_id")
+  auth              Auth?       @relation(fields: [authId], references: [id])
+  loyaltyPoints     Int         @default(0) @map("loyalty_points") // Điểm thưởng
+  patientProfiles   PatientProfile[] // Quan hệ với các hồ sơ khám bệnh
+
+  @@map("patients")
+}
+
+// Bảng PatientProfile cho hồ sơ khám bệnh của từng người
+model PatientProfile {
+  id                String      @id @default(uuid())
+  profileCode       String      @map("profile_code")
+  patientId         String      @map("patient_id")
+  name              String      // Tên người khám
+  dateOfBirth       DateTime    @map("date_of_birth")
+  gender            String
   address           String?
-  userId            String?     @unique
-  user              User?    @relation(fields: [userId], references: [id])
-  occupation        String?  @map("occupation") // Nghề nghiệp
-  emergencyContact  Json     @map("emergency_contact") // Liên hệ khẩn cấp
-  healthInsurance   String?  @map("health_insurance") // Bảo hiểm y tế
-  loyaltyPoints     Int      @default(0) @map("loyalty_points") // Điểm thưởng
+  occupation        String?     @map("occupation") // Nghề nghiệp
+  emergencyContact  Json        @map("emergency_contact") // Liên hệ khẩn cấp
+  healthInsurance   String?     @map("health_insurance") // Bảo hiểm y tế
+  relationship      String?     // Mối quan hệ với người đăng ký (ba, mẹ, con, vợ, chồng, ...)
+  isActive          Boolean     @default(true) @map("is_active")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+  patient           Patient     @relation(fields: [patientId], references: [id])
   appointments      Appointment[]
   medicalRecords    MedicalRecord[]
 
-  @@map("patients")
+  @@map("patient_profiles")
 }
 
 // Bảng Receptionist cho lễ tân/phụ tá
 model Receptionist {
   id       String      @id @default(uuid())
-  userId   String      @unique @map("user_id")
+  authId   String      @unique @map("auth_id")
   clinicId String      @map("clinic_id")
-  user     User     @relation(fields: [userId], references: [id])
-  clinic   Clinic   @relation(fields: [clinicId], references: [id])
+  auth     Auth        @relation(fields: [authId], references: [id])
+  clinic   Clinic      @relation(fields: [clinicId], references: [id])
 
   @@map("receptionists")
 }
 
-// Bảng SystemAdmin cho admin hệ thống
-model SystemAdmin {
-  id     String      @id @default(uuid())
-  systemAdminCode String   @map("system_admin_code")
-  userId String      @unique @map("user_id")
-  user   User     @relation(fields: [userId], references: [id])
-
-  @@map("system_admins")
-}
-
-// Bảng ClinicAdmin cho admin phòng khám
-model ClinicAdmin {
+// Bảng Admin cho admin phòng khám
+model Admin {
   id       String      @id @default(uuid())
-  clinicAdminCode String   @map("clinic_admin_code")
-  userId   String      @unique @map("user_id")
+  adminCode String     @map("admin_code")
+  authId   String      @unique @map("auth_id")
   clinicId String      @map("clinic_id")
-  user     User     @relation(fields: [userId], references: [id])
-  clinic   Clinic   @relation(fields: [clinicId], references: [id])
+  auth     Auth        @relation(fields: [authId], references: [id])
+  clinic   Clinic      @relation(fields: [clinicId], references: [id])
 
-  @@map("clinic_admins")
+  @@map("admins")
 }
 
 // Bảng Clinic cho thông tin phòng khám
@@ -146,7 +144,7 @@ model Clinic {
   doctors       Doctor[]
   services      Service[] @relation("ClinicServices")
   appointments  Appointment[]
-  clinicAdmins  ClinicAdmin[]
+  admins        Admin[]
 
   @@map("clinics")
 }
@@ -211,7 +209,7 @@ model Appointment {
   id          String      @id @default(uuid())
   appointmentCode String   @map("appointment_code")
   bookerId    String      @map("booker_id")
-  patientId   String      @map("patient_id")
+  patientProfileId String  @map("patient_profile_id")
   clinicId    String      @map("clinic_id")
   specialtyId String      @map("specialty_id")
   doctorId    String      @map("doctor_id")
@@ -220,8 +218,8 @@ model Appointment {
   date        DateTime @map("date")
   startTime   String   @map("start_time")
   endTime     String   @map("end_time")
-  booker      User     @relation("Booker", fields: [bookerId], references: [id])
-  patient     Patient  @relation(fields: [patientId], references: [id])
+  booker      Auth     @relation("Booker", fields: [bookerId], references: [id])
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
   clinic      Clinic   @relation(fields: [clinicId], references: [id])
   specialty   Specialty @relation(fields: [specialtyId], references: [id])
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
@@ -237,12 +235,12 @@ model Appointment {
 model Invoice {
   id            String      @id @default(uuid())
   invoiceCode   String   @map("invoice_code")
-  userId        String      @map("user_id")
+  authId        String      @map("auth_id")
   totalAmount   Float    @map("total_amount")
   paymentMethod String   @map("payment_method")
   paymentStatus String   @map("payment_status")
   createdAt     DateTime @default(now()) @map("created_at")
-  user          User     @relation(fields: [userId], references: [id])
+  auth          Auth     @relation(fields: [authId], references: [id])
   appointments  Appointment[]
 
   @@map("invoices")
@@ -269,7 +267,7 @@ model MedicalRecord {
   id          String      @id @default(uuid())
   medicalRecordCode String   @map("medical_record_code")
   templateId  String
-  patientId   String
+  patientProfileId String  @map("patient_profile_id")
   doctorId    String
   appointmentId String?  // Liên kết với lịch hẹn (tùy chọn)
   content     Json     // Nội dung bệnh án theo template
@@ -279,7 +277,7 @@ model MedicalRecord {
   status      MedicalRecordStatus @default(DRAFT)
   histories   MedicalRecordHistory[]
   template    Template @relation(fields: [templateId], references: [id])
-  patient     Patient  @relation(fields: [patientId], references: [id])
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
   appointment Appointment? @relation(fields: [appointmentId], references: [id])
 
