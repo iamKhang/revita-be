@@ -24,7 +24,7 @@ export class MedicalRecordController {
   constructor(private readonly medicalRecordService: MedicalRecordService) {}
 
   @Post()
-  @Roles(Role.DOCTOR, Role.SYSTEM_ADMIN, Role.CLINIC_ADMIN)
+  @Roles(Role.DOCTOR, Role.ADMIN)
   async create(
     @Body() dto: CreateMedicalRecordDto,
     @Request() req: { user: JwtUserPayload },

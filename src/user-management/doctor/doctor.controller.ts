@@ -13,8 +13,8 @@ import { Roles } from '../../rbac/roles.decorator';
 import { Role } from '../../rbac/roles.enum';
 import { RolesGuard } from '../../rbac/roles.guard';
 import { PrismaClient } from '@prisma/client';
-import { CreateMedicalRecordDto } from '../dto/create-medical-record.dto';
-import { UpdateMedicalRecordDto } from '../dto/update-medical-record.dto';
+import { CreateMedicalRecordDto } from '../../medical-record/dto/create-medical-record.dto';
+import { UpdateMedicalRecordDto } from '../../medical-record/dto/update-medical-record.dto';
 import { JwtAuthGuard } from '../../login/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -28,7 +28,7 @@ export class DoctorController {
     return this.prisma.appointment.findMany({
       where: { doctorId },
       include: {
-        patient: { include: { user: true } },
+        patientProfile: { include: { patient: { include: { auth: true } } } },
         clinic: true,
         service: true,
         specialty: true,
@@ -42,7 +42,7 @@ export class DoctorController {
     return this.prisma.medicalRecord.findMany({
       where: { doctorId },
       include: {
-        patient: { include: { user: true } },
+        patientProfile: { include: { patient: { include: { auth: true } } } },
         template: true,
         appointment: true,
       },
@@ -55,15 +55,15 @@ export class DoctorController {
     @Param('doctorId') doctorId: string,
     @Body() body: CreateMedicalRecordDto,
   ) {
-    const { patientId, templateId, content, appointmentId } = body;
-    if (!patientId || !templateId || !content) {
+    const { patientProfileId, templateId, content, appointmentId } = body;
+    if (!patientProfileId || !templateId || !content) {
       throw new BadRequestException('Missing required fields');
     }
     return this.prisma.medicalRecord.create({
       data: {
         medicalRecordCode: `MR${Date.now()}`,
         doctorId,
-        patientId,
+        patientProfileId,
         templateId,
         content,
         appointmentId,

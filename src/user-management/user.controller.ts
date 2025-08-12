@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { PrismaClient } from '@prisma/client';
-import { UpdateUserDto } from './dto/user.dto';
+import { UpdateUserDto } from './dto/admin.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')
@@ -20,12 +20,11 @@ export class UserController {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const userId = req.user?.id;
     if (!userId) throw new NotFoundException('User not found');
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { role, ...basicInfo } = body;
-    return this.prisma.user.update({
+    return this.prisma.auth.update({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       where: { id: userId },
-      data: basicInfo,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      data: body as any,
     });
   }
 }

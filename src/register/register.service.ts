@@ -168,10 +168,10 @@ export class RegisterService {
 
     // Kiểm tra citizenId nếu có
     if (citizenId) {
-      const existingUser = await this.prisma.user.findUnique({
+      const existingAuth = await this.prisma.auth.findUnique({
         where: { citizenId },
       });
-      if (existingUser) {
+      if (existingAuth) {
         throw new ConflictException('Số CMND/CCCD đã được đăng ký');
       }
     }
@@ -180,10 +180,10 @@ export class RegisterService {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     try {
-      // Tạo user và auth trong transaction
+      // Tạo auth và patient trong transaction
       const result = await this.prisma.$transaction(async (prisma) => {
-        // Tạo User
-        const user = await prisma.user.create({
+        // Tạo Auth (main user table)
+        const auth = await prisma.auth.create({
           data: {
             name,
             dateOfBirth: new Date(dateOfBirth),
@@ -192,13 +192,6 @@ export class RegisterService {
             citizenId,
             avatar,
             role: Role.PATIENT, // Mặc định là PATIENT
-          },
-        });
-
-        // Tạo Auth
-        await prisma.auth.create({
-          data: {
-            userId: user.id,
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             phone: sessionData.phone,
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -211,13 +204,12 @@ export class RegisterService {
         await prisma.patient.create({
           data: {
             patientCode: `PAT${Date.now()}`, // Tạo mã bệnh nhân
-            userId: user.id,
-            address,
-            emergencyContact: {}, // Có thể để trống ban đầu
+            authId: auth.id,
+            loyaltyPoints: 0,
           },
         });
 
-        return user;
+        return auth;
       });
 
       // Xóa session sau khi đăng ký thành công

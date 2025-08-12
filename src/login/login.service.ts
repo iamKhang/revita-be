@@ -11,7 +11,7 @@ interface JwtPayload {
   patient?: { id: string; patientCode: string };
   doctor?: { id: string; doctorCode: string };
   receptionist?: { id: string };
-  clinicAdmin?: { id: string };
+  admin?: { id: string };
 }
 
 interface GoogleUser {
@@ -51,8 +51,8 @@ export class LoginService {
     if (!auth) throw new UnauthorizedException('Invalid credentials');
 
     // Lấy thông tin user và role
-    const user = await this.prisma.user.findUnique({
-      where: { id: auth.userId },
+    const user = await this.prisma.auth.findUnique({
+      where: { id: auth.id },
       select: {
         id: true,
         name: true,
@@ -69,16 +69,16 @@ export class LoginService {
 
     // Tạo payload cơ bản
     const payload: JwtPayload = {
-      sub: auth.userId,
+      sub: auth.id,
       phone: auth.phone,
       email: auth.email,
-      role: user.role,
+      role: auth.role as string,
     };
 
     // Thêm thông tin tương ứng với role
     if (user.role === 'PATIENT') {
       const patient = await this.prisma.patient.findUnique({
-        where: { userId: auth.userId },
+        where: { authId: auth.id },
         select: { id: true, patientCode: true },
       });
       if (patient) {
@@ -86,7 +86,7 @@ export class LoginService {
       }
     } else if (user.role === 'DOCTOR') {
       const doctor = await this.prisma.doctor.findUnique({
-        where: { userId: auth.userId },
+        where: { authId: auth.id },
         select: { id: true, doctorCode: true },
       });
       if (doctor) {
@@ -94,19 +94,21 @@ export class LoginService {
       }
     } else if (user.role === 'RECEPTIONIST') {
       const receptionist = await this.prisma.receptionist.findUnique({
-        where: { userId: auth.userId },
+        where: { authId: auth.id },
         select: { id: true },
       });
       if (receptionist) {
         payload.receptionist = receptionist;
       }
-    } else if (user.role === 'CLINIC_ADMIN') {
-      const clinicAdmin = await this.prisma.clinicAdmin.findUnique({
-        where: { userId: auth.userId },
+    } else if (user.role === 'ADMIN') {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const admin = await this.prisma.admin.findUnique({
+        where: { authId: auth.id },
         select: { id: true },
       });
-      if (clinicAdmin) {
-        payload.clinicAdmin = clinicAdmin;
+      if (admin) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        payload.admin = { id: admin.id };
       }
     }
 
@@ -123,52 +125,35 @@ export class LoginService {
       where: {
         OR: [{ email: googleUser.email }, { googleId: googleUser.googleId }],
       },
-      include: {
-        user: true,
-      },
     });
 
     if (!auth) {
       console.log('✅ Creating new user for:', googleUser.email);
-      // Tạo user mới nếu chưa tồn tại
-      const newUser = await this.prisma.user.create({
+      // Tạo auth mới nếu chưa tồn tại
+      auth = await this.prisma.auth.create({
         data: {
           name: `${googleUser.firstName} ${googleUser.lastName}`,
           dateOfBirth: new Date(), // Có thể cập nhật sau
           gender: 'other', // Có thể cập nhật sau
           address: '', // Có thể cập nhật sau
-          // citizenId: null, // Không cần set vì giờ có thể null
           role: 'PATIENT', // Mặc định là PATIENT
           avatar: googleUser.picture,
-          auth: {
-            create: {
-              email: googleUser.email,
-              googleId: googleUser.googleId,
-              accessToken: googleUser.accessToken,
-              refreshToken: googleUser.refreshToken,
-              tokenExpiry: new Date(Date.now() + 3600 * 1000), // 1 giờ
-            },
-          },
-        },
-        include: {
-          auth: true,
+          email: googleUser.email,
+          googleId: googleUser.googleId,
+          accessToken: googleUser.accessToken,
+          refreshToken: googleUser.refreshToken,
+          tokenExpiry: new Date(Date.now() + 3600 * 1000), // 1 giờ
         },
       });
-      // Tạo patient mới liên kết với user vừa tạo
+      // Tạo patient mới liên kết với auth vừa tạo
       await this.prisma.patient.create({
         data: {
-          userId: newUser.id,
           patientCode: `PAT${Date.now()}`,
-          address: newUser.address,
-          occupation: '',
-          emergencyContact: {},
-          healthInsurance: '',
+          authId: auth.id,
           loyaltyPoints: 0,
         },
       });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      auth = newUser.auth as any;
-      console.log('✅ New user created with ID:', newUser.id);
+      console.log('✅ New user created with ID:', auth.id);
     } else {
       console.log(
         '✅ User already exists, updating auth info for:',
@@ -185,9 +170,9 @@ export class LoginService {
         },
       });
       // Cập nhật avatar nếu có thay đổi
-      if (auth.user.avatar !== googleUser.picture) {
-        await this.prisma.user.update({
-          where: { id: auth.userId },
+      if (auth.avatar !== googleUser.picture) {
+        await this.prisma.auth.update({
+          where: { id: auth.id },
           data: {
             avatar: googleUser.picture,
           },
@@ -201,63 +186,62 @@ export class LoginService {
 
     // Tạo JWT tokens với thông tin role tương ứng
     const payload: JwtPayload = {
-      sub: auth.userId,
+      sub: auth.id,
       phone: auth.phone,
       email: auth.email,
-      role: auth.user.role,
+      role: auth.role as string,
     };
 
     // Thêm thông tin tương ứng với role
-    if (auth.user.role === 'PATIENT') {
+    if (auth.role === 'PATIENT') {
       const patient = await this.prisma.patient.findUnique({
-        where: { userId: auth.userId },
+        where: { authId: auth.id },
         select: { id: true, patientCode: true },
       });
       if (patient) {
         payload.patient = patient;
       }
-    } else if (auth.user.role === 'DOCTOR') {
+    } else if (auth.role === 'DOCTOR') {
       const doctor = await this.prisma.doctor.findUnique({
-        where: { userId: auth.userId },
+        where: { authId: auth.id },
         select: { id: true, doctorCode: true },
       });
       if (doctor) {
         payload.doctor = doctor;
       }
-    } else if (auth.user.role === 'RECEPTIONIST') {
+    } else if (auth.role === 'RECEPTIONIST') {
       const receptionist = await this.prisma.receptionist.findUnique({
-        where: { userId: auth.userId },
+        where: { authId: auth.id },
         select: { id: true },
       });
       if (receptionist) {
         payload.receptionist = receptionist;
       }
-    } else if (auth.user.role === 'CLINIC_ADMIN') {
-      const clinicAdmin = await this.prisma.clinicAdmin.findUnique({
-        where: { userId: auth.userId },
+    } else if (auth.role === 'ADMIN') {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const admin = await this.prisma.admin.findUnique({
+        where: { authId: auth.id },
         select: { id: true },
       });
-      if (clinicAdmin) {
-        payload.clinicAdmin = clinicAdmin;
+      if (admin) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        payload.admin = { id: admin.id };
       }
     }
 
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: auth.userId },
-      select: {
-        id: true,
-        name: true,
-        dateOfBirth: true,
-        gender: true,
-        avatar: true,
-        address: true,
-        citizenId: true,
-        role: true,
-      },
-    });
+    const user = {
+      id: auth.id,
+      name: auth.name as string,
+      dateOfBirth: auth.dateOfBirth as Date,
+      gender: auth.gender as string,
+      avatar: auth.avatar as string | null,
+      address: auth.address as string,
+      citizenId: auth.citizenId as string | null,
+      role: auth.role as string,
+    };
 
     return { accessToken, refreshToken, user };
   }
@@ -278,17 +262,17 @@ export class LoginService {
       const payload: JwtPayload = { sub, phone };
 
       const auth = await this.prisma.auth.findUnique({
-        where: { userId: payload.sub },
+        where: { id: payload.sub },
       });
       if (!auth) throw new UnauthorizedException('Invalid refresh token');
 
       const newAccessToken = this.jwtService.sign(
-        { sub: auth.userId, phone: auth.phone },
+        { sub: auth.id, phone: auth.phone },
         { expiresIn: '15m' },
       );
 
       const newRefreshToken = this.jwtService.sign(
-        { sub: auth.userId, phone: auth.phone },
+        { sub: auth.id, phone: auth.phone },
         { expiresIn: '7d' },
       );
       return { accessToken: newAccessToken, refreshToken: newRefreshToken };
@@ -309,7 +293,7 @@ export class LoginService {
         throw new UnauthorizedException('Invalid token');
       }
 
-      const user = await this.prisma.user.findUnique({
+      const auth = await this.prisma.auth.findUnique({
         where: { id: sub },
         select: {
           id: true,
@@ -322,8 +306,8 @@ export class LoginService {
           role: true,
         },
       });
-      if (!user) throw new UnauthorizedException('User not found');
-      return user;
+      if (!auth) throw new UnauthorizedException('User not found');
+      return auth;
     } catch {
       throw new UnauthorizedException('Invalid token');
     }

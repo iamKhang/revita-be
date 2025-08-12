@@ -41,12 +41,12 @@ export class ReceptionistController {
       throw new BadRequestException('Missing required fields');
     }
     if (citizenId) {
-      const existed = await this.prisma.user.findUnique({
+      const existed = await this.prisma.auth.findUnique({
         where: { citizenId },
       });
       if (existed) throw new BadRequestException('CitizenId already exists');
     }
-    const user = await this.prisma.user.create({
+    const auth = await this.prisma.auth.create({
       data: {
         name,
         dateOfBirth: new Date(dateOfBirth),
@@ -55,18 +55,19 @@ export class ReceptionistController {
         citizenId,
         avatar,
         role: Role.PATIENT,
-        auth: { create: { phone, email, password } },
+        phone,
+        email,
+        password,
       },
     });
     const patient = await this.prisma.patient.create({
       data: {
-        userId: user.id,
+        authId: auth.id,
         patientCode: `PAT${Date.now()}`,
-        address,
-        emergencyContact: {},
+        loyaltyPoints: 0,
       },
     });
-    return { user, patient };
+    return { auth, patient };
   }
 
   @Get('clinics/:clinicId/patients')
@@ -75,13 +76,15 @@ export class ReceptionistController {
     // Lấy tất cả bệnh nhân từng có lịch hẹn tại clinic này
     const appointments = await this.prisma.appointment.findMany({
       where: { clinicId },
-      select: { patientId: true },
-      distinct: ['patientId'],
+      select: { patientProfileId: true },
+      distinct: ['patientProfileId'],
     });
-    const patientIds = appointments.map((a) => a.patientId);
+    const patientProfileIds = appointments.map(
+      (a) => a.patientProfileId as string,
+    );
     return this.prisma.patient.findMany({
-      where: { id: { in: patientIds } },
-      include: { user: true },
+      where: { id: { in: patientProfileIds } },
+      include: { auth: true },
     });
   }
 
@@ -95,11 +98,17 @@ export class ReceptionistController {
       where: { id: patientId },
     });
     if (!patient) throw new NotFoundException('Patient not found');
-    await this.prisma.user.update({
-      where: { id: patient.userId! },
-      data: body,
+    await this.prisma.auth.update({
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      where: { id: patient.authId! },
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      data: body as any,
     });
-    return this.prisma.patient.update({ where: { id: patientId }, data: body });
+    return this.prisma.patient.update({
+      where: { id: patientId },
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      data: body as any,
+    });
   }
 
   @Post('appointments')
@@ -107,7 +116,7 @@ export class ReceptionistController {
   async bookAppointment(@Body() body: BookAppointmentDto) {
     const {
       bookerId,
-      patientId,
+      patientProfileId,
       clinicId,
       specialtyId,
       doctorId,
@@ -119,7 +128,7 @@ export class ReceptionistController {
     } = body;
     if (
       !bookerId ||
-      !patientId ||
+      !patientProfileId ||
       !clinicId ||
       !specialtyId ||
       !doctorId ||
@@ -134,7 +143,7 @@ export class ReceptionistController {
       data: {
         appointmentCode: `APPT${Date.now()}`,
         bookerId,
-        patientId,
+        patientProfileId,
         clinicId,
         specialtyId,
         doctorId,
@@ -153,8 +162,8 @@ export class ReceptionistController {
     return this.prisma.appointment.findMany({
       where: { clinicId },
       include: {
-        patient: { include: { user: true } },
-        doctor: { include: { user: true } },
+        patientProfile: { include: { patient: { include: { auth: true } } } },
+        doctor: { include: { auth: true } },
         service: true,
         specialty: true,
       },

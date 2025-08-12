@@ -1,16 +1,8 @@
 -- CreateEnum
-DO $$ BEGIN
-    CREATE TYPE "Role" AS ENUM ('DOCTOR', 'PATIENT', 'RECEPTIONIST', 'ADMIN');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
+CREATE TYPE "Role" AS ENUM ('DOCTOR', 'PATIENT', 'RECEPTIONIST', 'ADMIN');
 
 -- CreateEnum
-DO $$ BEGIN
-    CREATE TYPE "MedicalRecordStatus" AS ENUM ('DRAFT', 'IN_PROGRESS', 'COMPLETED');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
+CREATE TYPE "MedicalRecordStatus" AS ENUM ('DRAFT', 'IN_PROGRESS', 'COMPLETED');
 
 -- CreateTable
 CREATE TABLE "auths" (

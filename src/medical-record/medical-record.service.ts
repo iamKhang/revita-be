@@ -17,12 +17,12 @@ export class MedicalRecordService {
 
   async create(dto: CreateMedicalRecordDto, user: JwtUserPayload) {
     if (
-      ![Role.DOCTOR, Role.SYSTEM_ADMIN, Role.CLINIC_ADMIN].includes(user.role as Role)
+      ![Role.DOCTOR, Role.ADMIN].includes(user.role as Role)
     ) {
       throw new ForbiddenException('Bạn không có quyền tạo hồ sơ bệnh án');
     }
     const patient = await this.prisma.patient.findUnique({
-      where: { id: dto.patientId }
+      where: { id: dto.patientProfileId }
     });
     if (!patient) {
       throw new NotFoundException('Không tìm thấy bệnh nhân');
@@ -30,7 +30,7 @@ export class MedicalRecordService {
     let doctorId: string | undefined = undefined;
     if (user.role === Role.DOCTOR) {
       const doctor = await this.prisma.doctor.findUnique({
-        where: { userId: user.id },
+        where: { authId: user.id },
         select: { id: true }
       });
       doctorId = doctor?.id;
@@ -38,8 +38,7 @@ export class MedicalRecordService {
         throw new NotFoundException('Không tìm thấy bác sĩ cho user này');
       }
     } else if (
-      user.role === Role.SYSTEM_ADMIN ||
-      user.role === Role.CLINIC_ADMIN
+      user.role === Role.ADMIN 
     ) {
       doctorId = (dto as any)['doctorId'];
       if (!doctorId) {
@@ -54,7 +53,7 @@ export class MedicalRecordService {
       }
     }
     const data: any = {
-      patientId: dto.patientId,
+      patientProfileId: dto.patientProfileId,
       templateId: dto.templateId,
       content: dto.content,
       medicalRecordCode: `MR${Date.now()}`,
@@ -75,7 +74,7 @@ export class MedicalRecordService {
 
   async findAll(user: JwtUserPayload) {
     const include = {
-      patient: true,
+      patientProfile: true,
       doctor: true,
     };
 
@@ -85,7 +84,7 @@ export class MedicalRecordService {
       }
       
       return await this.prisma.medicalRecord.findMany({
-        where: { patientId: user.patient.id },
+        where: { patientProfileId: user.patient.id },
         include,
       });
     }
@@ -110,7 +109,7 @@ export class MedicalRecordService {
     const record = await this.prisma.medicalRecord.findUnique({
       where: { id },
       include: {
-        patient: true,
+        patientProfile: true,
         doctor: true,
       },
     });
@@ -124,7 +123,7 @@ export class MedicalRecordService {
         throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
       }
       
-      if (record.patientId !== user.patient.id) {
+      if (record.patientProfileId !== user.patient.id) {
         throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
       }
     }

@@ -8,7 +8,7 @@ import { MedicalRecordStatus } from '@prisma/client';
 export class CreateMedicalRecordDto {
   @IsUUID()
   @IsNotEmpty()
-  patientId: string;
+  patientProfileId: string;
 
   @IsUUID()
   @IsNotEmpty()
@@ -18,7 +18,10 @@ export class CreateMedicalRecordDto {
   @IsOptional()
   doctorId?: string;
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+  @IsUUID()
+  @IsOptional()
+  appointmentId?: string;
+
   @IsEnum(MedicalRecordStatus)
   @IsOptional()
   status?: MedicalRecordStatus;

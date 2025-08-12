@@ -7,7 +7,7 @@ export class BookAppointmentDto {
 
   @IsString()
   @IsNotEmpty()
-  patientId: string;
+  patientProfileId: string;
 
   @IsString()
   @IsNotEmpty()
