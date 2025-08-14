@@ -4,17 +4,6 @@ import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  // 1. Tạo Clinic
-  const clinic = await prisma.clinic.create({
-    data: {
-      clinicCode: 'CLINIC001',
-      name: 'Phòng khám Đa khoa Trà Ôn',
-      address: '123 Đường Lớn, TP HCM',
-      phone: '0123456789',
-      email: 'clinic1@example.com',
-    },
-  });
-
   // 2.1. Tạo danh sách các chuyên khoa (Specialty)
   const specialtyNames = [
     'Nội tổng quát',
@@ -39,7 +28,7 @@ async function main() {
   const specialtyMap: Record<string, { id: string; name: string }> = {};
   for (const name of specialtyNames) {
     const s = await prisma.specialty.create({
-      data: { name, clinicId: clinic.id },
+      data: { name },
     });
     specialtyMap[name] = { id: s.id, name };
   }
@@ -1041,7 +1030,6 @@ async function main() {
         price: 200000, // Giá mẫu, có thể thay đổi
         description: `Dịch vụ khám chuyên khoa ${t.name}`,
         specialtyId: specialty.id,
-        clinicId: clinic.id,
       },
     });
   }
@@ -1077,7 +1065,6 @@ async function main() {
       doctor: {
         create: {
           doctorCode: 'DOC001',
-          clinicId: clinic.id,
           degrees: 'Bác sĩ đa khoa',
           yearsExperience: 10,
           rating: 4.8,
@@ -1124,9 +1111,7 @@ async function main() {
       citizenId: '3333333333',
       role: 'RECEPTIONIST',
       receptionist: {
-        create: {
-          clinicId: clinic.id,
-        },
+        create: {},
       },
     },
   });
@@ -1148,7 +1133,6 @@ async function main() {
       admin: {
         create: {
           adminCode: 'AD001',
-          clinicId: clinic.id,
         },
       },
     },

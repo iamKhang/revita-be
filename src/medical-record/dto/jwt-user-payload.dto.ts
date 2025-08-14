@@ -14,8 +14,9 @@ export interface JwtUserPayload {
   receptionist?: {
     id: string;
   };
-  clinicAdmin?: {
+  admin?: {
     id: string;
   };
+
   // Thêm các trường khác nếu cần
 }

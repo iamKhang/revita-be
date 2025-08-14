@@ -11,10 +11,6 @@ export class BookAppointmentDto {
 
   @IsString()
   @IsNotEmpty()
-  clinicId: string;
-
-  @IsString()
-  @IsNotEmpty()
   specialtyId: string;
 
   @IsString()

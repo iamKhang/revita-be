@@ -72,7 +72,6 @@ export class AdminController {
       phone,
       role,
       // Doctor specific fields
-      clinicId,
       degrees,
       yearsExperience,
       workHistory,
@@ -135,13 +134,10 @@ export class AdminController {
 
     switch (role) {
       case Role.DOCTOR:
-        if (!clinicId)
-          throw new BadRequestException('ClinicId is required for doctor');
         roleRecord = await this.prisma.doctor.create({
           data: {
             doctorCode: `DOC${Date.now()}`,
             authId: auth.id,
-            clinicId,
             degrees: degrees || [],
             yearsExperience: yearsExperience || 0,
             rating: 0,
@@ -162,27 +158,19 @@ export class AdminController {
         break;
 
       case Role.RECEPTIONIST:
-        if (!clinicId)
-          throw new BadRequestException(
-            'ClinicId is required for receptionist',
-          );
         roleRecord = await this.prisma.receptionist.create({
           data: {
             authId: auth.id,
-            clinicId,
           },
         });
         break;
 
       case Role.ADMIN:
-        if (!clinicId)
-          throw new BadRequestException('ClinicId is required for admin');
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         roleRecord = await (this.prisma as any).admin.create({
           data: {
             adminCode: adminCode || `ADM${Date.now()}`,
             authId: auth.id,
-            clinicId,
           },
         });
         break;
@@ -329,51 +317,12 @@ export class AdminController {
     return { message: 'User deleted successfully' };
   }
 
-  // Quản lý clinics
-  @Get('clinics')
-  @Roles(Role.ADMIN)
-  async findAllClinics() {
-    return this.prisma.clinic.findMany({
-      include: {
-        doctors: true,
-        receptionists: true,
-        admins: true,
-        specialties: true,
-      },
-    });
-  }
-
-  @Get('clinics/:clinicId')
-  @Roles(Role.ADMIN)
-  async findClinicById(@Param('clinicId') clinicId: string) {
-    const clinic = await this.prisma.clinic.findUnique({
-      where: { id: clinicId },
-      include: {
-        doctors: {
-          include: { auth: true },
-        },
-        receptionists: {
-          include: { auth: true },
-        },
-        admins: {
-          include: { auth: true },
-        },
-        specialties: true,
-      },
-    });
-    if (!clinic) throw new NotFoundException('Clinic not found');
-    return clinic;
-  }
-
   // Quản lý specialties
   @Get('specialties')
   @Roles(Role.ADMIN)
-  async findAllSpecialties(@Query('clinicId') clinicId?: string) {
-    const where = clinicId ? { clinicId } : {};
+  async findAllSpecialties() {
     return this.prisma.specialty.findMany({
-      where,
       include: {
-        clinic: true,
         doctors: true,
         services: true,
         templates: true,
@@ -403,7 +352,6 @@ export class AdminController {
       where,
       include: {
         specialty: true,
-        clinic: true,
       },
     });
   }

@@ -46,10 +46,6 @@ export class CreateUserDto {
 
   // Doctor specific fields
   @IsOptional()
-  @IsString()
-  clinicId?: string;
-
-  @IsOptional()
   @IsArray()
   degrees?: any[];
 

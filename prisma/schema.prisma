@@ -57,7 +57,6 @@ model Doctor {
   id              String      @id @default(uuid())
   doctorCode      String      @map("doctor_code")
   authId          String      @unique @map("auth_id")
-  clinicId        String      @map("clinic_id")
   degrees         Json     // Sửa từ String[] sang Json
   specialties     DoctorSpecialty[]
   yearsExperience Int      @map("years_experience")
@@ -65,7 +64,6 @@ model Doctor {
   workHistory     String   @map("work_history")
   description     String   @map("description")
   auth            Auth     @relation(fields: [authId], references: [id])
-  clinic          Clinic   @relation(fields: [clinicId], references: [id])
   schedules       Schedule[]
   appointments    Appointment[]
   medicalRecords  MedicalRecord[]
@@ -112,9 +110,7 @@ model PatientProfile {
 model Receptionist {
   id       String      @id @default(uuid())
   authId   String      @unique @map("auth_id")
-  clinicId String      @map("clinic_id")
   auth     Auth        @relation(fields: [authId], references: [id])
-  clinic   Clinic      @relation(fields: [clinicId], references: [id])
 
   @@map("receptionists")
 }
@@ -124,37 +120,15 @@ model Admin {
   id       String      @id @default(uuid())
   adminCode String     @map("admin_code")
   authId   String      @unique @map("auth_id")
-  clinicId String      @map("clinic_id")
   auth     Auth        @relation(fields: [authId], references: [id])
-  clinic   Clinic      @relation(fields: [clinicId], references: [id])
 
   @@map("admins")
-}
-
-// Bảng Clinic cho thông tin phòng khám
-model Clinic {
-  id            String      @id @default(uuid())
-  clinicCode    String   @map("clinic_code")
-  name          String   @map("name")
-  address       String   @map("address")
-  phone         String   @map("phone")
-  email         String   @map("email")
-  receptionists Receptionist[]
-  specialties   Specialty[]
-  doctors       Doctor[]
-  services      Service[] @relation("ClinicServices")
-  appointments  Appointment[]
-  admins        Admin[]
-
-  @@map("clinics")
 }
 
 // Bảng Specialty cho chuyên khoa
 model Specialty {
   id          String      @id @default(uuid()) @map("id")
   name        String
-  clinicId    String      @map("clinic_id")
-  clinic      Clinic   @relation(fields: [clinicId], references: [id])
   doctors     DoctorSpecialty[]
   services    Service[]
   appointments Appointment[]
@@ -183,8 +157,6 @@ model Service {
   description String   @map("description")
   specialtyId String      @map("specialty_id")
   specialty   Specialty @relation(fields: [specialtyId], references: [id])
-  clinicId    String      @map("clinic_id")
-  clinic      Clinic   @relation("ClinicServices", fields: [clinicId], references: [id]) // Thêm quan hệ đối ứng
   appointments Appointment[]
 
   @@map("services")
@@ -210,7 +182,6 @@ model Appointment {
   appointmentCode String   @map("appointment_code")
   bookerId    String      @map("booker_id")
   patientProfileId String  @map("patient_profile_id")
-  clinicId    String      @map("clinic_id")
   specialtyId String      @map("specialty_id")
   doctorId    String      @map("doctor_id")
   serviceId   String      @map("service_id")
@@ -220,7 +191,6 @@ model Appointment {
   endTime     String   @map("end_time")
   booker      Auth     @relation("Booker", fields: [bookerId], references: [id])
   patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
-  clinic      Clinic   @relation(fields: [clinicId], references: [id])
   specialty   Specialty @relation(fields: [specialtyId], references: [id])
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
   service     Service  @relation(fields: [serviceId], references: [id])

@@ -61,12 +61,6 @@
 			"enabled": true
 		},
 		{
-			"key": "clinicId",
-			"value": "",
-			"type": "default",
-			"enabled": true
-		},
-		{
 			"key": "specialtyId",
 			"value": "",
 			"type": "default",
@@ -337,28 +331,6 @@
           }
         },
         {
-          "name": "Get All Clinics",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
-            "url": { "raw": "{{baseUrl}}/admin/clinics", "host": ["{{baseUrl}}"], "path": ["admin", "clinics"] },
-            "description": "Lấy danh sách tất cả phòng khám."
-          }
-        },
-        {
-          "name": "Get Clinic By Id",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
-            "url": { "raw": "{{baseUrl}}/admin/clinics/{{clinicId}}", "host": ["{{baseUrl}}"], "path": ["admin", "clinics", "{{clinicId}}"] },
-            "description": "Lấy chi tiết phòng khám theo id."
-          }
-        },
-        {
           "name": "Get All Specialties",
           "request": {
             "method": "GET",
@@ -366,7 +338,7 @@
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
             "url": { "raw": "{{baseUrl}}/admin/specialties", "host": ["{{baseUrl}}"], "path": ["admin", "specialties"] },
-            "description": "Lấy danh sách tất cả chuyên khoa. Query: clinicId (optional)"
+            "description": "Lấy danh sách tất cả chuyên khoa."
           }
         },
         {
@@ -584,31 +556,31 @@
             "url": { "raw": "{{baseUrl}}/receptionists/appointments", "host": ["{{baseUrl}}"], "path": ["receptionists", "appointments"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bookerId\": \"{{userId}}\",\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"clinicId\": \"{{clinicId}}\",\n  \"specialtyId\": \"{{specialtyId}}\",\n  \"doctorId\": \"{{doctorId}}\",\n  \"serviceId\": \"{{serviceId}}\",\n  \"status\": \"CONFIRMED\",\n  \"date\": \"2024-01-15\",\n  \"startTime\": \"09:00\",\n  \"endTime\": \"10:00\"\n}"
+              "raw": "{\n  \"bookerId\": \"{{userId}}\",\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"specialtyId\": \"{{specialtyId}}\",\n  \"doctorId\": \"{{doctorId}}\",\n  \"serviceId\": \"{{serviceId}}\",\n  \"status\": \"CONFIRMED\",\n  \"date\": \"2024-01-15\",\n  \"startTime\": \"09:00\",\n  \"endTime\": \"10:00\"\n}"
             },
             "description": "Đặt lịch hẹn cho bệnh nhân."
           }
         },
         {
-          "name": "List Patients by Clinic",
+          "name": "List All Patients",
           "request": {
             "method": "GET",
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/receptionists/clinics/{{clinicId}}/patients", "host": ["{{baseUrl}}"], "path": ["receptionists", "clinics", "{{clinicId}}", "patients"] },
-            "description": "Lấy danh sách bệnh nhân theo clinic."
+            "url": { "raw": "{{baseUrl}}/receptionists/patients", "host": ["{{baseUrl}}"], "path": ["receptionists", "patients"] },
+            "description": "Lấy danh sách tất cả bệnh nhân."
           }
         },
         {
-          "name": "List Appointments by Clinic",
+          "name": "List All Appointments",
           "request": {
             "method": "GET",
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/receptionists/clinics/{{clinicId}}/appointments", "host": ["{{baseUrl}}"], "path": ["receptionists", "clinics", "{{clinicId}}", "appointments"] },
-            "description": "Lấy danh sách lịch hẹn theo clinic."
+            "url": { "raw": "{{baseUrl}}/receptionists/appointments", "host": ["{{baseUrl}}"], "path": ["receptionists", "appointments"] },
+            "description": "Lấy danh sách tất cả lịch hẹn."
           }
         }
       ]

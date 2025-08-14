@@ -115,7 +115,7 @@ export class MedicalRecordService {
       });
     }
 
-    // Cho admin và clinic admin - có thể xem tất cả
+    // Cho admin - có thể xem tất cả
     return await this.prisma.medicalRecord.findMany({ include });
   }
 

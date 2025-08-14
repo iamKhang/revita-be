@@ -15,7 +15,6 @@ async function main() {
   await prisma.patient.deleteMany();
   // await prisma.admin.deleteMany();
   await prisma.auth.deleteMany();
-  await prisma.clinic.deleteMany();
   console.log('All data cleared!');
 }
 

@@ -29,7 +29,6 @@ export class DoctorController {
       where: { doctorId },
       include: {
         patientProfile: { include: { patient: { include: { auth: true } } } },
-        clinic: true,
         service: true,
         specialty: true,
       },

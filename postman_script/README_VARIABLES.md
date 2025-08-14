@@ -16,7 +16,7 @@
 - `patientId`: ID của patient
 - `patientProfileId`: ID của patient profile
 - `doctorId`: ID của doctor
-- `clinicId`: ID của clinic
+
 - `specialtyId`: ID của specialty
 - `serviceId`: ID của service
 - `templateId`: ID của template
@@ -56,10 +56,6 @@ POST {{baseUrl}}/auth/login
 
 #### **Bước 2: Lấy thông tin cần thiết**
 ```bash
-# Lấy danh sách clinics
-GET {{baseUrl}}/admin/clinics
-# Copy clinicId vào biến
-
 # Lấy danh sách specialties
 GET {{baseUrl}}/admin/specialties
 # Copy specialtyId vào biến
@@ -137,7 +133,6 @@ POST {{baseUrl}}/medical-records
 
 2. **Lấy ID cần thiết:**
    ```
-   clinicId: 123e4567-e89b-12d3-a456-426614174000
    specialtyId: 456e7890-e89b-12d3-a456-426614174001
    templateId: 789e0123-e89b-12d3-a456-426614174002
    ```

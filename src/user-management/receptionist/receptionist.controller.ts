@@ -70,18 +70,11 @@ export class ReceptionistController {
     return { auth, patient };
   }
 
-  @Get('clinics/:clinicId/patients')
+  @Get('patients')
   @Roles(Role.RECEPTIONIST)
-  async listPatients(@Param('clinicId') clinicId: string) {
-    // Lấy tất cả bệnh nhân từng có lịch hẹn tại clinic này
-    const appointments = await this.prisma.appointment.findMany({
-      where: { clinicId },
-      select: { patientProfileId: true },
-      distinct: ['patientProfileId'],
-    });
-    const patientProfileIds = appointments.map((a) => a.patientProfileId);
+  async listPatients() {
+    // Lấy tất cả bệnh nhân
     return this.prisma.patient.findMany({
-      where: { id: { in: patientProfileIds } },
       include: { auth: true },
     });
   }
@@ -114,7 +107,6 @@ export class ReceptionistController {
     const {
       bookerId,
       patientProfileId,
-      clinicId,
       specialtyId,
       doctorId,
       serviceId,
@@ -126,7 +118,6 @@ export class ReceptionistController {
     if (
       !bookerId ||
       !patientProfileId ||
-      !clinicId ||
       !specialtyId ||
       !doctorId ||
       !serviceId ||
@@ -141,7 +132,6 @@ export class ReceptionistController {
         appointmentCode: `APPT${Date.now()}`,
         bookerId,
         patientProfileId,
-        clinicId,
         specialtyId,
         doctorId,
         serviceId,
@@ -153,11 +143,10 @@ export class ReceptionistController {
     });
   }
 
-  @Get('clinics/:clinicId/appointments')
+  @Get('appointments')
   @Roles(Role.RECEPTIONIST)
-  async listAppointments(@Param('clinicId') clinicId: string) {
+  async listAppointments() {
     return this.prisma.appointment.findMany({
-      where: { clinicId },
       include: {
         patientProfile: { include: { patient: { include: { auth: true } } } },
         doctor: { include: { auth: true } },
