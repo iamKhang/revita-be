@@ -118,7 +118,9 @@ export class LoginController {
       refreshToken: result.refreshToken,
       user: JSON.stringify(result.user),
     });
-    res.redirect(`${redirectUrl}/auth/callback?${queryParams.toString()}`);
+    const finalUrl = `${redirectUrl}/api/auth/callback?${queryParams.toString()}`;
+    console.log('🔗 Redirecting to:', finalUrl);
+    res.redirect(finalUrl);
   }
 
   @Post('google/token')
@@ -150,7 +152,7 @@ export class LoginController {
           client_secret: process.env.GOOGLE_CLIENT_SECRET,
           redirect_uri:
             process.env.GOOGLE_CALLBACK_URL ||
-            'http://localhost:3000/auth/google/callback',
+            'http://localhost:3000/api/auth/google/callback',
           grant_type: 'authorization_code',
         },
       );

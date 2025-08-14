@@ -18,7 +18,7 @@ import { UpdatePatientDto } from '../dto/update-patient.dto';
 import { BookAppointmentDto } from '../dto/book-appointment.dto';
 import { JwtAuthGuard } from 'src/login/jwt-auth.guard';
 
-@UseGuards(RolesGuard, JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('receptionists')
 export class ReceptionistController {
   private prisma = new PrismaClient();
@@ -79,9 +79,7 @@ export class ReceptionistController {
       select: { patientProfileId: true },
       distinct: ['patientProfileId'],
     });
-    const patientProfileIds = appointments.map(
-      (a) => a.patientProfileId as string,
-    );
+    const patientProfileIds = appointments.map((a) => a.patientProfileId);
     return this.prisma.patient.findMany({
       where: { id: { in: patientProfileIds } },
       include: { auth: true },
@@ -99,7 +97,6 @@ export class ReceptionistController {
     });
     if (!patient) throw new NotFoundException('Patient not found');
     await this.prisma.auth.update({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       where: { id: patient.authId! },
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       data: body as any,

@@ -1,17 +1,27 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsObject,
+} from 'class-validator';
 
 export class CreateMedicalRecordDto {
-  @IsString()
-  @IsNotEmpty()
-  patientId: string;
+  @IsUUID()
+  @IsOptional()
+  patientId?: string;
 
-  @IsString()
+  @IsUUID()
+  @IsOptional()
+  patientProfileId?: string;
+
+  @IsUUID()
   @IsNotEmpty()
   templateId: string;
 
-  @IsString()
+  @IsObject()
   @IsNotEmpty()
-  content: string;
+  content: object;
 
   @IsString()
   @IsOptional()

@@ -13,10 +13,15 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
     if (!requiredRoles) return true;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const { user } = context.switchToHttp().getRequest();
+    
+    const request = context.switchToHttp().getRequest();
+    const { user } = request;
+    
     console.log('Required Roles:', requiredRoles);
     console.log('User in Guard:', user);
+    console.log('Headers:', request.headers);
+    console.log('Authorization header:', request.headers.authorization);
+    
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
     return requiredRoles.includes(user?.role);
   }

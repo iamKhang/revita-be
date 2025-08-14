@@ -1,15 +1,11 @@
 /* eslint-disable */
-import {
-  Injectable,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
 import { UpdateMedicalRecordDto } from './dto/update-medical-record.dto';
-import { Role } from '../rbac/roles.enum';
 import { JwtUserPayload } from './dto/jwt-user-payload.dto';
-import { Prisma, MedicalRecordStatus } from '@prisma/client';
+import { Role } from '../rbac/roles.enum';
+import { MedicalRecordStatus } from '@prisma/client';
 
 @Injectable()
 export class MedicalRecordService {
@@ -21,12 +17,12 @@ export class MedicalRecordService {
     ) {
       throw new ForbiddenException('Bạn không có quyền tạo hồ sơ bệnh án');
     }
-    const patient = await this.prisma.patient.findUnique({
-      where: { id: dto.patientProfileId }
-    });
-    if (!patient) {
-      throw new NotFoundException('Không tìm thấy bệnh nhân');
+
+    // Only support patientProfileId now
+    if (!dto.patientProfileId) {
+      throw new BadRequestException('Missing required field: patientProfileId');
     }
+
     let doctorId: string | undefined = undefined;
     if (user.role === Role.DOCTOR) {
       const doctor = await this.prisma.doctor.findUnique({
@@ -52,6 +48,15 @@ export class MedicalRecordService {
         throw new NotFoundException('Không tìm thấy bác sĩ');
       }
     }
+
+    // Validate patient profile exists
+    const patientProfile = await this.prisma.patientProfile.findUnique({
+      where: { id: dto.patientProfileId }
+    });
+    if (!patientProfile) {
+      throw new NotFoundException('Không tìm thấy hồ sơ bệnh nhân');
+    }
+
     const data: any = {
       patientProfileId: dto.patientProfileId,
       templateId: dto.templateId,
@@ -61,6 +66,7 @@ export class MedicalRecordService {
       doctorId,
     };
     const created = await this.prisma.medicalRecord.create({ data });
+    
     // Lưu lịch sử tạo mới
     await this.prisma.medicalRecordHistory.create({
       data: {
@@ -69,6 +75,7 @@ export class MedicalRecordService {
         changes: { action: 'CREATE', data: created },
       },
     });
+    
     return created;
   }
 
@@ -83,8 +90,16 @@ export class MedicalRecordService {
         throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
       }
       
+      // Get all patient profiles for this patient
+      const patientProfiles = await this.prisma.patientProfile.findMany({
+        where: { patientId: user.patient.id },
+        select: { id: true },
+      });
+      
+      const patientProfileIds = patientProfiles.map(profile => profile.id);
+      
       return await this.prisma.medicalRecord.findMany({
-        where: { patientProfileId: user.patient.id },
+        where: { patientProfileId: { in: patientProfileIds } },
         include,
       });
     }
@@ -123,7 +138,13 @@ export class MedicalRecordService {
         throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
       }
       
-      if (record.patientProfileId !== user.patient.id) {
+      // Check if the patient profile belongs to this patient
+      const patientProfile = await this.prisma.patientProfile.findUnique({
+        where: { id: record.patientProfileId },
+        select: { patientId: true },
+      });
+      
+      if (!patientProfile || patientProfile.patientId !== user.patient.id) {
         throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
       }
     }

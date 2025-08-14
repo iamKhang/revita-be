@@ -3,6 +3,7 @@ import { AdminController } from './admin/admin.controller';
 import { ReceptionistModule } from './receptionist/receptionist.module';
 import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
+import { PatientProfileModule } from './patient-profile/patient-profile.module';
 
 import { PrismaClient } from '@prisma/client';
 import { PassportModule } from '@nestjs/passport';
@@ -14,6 +15,7 @@ import { UserController } from './user.controller';
     ReceptionistModule,
     DoctorModule,
     PatientModule,
+    PatientProfileModule,
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,

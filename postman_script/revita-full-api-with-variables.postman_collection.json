@@ -3,7 +3,7 @@
     "_postman_id": "revita-full-api-collection",
     "name": "Revita Full API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Full API collection for Revita medical system, including login, Google OAuth, register, user, admin, patient, doctor, receptionist, medical-record, and app endpoints."
+    "description": "Full API collection for Revita medical system, including login, Google OAuth, register, user, admin, patient, doctor, receptionist, patient-profile, medical-record, and app endpoints."
   },
   "values": [
 		{
@@ -23,6 +23,78 @@
 			"value": "",
 			"type": "default",
 			"enabled": true
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "refreshToken",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "googleCode",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "patientId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "patientProfileId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "doctorId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "clinicId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "specialtyId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "serviceId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "templateId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "medicalRecordId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "appointmentId",
+			"value": "",
+			"type": "default",
+			"enabled": true
 		}
 	],
   "item": [
@@ -36,7 +108,7 @@
             "header": [
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/auth/login", "host": ["{{base_url}}"], "path": ["api", "auth", "login"] },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"identifier\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
@@ -51,10 +123,10 @@
             "header": [
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/auth/refresh", "host": ["{{base_url}}"], "path": ["api", "auth", "refresh"] },
+            "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "refresh"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
             },
             "description": "Làm mới access token bằng refresh token."
           }
@@ -66,7 +138,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/auth/me", "host": ["{{base_url}}"], "path": ["api", "auth", "me"] },
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] },
             "description": "Lấy thông tin người dùng hiện tại."
           }
         },
@@ -74,7 +146,7 @@
           "name": "Google OAuth2: Start",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{base_url}}/api/auth/google", "host": ["{{base_url}}"], "path": ["api", "auth", "google"] },
+            "url": { "raw": "{{baseUrl}}/auth/google", "host": ["{{baseUrl}}"], "path": ["auth", "google"] },
             "description": "Bắt đầu xác thực Google OAuth2 (redirect, dùng trình duyệt)."
           }
         },
@@ -83,9 +155,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/auth/google/callback?platform=web",
-              "host": ["{{base_url}}"],
-              "path": ["api", "auth", "google", "callback"],
+              "raw": "{{baseUrl}}/auth/google/callback?platform=web",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "google", "callback"],
               "query": [
                 { "key": "platform", "value": "web" }
               ]
@@ -100,10 +172,10 @@
             "header": [
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/auth/google/token", "host": ["{{base_url}}"], "path": ["api", "auth", "google", "token"] },
+            "url": { "raw": "{{baseUrl}}/auth/google/token", "host": ["{{baseUrl}}"], "path": ["auth", "google", "token"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"{{google_code}}\"\n}"
+              "raw": "{\n  \"code\": \"{{googleCode}}\"\n}"
             },
             "description": "Đổi authorization code lấy tokens (dùng cho mobile/app hoặc SPA)."
           }
@@ -120,7 +192,7 @@
             "header": [
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/register/step1", "host": ["{{base_url}}"], "path": ["api", "register", "step1"] },
+            "url": { "raw": "{{baseUrl}}/register/step1", "host": ["{{baseUrl}}"], "path": ["register", "step1"] },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"phone\": \"\",\n  \"email\": \"\"\n}"
@@ -135,10 +207,10 @@
             "header": [
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/register/verify-otp", "host": ["{{base_url}}"], "path": ["api", "register", "verify-otp"] },
+            "url": { "raw": "{{baseUrl}}/register/verify-otp", "host": ["{{baseUrl}}"], "path": ["register", "verify-otp"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"otp\": \"123456\",\n  \"sessionId\": \"session_123456789\"\n}"
+              "raw": "{\n  \"otp\": \"123456\",\n  \"sessionId\": \"{{sessionId}}\"\n}"
             },
             "description": "Bước 2: Xác thực mã OTP."
           }
@@ -150,10 +222,10 @@
             "header": [
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/register/complete", "host": ["{{base_url}}"], "path": ["api", "register", "complete"] },
+            "url": { "raw": "{{baseUrl}}/register/complete", "host": ["{{baseUrl}}"], "path": ["register", "complete"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Nguyễn Văn A\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"password\": \"password123\",\n  \"sessionId\": \"session_123456789\"\n}"
+              "raw": "{\n  \"name\": \"Nguyễn Văn A\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"password\": \"password123\",\n  \"sessionId\": \"{{sessionId}}\"\n}"
             },
             "description": "Bước 3: Hoàn tất đăng ký."
           }
@@ -165,10 +237,10 @@
             "header": [
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/register/resend-otp", "host": ["{{base_url}}"], "path": ["api", "register", "resend-otp"] },
+            "url": { "raw": "{{baseUrl}}/register/resend-otp", "host": ["{{baseUrl}}"], "path": ["register", "resend-otp"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sessionId\": \"session_123456789\"\n}"
+              "raw": "{\n  \"sessionId\": \"{{sessionId}}\"\n}"
             },
             "description": "Gửi lại mã OTP cho session đang hoạt động."
           }
@@ -186,7 +258,7 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/users/me", "host": ["{{base_url}}"], "path": ["api", "users", "me"] },
+            "url": { "raw": "{{baseUrl}}/users/me", "host": ["{{baseUrl}}"], "path": ["users", "me"] },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Nguyễn Văn A\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\"\n}"
@@ -206,7 +278,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/admin/users", "host": ["{{base_url}}"], "path": ["api", "admin", "users"] },
+            "url": { "raw": "{{baseUrl}}/admin/users", "host": ["{{baseUrl}}"], "path": ["admin", "users"] },
             "description": "Lấy danh sách user. Query: role (optional)"
           }
         },
@@ -217,7 +289,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/admin/users/:userId", "host": ["{{base_url}}"], "path": ["api", "admin", "users", ":userId"] },
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}"] },
             "description": "Lấy user theo id."
           }
         },
@@ -229,7 +301,7 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/admin/users", "host": ["{{base_url}}"], "path": ["api", "admin", "users"] },
+            "url": { "raw": "{{baseUrl}}/admin/users", "host": ["{{baseUrl}}"], "path": ["admin", "users"] },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Nguyễn Văn A\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"password\": \"password123\",\n  \"email\": \"user@example.com\",\n  \"phone\": \"0123456789\",\n  \"role\": \"PATIENT\",\n  \"loyaltyPoints\": 0\n}"
@@ -245,7 +317,7 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/admin/users/:userId", "host": ["{{base_url}}"], "path": ["api", "admin", "users", ":userId"] },
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}"] },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Nguyễn Văn A Updated\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"email\": \"user@example.com\",\n  \"phone\": \"0123456789\",\n  \"password\": \"newpassword123\"\n}"
@@ -260,7 +332,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/admin/users/:userId", "host": ["{{base_url}}"], "path": ["api", "admin", "users", ":userId"] },
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}"] },
             "description": "Xóa user."
           }
         },
@@ -271,7 +343,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/admin/clinics", "host": ["{{base_url}}"], "path": ["api", "admin", "clinics"] },
+            "url": { "raw": "{{baseUrl}}/admin/clinics", "host": ["{{baseUrl}}"], "path": ["admin", "clinics"] },
             "description": "Lấy danh sách tất cả phòng khám."
           }
         },
@@ -282,7 +354,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/admin/clinics/:clinicId", "host": ["{{base_url}}"], "path": ["api", "admin", "clinics", ":clinicId"] },
+            "url": { "raw": "{{baseUrl}}/admin/clinics/{{clinicId}}", "host": ["{{baseUrl}}"], "path": ["admin", "clinics", "{{clinicId}}"] },
             "description": "Lấy chi tiết phòng khám theo id."
           }
         },
@@ -293,7 +365,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/admin/specialties", "host": ["{{base_url}}"], "path": ["api", "admin", "specialties"] },
+            "url": { "raw": "{{baseUrl}}/admin/specialties", "host": ["{{baseUrl}}"], "path": ["admin", "specialties"] },
             "description": "Lấy danh sách tất cả chuyên khoa. Query: clinicId (optional)"
           }
         },
@@ -304,7 +376,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/admin/templates", "host": ["{{base_url}}"], "path": ["api", "admin", "templates"] },
+            "url": { "raw": "{{baseUrl}}/admin/templates", "host": ["{{baseUrl}}"], "path": ["admin", "templates"] },
             "description": "Lấy danh sách tất cả template. Query: specialtyId (optional)"
           }
         },
@@ -315,7 +387,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/admin/services", "host": ["{{base_url}}"], "path": ["api", "admin", "services"] },
+            "url": { "raw": "{{baseUrl}}/admin/services", "host": ["{{baseUrl}}"], "path": ["admin", "services"] },
             "description": "Lấy danh sách tất cả dịch vụ. Query: specialtyId (optional)"
           }
         }
@@ -332,7 +404,7 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/patients/me", "host": ["{{base_url}}"], "path": ["api", "patients", "me"] },
+            "url": { "raw": "{{baseUrl}}/patients/me", "host": ["{{baseUrl}}"], "path": ["patients", "me"] },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Nguyễn Văn A\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"loyaltyPoints\": 100\n}"
@@ -347,8 +419,62 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/patients/me/medical-records", "host": ["{{base_url}}"], "path": ["api", "patients", "me", "medical-records"] },
+            "url": { "raw": "{{baseUrl}}/patients/me/medical-records", "host": ["{{baseUrl}}"], "path": ["patients", "me", "medical-records"] },
             "description": "Lấy danh sách bệnh án của bệnh nhân."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Patient Profile",
+      "item": [
+        {
+          "name": "Create Patient Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles", "host": ["{{baseUrl}}"], "path": ["patient-profiles"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"name\": \"Tên người khám\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"occupation\": \"Kỹ sư\",\n  \"emergencyContact\": {\n    \"name\": \"Nguyễn Thị B\",\n    \"phone\": \"0123456789\",\n    \"relationship\": \"Vợ\"\n  },\n  \"healthInsurance\": \"1234567890123456\",\n  \"relationship\": \"Chính chủ\"\n}"
+            },
+            "description": "Tạo hồ sơ bệnh nhân mới cho tất cả các role."
+          }
+        },
+        {
+          "name": "Get All Patient Profiles",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles", "host": ["{{baseUrl}}"], "path": ["patient-profiles"] },
+            "description": "Lấy danh sách hồ sơ bệnh nhân (theo quyền)."
+          }
+        },
+        {
+          "name": "Get Patient Profile By Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles/{{patientProfileId}}", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "{{patientProfileId}}"] },
+            "description": "Lấy chi tiết hồ sơ bệnh nhân theo ID."
+          }
+        },
+        {
+          "name": "Get Patient Profiles By Patient",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles/patient/{{patientId}}", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "patient", "{{patientId}}"] },
+            "description": "Lấy tất cả hồ sơ bệnh nhân của một patient."
           }
         }
       ]
@@ -363,7 +489,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/doctors/:doctorId/appointments", "host": ["{{base_url}}"], "path": ["api", "doctors", ":doctorId", "appointments"] },
+            "url": { "raw": "{{baseUrl}}/doctors/{{doctorId}}/appointments", "host": ["{{baseUrl}}"], "path": ["doctors", "{{doctorId}}", "appointments"] },
             "description": "Lấy danh sách lịch hẹn của bác sĩ."
           }
         },
@@ -374,7 +500,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/doctors/:doctorId/medical-records", "host": ["{{base_url}}"], "path": ["api", "doctors", ":doctorId", "medical-records"] },
+            "url": { "raw": "{{baseUrl}}/doctors/{{doctorId}}/medical-records", "host": ["{{baseUrl}}"], "path": ["doctors", "{{doctorId}}", "medical-records"] },
             "description": "Lấy danh sách bệnh án của bác sĩ."
           }
         },
@@ -386,12 +512,12 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/doctors/:doctorId/medical-records", "host": ["{{base_url}}"], "path": ["api", "doctors", ":doctorId", "medical-records"] },
+            "url": { "raw": "{{baseUrl}}/doctors/{{doctorId}}/medical-records", "host": ["{{baseUrl}}"], "path": ["doctors", "{{doctorId}}", "medical-records"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"patientProfileId\": \"string\",\n  \"templateId\": \"string\",\n  \"content\": {\n    \"field1\": \"value\"\n  },\n  \"appointmentId\": \"string\"\n}"
+              "raw": "{\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"templateId\": \"{{templateId}}\",\n  \"content\": {\n    \"field1\": \"value\"\n  },\n  \"appointmentId\": \"{{appointmentId}}\"\n}"
             },
-            "description": "Tạo bệnh án mới cho bác sĩ."
+            "description": "Tạo bệnh án mới cho bác sĩ (chỉ hỗ trợ patientProfileId)."
           }
         },
         {
@@ -402,7 +528,7 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/doctors/:doctorId/medical-records/:recordId", "host": ["{{base_url}}"], "path": ["api", "doctors", ":doctorId", "medical-records", ":recordId"] },
+            "url": { "raw": "{{baseUrl}}/doctors/{{doctorId}}/medical-records/{{medicalRecordId}}", "host": ["{{baseUrl}}"], "path": ["doctors", "{{doctorId}}", "medical-records", "{{medicalRecordId}}"] },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"content\": {\n    \"field1\": \"new value\"\n  },\n  \"status\": \"IN_PROGRESS\"\n}"
@@ -423,7 +549,7 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/receptionists/patients", "host": ["{{base_url}}"], "path": ["api", "receptionists", "patients"] },
+            "url": { "raw": "{{baseUrl}}/receptionists/patients", "host": ["{{baseUrl}}"], "path": ["receptionists", "patients"] },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Nguyễn Văn A\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"phone\": \"0123456789\",\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
@@ -439,7 +565,7 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/receptionists/patients/:patientId", "host": ["{{base_url}}"], "path": ["api", "receptionists", "patients", ":patientId"] },
+            "url": { "raw": "{{baseUrl}}/receptionists/patients/{{patientId}}", "host": ["{{baseUrl}}"], "path": ["receptionists", "patients", "{{patientId}}"] },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Nguyễn Văn A Updated\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"phone\": \"0123456789\",\n  \"email\": \"user@example.com\",\n  \"loyaltyPoints\": 100\n}"
@@ -455,10 +581,10 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/receptionists/appointments", "host": ["{{base_url}}"], "path": ["api", "receptionists", "appointments"] },
+            "url": { "raw": "{{baseUrl}}/receptionists/appointments", "host": ["{{baseUrl}}"], "path": ["receptionists", "appointments"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bookerId\": \"string\",\n  \"patientProfileId\": \"string\",\n  \"clinicId\": \"string\",\n  \"specialtyId\": \"string\",\n  \"doctorId\": \"string\",\n  \"serviceId\": \"string\",\n  \"status\": \"CONFIRMED\",\n  \"date\": \"2024-01-15\",\n  \"startTime\": \"09:00\",\n  \"endTime\": \"10:00\"\n}"
+              "raw": "{\n  \"bookerId\": \"{{userId}}\",\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"clinicId\": \"{{clinicId}}\",\n  \"specialtyId\": \"{{specialtyId}}\",\n  \"doctorId\": \"{{doctorId}}\",\n  \"serviceId\": \"{{serviceId}}\",\n  \"status\": \"CONFIRMED\",\n  \"date\": \"2024-01-15\",\n  \"startTime\": \"09:00\",\n  \"endTime\": \"10:00\"\n}"
             },
             "description": "Đặt lịch hẹn cho bệnh nhân."
           }
@@ -470,7 +596,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/receptionists/clinics/:clinicId/patients", "host": ["{{base_url}}"], "path": ["api", "receptionists", "clinics", ":clinicId", "patients"] },
+            "url": { "raw": "{{baseUrl}}/receptionists/clinics/{{clinicId}}/patients", "host": ["{{baseUrl}}"], "path": ["receptionists", "clinics", "{{clinicId}}", "patients"] },
             "description": "Lấy danh sách bệnh nhân theo clinic."
           }
         },
@@ -481,7 +607,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/receptionists/clinics/:clinicId/appointments", "host": ["{{base_url}}"], "path": ["api", "receptionists", "clinics", ":clinicId", "appointments"] },
+            "url": { "raw": "{{baseUrl}}/receptionists/clinics/{{clinicId}}/appointments", "host": ["{{baseUrl}}"], "path": ["receptionists", "clinics", "{{clinicId}}", "appointments"] },
             "description": "Lấy danh sách lịch hẹn theo clinic."
           }
         }
@@ -498,12 +624,12 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/medical-records", "host": ["{{base_url}}"], "path": ["api", "medical-records"] },
+            "url": { "raw": "{{baseUrl}}/medical-records", "host": ["{{baseUrl}}"], "path": ["medical-records"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"patientProfileId\": \"string\",\n  \"templateId\": \"string\",\n  \"doctorId\": \"string\",\n  \"status\": \"DRAFT\",\n  \"content\": {\n    \"field1\": \"value\"\n  }\n}"
+              "raw": "{\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"templateId\": \"{{templateId}}\",\n  \"doctorId\": \"{{doctorId}}\",\n  \"status\": \"DRAFT\",\n  \"content\": {\n    \"field1\": \"value\"\n  }\n}"
             },
-            "description": "Tạo hồ sơ bệnh án mới."
+            "description": "Tạo hồ sơ bệnh án mới (chỉ hỗ trợ patientProfileId)."
           }
         },
         {
@@ -513,7 +639,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/medical-records", "host": ["{{base_url}}"], "path": ["api", "medical-records"] },
+            "url": { "raw": "{{baseUrl}}/medical-records", "host": ["{{baseUrl}}"], "path": ["medical-records"] },
             "description": "Lấy tất cả hồ sơ bệnh án (theo quyền)."
           }
         },
@@ -524,7 +650,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/medical-records/:id", "host": ["{{base_url}}"], "path": ["api", "medical-records", ":id"] },
+            "url": { "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}", "host": ["{{baseUrl}}"], "path": ["medical-records", "{{medicalRecordId}}"] },
             "description": "Lấy chi tiết một hồ sơ bệnh án."
           }
         },
@@ -536,7 +662,7 @@
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": { "raw": "{{base_url}}/api/medical-records/:id", "host": ["{{base_url}}"], "path": ["api", "medical-records", ":id"] },
+            "url": { "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}", "host": ["{{baseUrl}}"], "path": ["medical-records", "{{medicalRecordId}}"] },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"content\": {\n    \"field1\": \"new value\"\n  },\n  \"status\": \"IN_PROGRESS\"\n}"
@@ -551,7 +677,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/medical-records/:id", "host": ["{{base_url}}"], "path": ["api", "medical-records", ":id"] },
+            "url": { "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}", "host": ["{{baseUrl}}"], "path": ["medical-records", "{{medicalRecordId}}"] },
             "description": "Xóa hồ sơ bệnh án (chỉ bác sĩ tạo hoặc admin)."
           }
         },
@@ -562,7 +688,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/medical-records/templates", "host": ["{{base_url}}"], "path": ["api", "medical-records", "templates"] },
+            "url": { "raw": "{{baseUrl}}/medical-records/templates", "host": ["{{baseUrl}}"], "path": ["medical-records", "templates"] },
             "description": "Lấy danh sách template bệnh án."
           }
         },
@@ -573,7 +699,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/medical-records/templates/:templateId", "host": ["{{base_url}}"], "path": ["api", "medical-records", "templates", ":templateId"] },
+            "url": { "raw": "{{baseUrl}}/medical-records/templates/{{templateId}}", "host": ["{{baseUrl}}"], "path": ["medical-records", "templates", "{{templateId}}"] },
             "description": "Lấy chi tiết template theo id."
           }
         },
@@ -584,7 +710,7 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{base_url}}/api/medical-records/:id/template", "host": ["{{base_url}}"], "path": ["api", "medical-records", ":id", "template"] },
+            "url": { "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}/template", "host": ["{{baseUrl}}"], "path": ["medical-records", "{{medicalRecordId}}", "template"] },
             "description": "Lấy template của một hồ sơ bệnh án."
           }
         }
@@ -597,11 +723,11 @@
           "name": "Hello",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{base_url}}/", "host": ["{{base_url}}"], "path": [""] },
+            "url": { "raw": "{{baseUrl}}/", "host": ["{{baseUrl}}"], "path": [""] },
             "description": "Lời chào từ server."
           }
         }
       ]
     }
   ]
-} 
+}

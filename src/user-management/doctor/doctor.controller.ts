@@ -55,18 +55,24 @@ export class DoctorController {
     @Param('doctorId') doctorId: string,
     @Body() body: CreateMedicalRecordDto,
   ) {
-    const { patientProfileId, templateId, content, appointmentId } = body;
-    if (!patientProfileId || !templateId || !content) {
-      throw new BadRequestException('Missing required fields');
+    if (!body.patientProfileId) {
+      throw new BadRequestException('Missing required field: patientProfileId');
     }
+
+    if (!body.templateId || !body.content) {
+      throw new BadRequestException(
+        'Missing required fields: templateId and content',
+      );
+    }
+
     return this.prisma.medicalRecord.create({
       data: {
         medicalRecordCode: `MR${Date.now()}`,
         doctorId,
-        patientProfileId,
-        templateId,
-        content,
-        appointmentId,
+        patientProfileId: body.patientProfileId,
+        templateId: body.templateId,
+        content: body.content,
+        appointmentId: body.appointmentId,
       },
     });
   }
