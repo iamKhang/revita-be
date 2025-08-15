@@ -62,6 +62,7 @@ export class ReceptionistController {
     });
     const patient = await this.prisma.patient.create({
       data: {
+        id: auth.id,
         authId: auth.id,
         patientCode: `PAT${Date.now()}`,
         loyaltyPoints: 0,

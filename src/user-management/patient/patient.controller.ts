@@ -5,7 +5,6 @@ import {
   UseGuards,
   Req,
   NotFoundException,
-  Get,
 } from '@nestjs/common';
 import { Roles } from '../../rbac/roles.decorator';
 import { Role } from '../../rbac/roles.enum';
@@ -35,28 +34,6 @@ export class PatientController {
       where: { authId: userId },
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       data: body as any,
-    });
-  }
-
-  @Get('me/medical-records')
-  @Roles(Role.PATIENT)
-  async viewMedicalRecords(@Req() req: any) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    const userId = req.user?.id;
-    if (!userId) throw new NotFoundException('User not found');
-
-    const patient = await this.prisma.patient.findUnique({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      where: { authId: userId },
-    });
-    if (!patient) throw new NotFoundException('Patient not found');
-    return this.prisma.medicalRecord.findMany({
-      where: { patientProfileId: patient.id },
-      include: {
-        doctor: { include: { auth: true } },
-        template: true,
-        appointment: true,
-      },
     });
   }
 }

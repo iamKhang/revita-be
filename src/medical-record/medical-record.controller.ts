@@ -37,6 +37,17 @@ export class MedicalRecordController {
     return await this.medicalRecordService.findAll(req.user);
   }
 
+  @Get('patient-profile/:patientProfileId')
+  async findByPatientProfile(
+    @Param('patientProfileId') patientProfileId: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return await this.medicalRecordService.findByPatientProfile(
+      patientProfileId,
+      req.user,
+    );
+  }
+
   @Get('templates')
   async getTemplates() {
     return await this.medicalRecordService.getTemplates();

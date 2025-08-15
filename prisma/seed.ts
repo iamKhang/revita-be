@@ -1050,7 +1050,7 @@ async function main() {
   const password = await bcrypt.hash('123456789', 10);
 
   // Doctor
-  await prisma.auth.create({
+  const doctorAuth = await prisma.auth.create({
     data: {
       name: 'Trần Đình Kiên',
       dateOfBirth: new Date('2003-05-07'),
@@ -1062,21 +1062,24 @@ async function main() {
       address: 'TP HCM',
       citizenId: '1111111111',
       role: 'DOCTOR',
-      doctor: {
-        create: {
-          doctorCode: 'DOC001',
-          degrees: 'Bác sĩ đa khoa',
-          yearsExperience: 10,
-          rating: 4.8,
-          workHistory: 'Bệnh viện Trà Ôn',
-          description: 'Chuyên gia nội tổng quát',
-        },
-      },
+    },
+  });
+
+  await prisma.doctor.create({
+    data: {
+      id: doctorAuth.id, // Sử dụng cùng id với auth
+      doctorCode: 'DOC001',
+      authId: doctorAuth.id,
+      degrees: 'Bác sĩ đa khoa',
+      yearsExperience: 10,
+      rating: 4.8,
+      workHistory: 'Bệnh viện Trà Ôn',
+      description: 'Chuyên gia nội tổng quát',
     },
   });
 
   // Patient
-  await prisma.auth.create({
+  const patientAuth = await prisma.auth.create({
     data: {
       name: 'Nguyễn Thanh Cảnh',
       dateOfBirth: new Date('2003-01-01'),
@@ -1088,17 +1091,20 @@ async function main() {
       address: 'TP HCM',
       citizenId: '2222222222',
       role: 'PATIENT',
-      patient: {
-        create: {
-          patientCode: 'PAT001',
-          loyaltyPoints: 100,
-        },
-      },
+    },
+  });
+
+  await prisma.patient.create({
+    data: {
+      id: patientAuth.id, // Sử dụng cùng id với auth
+      patientCode: 'PAT001',
+      authId: patientAuth.id,
+      loyaltyPoints: 100,
     },
   });
 
   // Receptionist
-  await prisma.auth.create({
+  const receptionistAuth = await prisma.auth.create({
     data: {
       name: 'Lê Hoàng Khang',
       dateOfBirth: new Date('1990-03-10'),
@@ -1110,14 +1116,18 @@ async function main() {
       address: 'TP HCM',
       citizenId: '3333333333',
       role: 'RECEPTIONIST',
-      receptionist: {
-        create: {},
-      },
+    },
+  });
+
+  await prisma.receptionist.create({
+    data: {
+      id: receptionistAuth.id, // Sử dụng cùng id với auth
+      authId: receptionistAuth.id,
     },
   });
 
   // Admin
-  await prisma.auth.create({
+  const adminAuth = await prisma.auth.create({
     data: {
       name: 'Trần Đình Kiên',
       dateOfBirth: new Date('2003-05-07'),
@@ -1130,11 +1140,14 @@ async function main() {
       address: 'TP HCM',
       citizenId: '4444444444',
       role: 'ADMIN',
-      admin: {
-        create: {
-          adminCode: 'AD001',
-        },
-      },
+    },
+  });
+
+  await prisma.admin.create({
+    data: {
+      id: adminAuth.id, // Sử dụng cùng id với auth
+      adminCode: 'AD001',
+      authId: adminAuth.id,
     },
   });
 }

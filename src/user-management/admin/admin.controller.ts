@@ -136,6 +136,7 @@ export class AdminController {
       case Role.DOCTOR:
         roleRecord = await this.prisma.doctor.create({
           data: {
+            id: auth.id,
             doctorCode: `DOC${Date.now()}`,
             authId: auth.id,
             degrees: degrees || [],
@@ -150,6 +151,7 @@ export class AdminController {
       case Role.PATIENT:
         roleRecord = await this.prisma.patient.create({
           data: {
+            id: auth.id,
             patientCode: `PAT${Date.now()}`,
             authId: auth.id,
             loyaltyPoints: loyaltyPoints || 0,
@@ -160,6 +162,7 @@ export class AdminController {
       case Role.RECEPTIONIST:
         roleRecord = await this.prisma.receptionist.create({
           data: {
+            id: auth.id,
             authId: auth.id,
           },
         });
@@ -169,6 +172,7 @@ export class AdminController {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         roleRecord = await (this.prisma as any).admin.create({
           data: {
+            id: auth.id,
             adminCode: adminCode || `ADM${Date.now()}`,
             authId: auth.id,
           },
@@ -263,7 +267,6 @@ export class AdminController {
 
       case Role.ADMIN:
         if (adminCode) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           roleRecord = await this.prisma.admin.update({
             where: { authId: userId },
             data: { adminCode },

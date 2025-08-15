@@ -119,7 +119,6 @@ export class LoginController {
       user: JSON.stringify(result.user),
     });
     const finalUrl = `${redirectUrl}/api/auth/callback?${queryParams.toString()}`;
-    console.log('🔗 Redirecting to:', finalUrl);
     res.redirect(finalUrl);
   }
 

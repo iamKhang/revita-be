@@ -82,7 +82,20 @@ export class MedicalRecordService {
   async findAll(user: JwtUserPayload) {
     const include = {
       patientProfile: true,
-      doctor: true,
+      doctor: {
+        include: {
+          auth: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              avatar: true,
+              gender: true,
+            },
+          },
+        },
+      },
     };
 
     if (user.role === Role.PATIENT) {
@@ -119,13 +132,89 @@ export class MedicalRecordService {
     return await this.prisma.medicalRecord.findMany({ include });
   }
 
+  async findByPatientProfile(patientProfileId: string, user: JwtUserPayload) {
+    const include = {
+      patientProfile: true,
+      doctor: {
+        include: {
+          auth: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              avatar: true,
+              gender: true,
+            },
+          },
+        },
+      },
+    };
+
+    // Validate patient profile exists
+    const patientProfile = await this.prisma.patientProfile.findUnique({
+      where: { id: patientProfileId },
+      include: { patient: true },
+    });
+    
+    if (!patientProfile) {
+      throw new NotFoundException('Không tìm thấy hồ sơ bệnh nhân');
+    }
+
+    // Check permissions based on user role
+    if (user.role === Role.PATIENT) {
+      if (!user.patient?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
+      }
+      
+      // Patient can only view their own profiles
+      if (patientProfile.patientId !== user.patient.id) {
+        throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
+      }
+    }
+
+    if (user.role === Role.DOCTOR) {
+      if (!user.doctor?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      }
+      
+      // Doctor can view records they created for this patient profile
+      return await this.prisma.medicalRecord.findMany({
+        where: { 
+          patientProfileId,
+          doctorId: user.doctor.id 
+        },
+        include,
+      });
+    }
+
+    // Admin can view all records for any patient profile
+    return await this.prisma.medicalRecord.findMany({
+      where: { patientProfileId },
+      include,
+    });
+  }
+
 
   async findOne(id: string, user: JwtUserPayload) {
     const record = await this.prisma.medicalRecord.findUnique({
       where: { id },
       include: {
         patientProfile: true,
-        doctor: true,
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                avatar: true,
+                gender: true,
+              },
+            },
+          },
+        },
       },
     });
 

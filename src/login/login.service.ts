@@ -101,13 +101,11 @@ export class LoginService {
         payload.receptionist = receptionist;
       }
     } else if (user.role === 'ADMIN') {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       const admin = await this.prisma.admin.findUnique({
         where: { authId: auth.id },
         select: { id: true },
       });
       if (admin) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
         payload.admin = { id: admin.id };
       }
     }
@@ -148,6 +146,7 @@ export class LoginService {
       // Tạo patient mới liên kết với auth vừa tạo
       await this.prisma.patient.create({
         data: {
+          id: auth.id,
           patientCode: `PAT${Date.now()}`,
           authId: auth.id,
           loyaltyPoints: 0,
@@ -218,13 +217,11 @@ export class LoginService {
         payload.receptionist = receptionist;
       }
     } else if (auth.role === 'ADMIN') {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       const admin = await this.prisma.admin.findUnique({
         where: { authId: auth.id },
         select: { id: true },
       });
       if (admin) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
         payload.admin = { id: admin.id };
       }
     }
@@ -234,13 +231,13 @@ export class LoginService {
 
     const user = {
       id: auth.id,
-      name: auth.name as string,
-      dateOfBirth: auth.dateOfBirth as Date,
-      gender: auth.gender as string,
-      avatar: auth.avatar as string | null,
-      address: auth.address as string,
-      citizenId: auth.citizenId as string | null,
-      role: auth.role as string,
+      name: auth.name,
+      dateOfBirth: auth.dateOfBirth,
+      gender: auth.gender,
+      avatar: auth.avatar,
+      address: auth.address,
+      citizenId: auth.citizenId,
+      role: auth.role,
     };
 
     return { accessToken, refreshToken, user };

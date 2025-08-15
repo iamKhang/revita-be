@@ -203,6 +203,7 @@ export class RegisterService {
         // Tạo Patient record
         await prisma.patient.create({
           data: {
+            id: auth.id,
             patientCode: `PAT${Date.now()}`, // Tạo mã bệnh nhân
             authId: auth.id,
             loyaltyPoints: 0,

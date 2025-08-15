@@ -383,17 +383,6 @@
             },
             "description": "Cập nhật thông tin cá nhân bệnh nhân."
           }
-        },
-        {
-          "name": "Get My Medical Records",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
-            "url": { "raw": "{{baseUrl}}/patients/me/medical-records", "host": ["{{baseUrl}}"], "path": ["patients", "me", "medical-records"] },
-            "description": "Lấy danh sách bệnh án của bệnh nhân."
-          }
         }
       ]
     },
@@ -613,6 +602,17 @@
             ],
             "url": { "raw": "{{baseUrl}}/medical-records", "host": ["{{baseUrl}}"], "path": ["medical-records"] },
             "description": "Lấy tất cả hồ sơ bệnh án (theo quyền)."
+          }
+        },
+        {
+          "name": "Get Medical Records By Patient Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/medical-records/patient-profile/{{patientProfileId}}", "host": ["{{baseUrl}}"], "path": ["medical-records", "patient-profile", "{{patientProfileId}}"] },
+            "description": "Lấy tất cả hồ sơ bệnh án của một patient profile cụ thể (theo quyền)."
           }
         },
         {
