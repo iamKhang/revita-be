@@ -16,6 +16,21 @@ export type AssignedRoom = {
   serviceIds: string[];
 };
 
+export type UpdateStatusRequest = {
+  patientProfileId: string;
+  roomId?: string;
+  roomCode?: string;
+};
+
+export type PatientStatus = 'LEFT_TEMPORARILY' | 'RETURNED' | 'SERVING' | 'COMPLETED' | 'SKIPPED';
+
+type ClinicRoomWithDoctor = {
+  id: string;
+  roomCode: string;
+  doctorId: string | null;
+  doctor: { doctorCode: string } | null;
+};
+
 @Injectable()
 export class RoutingService {
   constructor(
@@ -148,6 +163,85 @@ export class RoutingService {
     }
 
     return chosen;
+  }
+
+  async updateStatusForPatientInRoom(
+    request: UpdateStatusRequest,
+    status: PatientStatus,
+  ): Promise<{
+    ok: true;
+    status: PatientStatus;
+    patientProfileId: string;
+    patientName: string | null;
+    roomId: string;
+    roomCode: string;
+    doctorId: string | null;
+    doctorCode: string | null;
+    timestamp: string;
+  }> {
+    // Validate patient profile and get display name
+    const profile = await this.prisma.patientProfile.findUnique({
+      where: { id: request.patientProfileId },
+      include: { patient: { include: { auth: true } } },
+    });
+    if (!profile) throw new NotFoundException('Patient profile not found');
+    const patientName = (profile.name && profile.name.trim().length > 0)
+      ? profile.name
+      : profile.patient?.auth?.name ?? null;
+
+    // Resolve room by id or code
+    let room: ClinicRoomWithDoctor | null = null;
+    if (request.roomId) {
+      room = await this.prisma.clinicRoom.findUnique({
+        where: { id: request.roomId },
+        include: { doctor: true },
+      });
+    } else if (request.roomCode) {
+      room = await this.prisma.clinicRoom.findUnique({
+        where: { roomCode: request.roomCode },
+        include: { doctor: true },
+      });
+    }
+    if (!room) throw new NotFoundException('Clinic room not found');
+
+    const timestamp = new Date().toISOString();
+
+    const topic = process.env.KAFKA_TOPIC_ASSIGNMENTS || 'clinic.assignments';
+    const event = {
+      type: 'PATIENT_STATUS' as const,
+      status,
+      patientProfileId: request.patientProfileId,
+      patientName,
+      roomId: room.id,
+      roomCode: room.roomCode,
+      doctorId: room.doctorId ?? null,
+      doctorCode: room.doctor?.doctorCode ?? null,
+      timestamp,
+    };
+
+    try {
+      await this.kafka.publish(topic, [
+        {
+          key: room.id,
+          value: event,
+        },
+      ]);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[Kafka] publish skipped:', (err as Error).message);
+    }
+
+    return {
+      ok: true,
+      status,
+      patientProfileId: event.patientProfileId,
+      patientName: event.patientName,
+      roomId: event.roomId,
+      roomCode: event.roomCode,
+      doctorId: event.doctorId,
+      doctorCode: event.doctorCode,
+      timestamp,
+    };
   }
 }
 

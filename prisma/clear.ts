@@ -2,6 +2,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
+  // Delete in FK-safe order
+  await prisma.medicalRecordHistory.deleteMany();
   await prisma.medicalRecord.deleteMany();
   await prisma.appointment.deleteMany();
   await prisma.invoice.deleteMany();
@@ -11,10 +13,11 @@ async function main() {
   await prisma.service.deleteMany();
   await prisma.template.deleteMany();
   await prisma.specialty.deleteMany();
+  await prisma.patientProfile.deleteMany();
   await prisma.receptionist.deleteMany();
+  await prisma.admin.deleteMany();
   await prisma.doctor.deleteMany();
   await prisma.patient.deleteMany();
-  // await prisma.admin.deleteMany();
   await prisma.auth.deleteMany();
   console.log('All data cleared!');
 }

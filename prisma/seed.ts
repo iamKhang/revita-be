@@ -1019,121 +1019,11 @@ async function main() {
     });
   }
 
-  // 3. Seed phòng khám (ClinicRoom), bác sĩ và dịch vụ cho 2 khoa: Răng hàm mặt, Mắt
-  const targetSpecialties = [
-    {
-      name: 'Răng hàm mặt',
-      codePrefix: 'RHM',
-      roomNamePrefix: 'Phòng RHM',
-      servicePresets: [
-        { code: 'KHAM', name: 'Khám răng tổng quát', price: 150000 },
-        { code: 'CAORANG', name: 'Lấy cao răng', price: 200000 },
-        { code: 'TRAM', name: 'Trám răng', price: 300000 },
-      ],
-    },
-    {
-      name: 'Mắt',
-      codePrefix: 'MAT',
-      roomNamePrefix: 'Phòng Mắt',
-      servicePresets: [
-        { code: 'KHAM', name: 'Khám mắt tổng quát', price: 150000 },
-        { code: 'DOTHILUC', name: 'Đo thị lực', price: 120000 },
-        { code: 'KHUCXA', name: 'Đo khúc xạ', price: 180000 },
-      ],
-    },
-  ];
+  // 3. TẠM THỜI BỎ cách phát sinh phòng khám và dịch vụ theo for để tránh nhân bản service theo từng phòng
+  // Vui lòng sử dụng file `prisma/seed_clinic.ts` để seed dữ liệu phòng, bác sĩ, dịch vụ và mapping n-n.
+  const targetSpecialties: never[] = [];
 
   const password = await bcrypt.hash('123456789', 10);
-
-  for (const spec of targetSpecialties) {
-    const specialty = specialtyMap[spec.name];
-    if (!specialty) continue;
-
-    for (let i = 1; i <= 5; i++) {
-      const idx = `${i}`.padStart(2, '0');
-      const roomCode = `${spec.codePrefix}-${idx}`;
-      const roomName = `${spec.roomNamePrefix} ${idx}`;
-
-      // Tạo Auth cho bác sĩ của phòng
-      const doctorEmail = `doctor.${spec.codePrefix.toLowerCase()}${idx}@example.com`;
-      const doctorPhone = `090${spec.codePrefix.length}${i}0000${i}`; // đảm bảo unique đơn giản
-      const doctorCitizen = `${spec.codePrefix.length}${i}`.padEnd(10, `${i}`);
-
-      let doctorAuth = await prisma.auth.findUnique({ where: { email: doctorEmail } });
-      if (!doctorAuth) {
-        doctorAuth = await prisma.auth.create({
-          data: {
-            name: `Bác sĩ ${spec.name} ${idx}`,
-            dateOfBirth: new Date('1985-01-01'),
-            email: doctorEmail,
-            phone: null,
-            password,
-            gender: 'male',
-            avatar: null,
-            address: 'TP HCM',
-            citizenId: null,
-            role: 'DOCTOR',
-          },
-        });
-      }
-
-      // Tạo Doctor
-      let doctor = await prisma.doctor.findUnique({ where: { authId: doctorAuth.id } });
-      if (!doctor) {
-        doctor = await prisma.doctor.create({
-          data: {
-            id: doctorAuth.id,
-            doctorCode: `DOC_${spec.codePrefix}_${idx}`,
-            authId: doctorAuth.id,
-            degrees: ['BS CKI', spec.name],
-            yearsExperience: 8 + i,
-            rating: 4.5,
-            workHistory: 'Bệnh viện TP',
-            description: `Bác sĩ chuyên khoa ${spec.name}`,
-          },
-        });
-      }
-
-      // Tạo phòng khám gắn với chuyên khoa và bác sĩ
-      const existingRoom = await prisma.clinicRoom.findUnique({ where: { roomCode } });
-      const room = existingRoom
-        ? existingRoom
-        : await prisma.clinicRoom.create({
-            data: {
-              roomCode,
-              roomName,
-              specialtyId: specialty.id,
-              doctorId: doctor.id,
-              description: `Phòng khám ${spec.name} số ${idx}`,
-            },
-          });
-
-      // Tạo các dịch vụ cho phòng và gắn qua bảng trung gian
-      for (const preset of spec.servicePresets) {
-        const serviceCode = `SRV_${roomCode}_${preset.code}`;
-        let service = await prisma.service.findFirst({ where: { serviceCode } });
-        if (!service) {
-          service = await prisma.service.create({
-            data: {
-              serviceCode,
-              name: preset.name,
-              price: preset.price,
-              description: `${preset.name} tại ${roomName}`,
-            },
-          });
-        }
-
-        const existedLink = await prisma.clinicRoomService.findFirst({
-          where: { clinicRoomId: room.id, serviceId: service.id },
-        });
-        if (!existedLink) {
-          await prisma.clinicRoomService.create({
-            data: { clinicRoomId: room.id, serviceId: service.id },
-          });
-        }
-      }
-    }
-  }
 
   // 4. Tạo các user và auth cho từng role
   let doctorAuth = await prisma.auth.findUnique({ where: { email: 'doctor@gmail.com' } });
@@ -1213,7 +1103,7 @@ async function main() {
         data: {
           profileCode: `PP_${idx}`,
           patientId: patientAuth.id,
-          name: `Hồ sơ bệnh nhân ${idx}`,
+          name: `Bệnh nhân ${idx}`,
           dateOfBirth: new Date(`199${i % 10}-0${(i % 9) + 1}-15`),
           gender: i % 2 === 0 ? 'male' : 'female',
           address: 'TP HCM',
