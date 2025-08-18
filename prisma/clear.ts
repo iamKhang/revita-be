@@ -6,7 +6,8 @@ async function main() {
   await prisma.appointment.deleteMany();
   await prisma.invoice.deleteMany();
   await prisma.schedule.deleteMany();
-  await prisma.doctorSpecialty.deleteMany();
+  await prisma.clinicRoomService.deleteMany();
+  await prisma.clinicRoom.deleteMany();
   await prisma.service.deleteMany();
   await prisma.template.deleteMany();
   await prisma.specialty.deleteMany();

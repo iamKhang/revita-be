@@ -1,0 +1,57 @@
+{
+  "info": {
+    "name": "Revita Routing API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Assign patient to rooms",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/routing/assign",
+          "host": ["{{baseUrl}}"],
+          "path": ["routing", "assign"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"serviceIds\": [\n    \"{{serviceId1}}\",\n    \"{{serviceId2}}\"\n  ]\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 201/200', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('Has assignments array', function () {",
+              "  pm.expect(json).to.have.property('assignments');",
+              "  pm.expect(Array.isArray(json.assignments)).to.be.true;",
+              "  pm.expect(json.assignments.length).to.be.greaterThan(0);",
+              "});",
+              "",
+              "// Save first assignment to env for convenience",
+              "if (json.assignments && json.assignments.length > 0) {",
+              "  pm.environment.set('assignedRoomId', json.assignments[0].roomId);",
+              "  pm.environment.set('assignedDoctorId', json.assignments[0].doctorId);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "patientProfileId", "value": "" },
+    { "key": "serviceId1", "value": "" },
+    { "key": "serviceId2", "value": "" }
+  ]
+}

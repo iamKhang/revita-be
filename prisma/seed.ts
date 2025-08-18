@@ -1019,137 +1019,272 @@ async function main() {
     });
   }
 
-  // Tạo service mẫu cho từng template
-  for (const t of templates) {
-    const specialty = specialtyMap[t.specialtyName];
+  // 3. Seed phòng khám (ClinicRoom), bác sĩ và dịch vụ cho 2 khoa: Răng hàm mặt, Mắt
+  const targetSpecialties = [
+    {
+      name: 'Răng hàm mặt',
+      codePrefix: 'RHM',
+      roomNamePrefix: 'Phòng RHM',
+      servicePresets: [
+        { code: 'KHAM', name: 'Khám răng tổng quát', price: 150000 },
+        { code: 'CAORANG', name: 'Lấy cao răng', price: 200000 },
+        { code: 'TRAM', name: 'Trám răng', price: 300000 },
+      ],
+    },
+    {
+      name: 'Mắt',
+      codePrefix: 'MAT',
+      roomNamePrefix: 'Phòng Mắt',
+      servicePresets: [
+        { code: 'KHAM', name: 'Khám mắt tổng quát', price: 150000 },
+        { code: 'DOTHILUC', name: 'Đo thị lực', price: 120000 },
+        { code: 'KHUCXA', name: 'Đo khúc xạ', price: 180000 },
+      ],
+    },
+  ];
+
+  const password = await bcrypt.hash('123456789', 10);
+
+  for (const spec of targetSpecialties) {
+    const specialty = specialtyMap[spec.name];
     if (!specialty) continue;
-    await prisma.service.create({
+
+    for (let i = 1; i <= 5; i++) {
+      const idx = `${i}`.padStart(2, '0');
+      const roomCode = `${spec.codePrefix}-${idx}`;
+      const roomName = `${spec.roomNamePrefix} ${idx}`;
+
+      // Tạo Auth cho bác sĩ của phòng
+      const doctorEmail = `doctor.${spec.codePrefix.toLowerCase()}${idx}@example.com`;
+      const doctorPhone = `090${spec.codePrefix.length}${i}0000${i}`; // đảm bảo unique đơn giản
+      const doctorCitizen = `${spec.codePrefix.length}${i}`.padEnd(10, `${i}`);
+
+      let doctorAuth = await prisma.auth.findUnique({ where: { email: doctorEmail } });
+      if (!doctorAuth) {
+        doctorAuth = await prisma.auth.create({
+          data: {
+            name: `Bác sĩ ${spec.name} ${idx}`,
+            dateOfBirth: new Date('1985-01-01'),
+            email: doctorEmail,
+            phone: null,
+            password,
+            gender: 'male',
+            avatar: null,
+            address: 'TP HCM',
+            citizenId: null,
+            role: 'DOCTOR',
+          },
+        });
+      }
+
+      // Tạo Doctor
+      let doctor = await prisma.doctor.findUnique({ where: { authId: doctorAuth.id } });
+      if (!doctor) {
+        doctor = await prisma.doctor.create({
+          data: {
+            id: doctorAuth.id,
+            doctorCode: `DOC_${spec.codePrefix}_${idx}`,
+            authId: doctorAuth.id,
+            degrees: ['BS CKI', spec.name],
+            yearsExperience: 8 + i,
+            rating: 4.5,
+            workHistory: 'Bệnh viện TP',
+            description: `Bác sĩ chuyên khoa ${spec.name}`,
+          },
+        });
+      }
+
+      // Tạo phòng khám gắn với chuyên khoa và bác sĩ
+      const existingRoom = await prisma.clinicRoom.findUnique({ where: { roomCode } });
+      const room = existingRoom
+        ? existingRoom
+        : await prisma.clinicRoom.create({
+            data: {
+              roomCode,
+              roomName,
+              specialtyId: specialty.id,
+              doctorId: doctor.id,
+              description: `Phòng khám ${spec.name} số ${idx}`,
+            },
+          });
+
+      // Tạo các dịch vụ cho phòng và gắn qua bảng trung gian
+      for (const preset of spec.servicePresets) {
+        const serviceCode = `SRV_${roomCode}_${preset.code}`;
+        let service = await prisma.service.findFirst({ where: { serviceCode } });
+        if (!service) {
+          service = await prisma.service.create({
+            data: {
+              serviceCode,
+              name: preset.name,
+              price: preset.price,
+              description: `${preset.name} tại ${roomName}`,
+            },
+          });
+        }
+
+        const existedLink = await prisma.clinicRoomService.findFirst({
+          where: { clinicRoomId: room.id, serviceId: service.id },
+        });
+        if (!existedLink) {
+          await prisma.clinicRoomService.create({
+            data: { clinicRoomId: room.id, serviceId: service.id },
+          });
+        }
+      }
+    }
+  }
+
+  // 4. Tạo các user và auth cho từng role
+  let doctorAuth = await prisma.auth.findUnique({ where: { email: 'doctor@gmail.com' } });
+  if (!doctorAuth) {
+    doctorAuth = await prisma.auth.create({
       data: {
-        serviceCode: `SERVICE_${t.templateCode}`,
-        name: `${t.name}`,
-        price: 200000, // Giá mẫu, có thể thay đổi
-        description: `Dịch vụ khám chuyên khoa ${t.name}`,
-        specialtyId: specialty.id,
+        name: 'Trần Đình Kiên',
+        dateOfBirth: new Date('2003-05-07'),
+        email: 'doctor@gmail.com',
+        phone: '0325421882',
+        password: password,
+        gender: 'male',
+        avatar: null,
+        address: 'TP HCM',
+        citizenId: '1111111111',
+        role: 'DOCTOR',
       },
     });
   }
 
-  // 3. Tạo Service
-  // await prisma.service.create({
-  //   data: {
-  //     serviceCode: 'SERVICE001',
-  //     name: 'Khám tổng quát',
-  //     price: 200000,
-  //     description: 'Khám sức khỏe tổng quát',
-  //     specialtyId: specialtyMap['Nội tổng quát'].id, // Assuming 'Nội tổng quát' is the default specialty for this service
-  //     clinicId: clinic.id,
-  //   },
-  // });
-
-  // 4. Tạo các user và auth cho từng role
-  const password = await bcrypt.hash('123456789', 10);
-
-  // Doctor
-  const doctorAuth = await prisma.auth.create({
-    data: {
-      name: 'Trần Đình Kiên',
-      dateOfBirth: new Date('2003-05-07'),
-      email: 'doctor@gmail.com',
-      phone: '0325421882',
-      password: password,
-      gender: 'male',
-      avatar: null,
-      address: 'TP HCM',
-      citizenId: '1111111111',
-      role: 'DOCTOR',
-    },
-  });
-
-  await prisma.doctor.create({
-    data: {
-      id: doctorAuth.id, // Sử dụng cùng id với auth
-      doctorCode: 'DOC001',
-      authId: doctorAuth.id,
-      degrees: 'Bác sĩ đa khoa',
-      yearsExperience: 10,
-      rating: 4.8,
-      workHistory: 'Bệnh viện Trà Ôn',
-      description: 'Chuyên gia nội tổng quát',
-    },
-  });
+  const existedDefaultDoctor = await prisma.doctor.findUnique({ where: { authId: doctorAuth.id } });
+  if (!existedDefaultDoctor) {
+    await prisma.doctor.create({
+      data: {
+        id: doctorAuth.id, // Sử dụng cùng id với auth
+        doctorCode: 'DOC001',
+        authId: doctorAuth.id,
+        degrees: ['Bác sĩ đa khoa'],
+        yearsExperience: 10,
+        rating: 4.8,
+        workHistory: 'Bệnh viện Trà Ôn',
+        description: 'Chuyên gia nội tổng quát',
+      },
+    });
+  }
 
   // Patient
-  const patientAuth = await prisma.auth.create({
-    data: {
-      name: 'Nguyễn Thanh Cảnh',
-      dateOfBirth: new Date('2003-01-01'),
-      email: 'patient@gmail.com',
-      phone: '0900000001',
-      password: password,
-      gender: 'male',
-      avatar: null,
-      address: 'TP HCM',
-      citizenId: '2222222222',
-      role: 'PATIENT',
-    },
-  });
+  let patientAuth = await prisma.auth.findUnique({ where: { email: 'patient@gmail.com' } });
+  if (!patientAuth) {
+    patientAuth = await prisma.auth.create({
+      data: {
+        name: 'Nguyễn Thanh Cảnh',
+        dateOfBirth: new Date('2003-01-01'),
+        email: 'patient@gmail.com',
+        phone: '0900000001',
+        password: password,
+        gender: 'male',
+        avatar: null,
+        address: 'TP HCM',
+        citizenId: '2222222222',
+        role: 'PATIENT',
+      },
+    });
+  }
 
-  await prisma.patient.create({
-    data: {
-      id: patientAuth.id, // Sử dụng cùng id với auth
-      patientCode: 'PAT001',
-      authId: patientAuth.id,
-      loyaltyPoints: 100,
-    },
-  });
+  const existedPatient = await prisma.patient.findUnique({ where: { authId: patientAuth.id } });
+  if (!existedPatient) {
+    await prisma.patient.create({
+      data: {
+        id: patientAuth.id, // Sử dụng cùng id với auth
+        patientCode: 'PAT001',
+        authId: patientAuth.id,
+        loyaltyPoints: 100,
+      },
+    });
+  }
+
+  // Tạo nhiều hồ sơ khám bệnh (PatientProfile) cho bệnh nhân trên
+  const relationships = ['self', 'child', 'spouse', 'parent'];
+  for (let i = 1; i <= 20; i++) {
+    const idx = `${i}`.padStart(2, '0');
+    const existedProfile = await prisma.patientProfile.findFirst({
+      where: { profileCode: `PP_${idx}`, patientId: patientAuth.id },
+    });
+    if (!existedProfile) {
+      await prisma.patientProfile.create({
+        data: {
+          profileCode: `PP_${idx}`,
+          patientId: patientAuth.id,
+          name: `Hồ sơ bệnh nhân ${idx}`,
+          dateOfBirth: new Date(`199${i % 10}-0${(i % 9) + 1}-15`),
+          gender: i % 2 === 0 ? 'male' : 'female',
+          address: 'TP HCM',
+          occupation: 'Nhân viên văn phòng',
+          emergencyContact: { name: 'Liên hệ khẩn cấp', phone: `090000${idx}` },
+          healthInsurance: i % 3 === 0 ? 'BHYT-TEST' : null,
+          relationship: relationships[i % relationships.length],
+        },
+      });
+    }
+  }
 
   // Receptionist
-  const receptionistAuth = await prisma.auth.create({
-    data: {
-      name: 'Lê Hoàng Khang',
-      dateOfBirth: new Date('1990-03-10'),
-      email: 'receptionist@gmail.com',
-      phone: '0900000002',
-      password: password,
-      gender: 'male',
-      avatar: null,
-      address: 'TP HCM',
-      citizenId: '3333333333',
-      role: 'RECEPTIONIST',
-    },
-  });
+  let receptionistAuth = await prisma.auth.findUnique({ where: { email: 'receptionist@gmail.com' } });
+  if (!receptionistAuth) {
+    receptionistAuth = await prisma.auth.create({
+      data: {
+        name: 'Lê Hoàng Khang',
+        dateOfBirth: new Date('1990-03-10'),
+        email: 'receptionist@gmail.com',
+        phone: '0900000002',
+        password: password,
+        gender: 'male',
+        avatar: null,
+        address: 'TP HCM',
+        citizenId: '3333333333',
+        role: 'RECEPTIONIST',
+      },
+    });
+  }
 
-  await prisma.receptionist.create({
-    data: {
-      id: receptionistAuth.id, // Sử dụng cùng id với auth
-      authId: receptionistAuth.id,
-    },
-  });
+  const existedReceptionist = await prisma.receptionist.findUnique({ where: { authId: receptionistAuth.id } });
+  if (!existedReceptionist) {
+    await prisma.receptionist.create({
+      data: {
+        id: receptionistAuth.id, // Sử dụng cùng id với auth
+        authId: receptionistAuth.id,
+      },
+    });
+  }
 
   // Admin
-  const adminAuth = await prisma.auth.create({
-    data: {
-      name: 'Trần Đình Kiên',
-      dateOfBirth: new Date('2003-05-07'),
-      email: 'admin@gmail.com',
-      phone: '0325421881',
-      password: password,
-      gender: 'male',
-      avatar:
-        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/Anime_Characters_cnkjji.jpg',
-      address: 'TP HCM',
-      citizenId: '4444444444',
-      role: 'ADMIN',
-    },
-  });
+  let adminAuth = await prisma.auth.findUnique({ where: { email: 'admin@gmail.com' } });
+  if (!adminAuth) {
+    adminAuth = await prisma.auth.create({
+      data: {
+        name: 'Trần Đình Kiên',
+        dateOfBirth: new Date('2003-05-07'),
+        email: 'admin@gmail.com',
+        phone: '0325421881',
+        password: password,
+        gender: 'male',
+        avatar:
+          'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/Anime_Characters_cnkjji.jpg',
+        address: 'TP HCM',
+        citizenId: '4444444444',
+        role: 'ADMIN',
+      },
+    });
+  }
 
-  await prisma.admin.create({
-    data: {
-      id: adminAuth.id, // Sử dụng cùng id với auth
-      adminCode: 'AD001',
-      authId: adminAuth.id,
-    },
-  });
+  const existedAdmin = await prisma.admin.findUnique({ where: { authId: adminAuth.id } });
+  if (!existedAdmin) {
+    await prisma.admin.create({
+      data: {
+        id: adminAuth.id, // Sử dụng cùng id với auth
+        adminCode: 'AD001',
+        authId: adminAuth.id,
+      },
+    });
+  }
 }
 
 main()

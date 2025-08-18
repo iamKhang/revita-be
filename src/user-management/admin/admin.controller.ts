@@ -326,8 +326,7 @@ export class AdminController {
   async findAllSpecialties() {
     return this.prisma.specialty.findMany({
       include: {
-        doctors: true,
-        services: true,
+        clinicRooms: true,
         templates: true,
       },
     });
@@ -350,12 +349,9 @@ export class AdminController {
   @Get('services')
   @Roles(Role.ADMIN)
   async findAllServices(@Query('specialtyId') specialtyId?: string) {
-    const where = specialtyId ? { specialtyId } : {};
+    const where = {};
     return this.prisma.service.findMany({
       where,
-      include: {
-        specialty: true,
-      },
     });
   }
 }

@@ -58,7 +58,6 @@ model Doctor {
   doctorCode      String      @map("doctor_code")
   authId          String      @unique @map("auth_id")
   degrees         Json     // Sửa từ String[] sang Json
-  specialties     DoctorSpecialty[]
   yearsExperience Int      @map("years_experience")
   rating          Float    @map("rating")
   workHistory     String   @map("work_history")
@@ -67,6 +66,7 @@ model Doctor {
   schedules       Schedule[]
   appointments    Appointment[]
   medicalRecords  MedicalRecord[]
+  clinicRooms     ClinicRoom[]
 
   @@map("doctors")
 }
@@ -129,23 +129,42 @@ model Admin {
 model Specialty {
   id          String      @id @default(uuid()) @map("id")
   name        String
-  doctors     DoctorSpecialty[]
-  services    Service[]
+  clinicRooms ClinicRoom[]
   appointments Appointment[]
   templates   Template[]
 
   @@map("specialties")
 }
 
-// Bảng trung gian DoctorSpecialty cho quan hệ nhiều-nhiều
-model DoctorSpecialty {
-  doctorId    String      @map("doctor_id")
+// Bảng ClinicRoom cho phòng khám
+model ClinicRoom {
+  id          String      @id @default(uuid())
+  roomCode    String      @unique @map("room_code") // Mã phòng
+  roomName    String      @map("room_name") // Tên phòng
   specialtyId String      @map("specialty_id")
-  doctor      Doctor    @relation(fields: [doctorId], references: [id])
-  specialty   Specialty @relation(fields: [specialtyId], references: [id])
-  @@unique([doctorId, specialtyId])
+  doctorId    String      @unique @map("doctor_id") // Mỗi phòng chỉ gắn với 1 bác sĩ
+  description String?     @map("description") // Mô tả phòng
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  
+  specialty   Specialty   @relation(fields: [specialtyId], references: [id])
+  doctor      Doctor      @relation(fields: [doctorId], references: [id])
+  services    ClinicRoomService[]
+  appointments Appointment[]
 
-  @@map("doctor_specialties")
+  @@map("clinic_rooms")
+}
+
+// Bảng trung gian ClinicRoomService cho quan hệ nhiều-nhiều giữa phòng khám và dịch vụ
+model ClinicRoomService {
+  clinicRoomId String      @map("clinic_room_id")
+  serviceId    String      @map("service_id")
+  clinicRoom   ClinicRoom  @relation(fields: [clinicRoomId], references: [id])
+  service      Service     @relation(fields: [serviceId], references: [id])
+  
+  @@unique([clinicRoomId, serviceId])
+  @@map("clinic_room_services")
 }
 
 // Bảng Service cho dịch vụ
@@ -155,8 +174,7 @@ model Service {
   name        String   @map("name")
   price       Float    @map("price")
   description String   @map("description")
-  specialtyId String      @map("specialty_id")
-  specialty   Specialty @relation(fields: [specialtyId], references: [id])
+  clinicRoomServices ClinicRoomService[]
   appointments Appointment[]
 
   @@map("services")
@@ -185,6 +203,7 @@ model Appointment {
   specialtyId String      @map("specialty_id")
   doctorId    String      @map("doctor_id")
   serviceId   String      @map("service_id")
+  clinicRoomId String?    @map("clinic_room_id")
   status      String   @map("status")
   date        DateTime @map("date")
   startTime   String   @map("start_time")
@@ -194,6 +213,7 @@ model Appointment {
   specialty   Specialty @relation(fields: [specialtyId], references: [id])
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
   service     Service  @relation(fields: [serviceId], references: [id])
+  clinicRoom  ClinicRoom? @relation(fields: [clinicRoomId], references: [id])
   invoiceId   String?     @map("invoice_id")
   invoice     Invoice? @relation(fields: [invoiceId], references: [id])
   medicalRecords MedicalRecord[]

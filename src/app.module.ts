@@ -7,6 +7,7 @@ import { RolesGuard } from './rbac/roles.guard';
 import { UserManagementModule } from './user-management/user-management.module';
 import { JwtStrategy } from './login/jwt.strategy';
 import { MedicalRecordModule } from './medical-record/medical-record.module';
+import { RoutingModule } from './routing/routing.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { MedicalRecordModule } from './medical-record/medical-record.module';
     RegisterModule,
     UserManagementModule,
     MedicalRecordModule,
+    RoutingModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
