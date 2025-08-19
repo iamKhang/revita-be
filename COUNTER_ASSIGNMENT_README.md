@@ -1,0 +1,287 @@
+# Hệ thống Phân bổ Quầy Khám với Kafka
+
+## Tổng quan
+
+Hệ thống phân bổ quầy khám tự động sử dụng Kafka để quản lý việc phân bổ bệnh nhân đến các quầy (receptionist) dựa trên hệ thống ưu tiên thông minh.
+
+## Tính năng chính
+
+### 1. Hệ thống Ưu tiên
+- **Cấp cứu**: Ưu tiên cao nhất (1000 điểm)
+- **Người cao tuổi (>70)**: 500 điểm
+- **Phụ nữ có thai**: 400 điểm
+- **Người khuyết tật**: 300 điểm
+- **VIP**: 200 điểm
+- **Độ tuổi**: 60+ (100 điểm), 50+ (50 điểm), 40+ (25 điểm)
+
+### 2. Thuật toán Phân bổ
+- Tính điểm ưu tiên cho bệnh nhân
+- Đánh giá tải trọng của từng quầy
+- Chọn quầy tối ưu dựa trên:
+  - Độ dài hàng đợi hiện tại
+  - Thời gian xử lý trung bình
+  - Điểm ưu tiên của bệnh nhân
+
+### 3. Real-time Communication
+- Sử dụng Kafka để gửi thông báo real-time
+- Các quầy nhận được thông báo ngay lập tức
+- Hỗ trợ ứng dụng Electron
+
+## API Endpoints
+
+### 1. Phân bổ bệnh nhân
+```http
+POST /counter-assignment/assign
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "appointmentId": "uuid",
+  "patientProfileId": "uuid",
+  "invoiceId": "uuid",
+  "patientName": "Nguyễn Văn A",
+  "patientAge": 75,
+  "patientGender": "MALE",
+  "isPregnant": false,
+  "isEmergency": false,
+  "isElderly": true,
+  "isDisabled": false,
+  "isVIP": false,
+  "priorityLevel": "HIGH",
+  "notes": "Bệnh nhân cao tuổi"
+}
+```
+
+### 2. Quét hóa đơn và phân bổ tự động
+```http
+POST /counter-assignment/scan-invoice
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "invoiceId": "uuid",
+  "qrCode": "optional-qr-code",
+  "scannedBy": "receptionist-id",
+  "deviceId": "electron-app-id"
+}
+```
+
+### 3. Phân bổ trực tiếp (không cần hóa đơn)
+```http
+POST /counter-assignment/direct-assignment
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "patientName": "Nguyễn Văn A",
+  "patientAge": 75,
+  "patientGender": "MALE",
+  "patientPhone": "0901234567",
+  "serviceName": "Khám tổng quát",
+  "servicePrice": 200000,
+  "isElderly": true,
+  "isPregnant": false,
+  "isEmergency": false,
+  "isDisabled": false,
+  "isVIP": false,
+  "priorityLevel": "HIGH",
+  "notes": "Bệnh nhân cao tuổi, cần ưu tiên",
+  "assignedBy": "receptionist-id"
+}
+```
+
+### 4. Xem trạng thái quầy
+```http
+GET /counter-assignment/counters/available
+Authorization: Bearer <token>
+```
+
+### 5. Xem hàng đợi của quầy
+```http
+GET /counter-assignment/counters/{counterId}/queue
+Authorization: Bearer <token>
+```
+
+### 6. Xem tổng quan hệ thống
+```http
+GET /counter-assignment/counters/status
+Authorization: Bearer <token>
+```
+
+## Kafka Topics
+
+### 1. Counter Assignments
+- **Topic**: `counter.assignments`
+- **Event Type**: `PATIENT_ASSIGNED_TO_COUNTER`
+- **Message Format**:
+```json
+{
+  "type": "PATIENT_ASSIGNED_TO_COUNTER",
+  "appointmentId": "uuid",
+  "patientProfileId": "uuid",
+  "invoiceId": "uuid",
+  "patientName": "Nguyễn Văn A",
+  "patientAge": 75,
+  "patientGender": "MALE",
+  "priorityScore": 600,
+  "assignedCounter": {
+    "counterId": "uuid",
+    "counterCode": "CTR123456",
+    "counterName": "Counter Nguyễn Thị B",
+    "receptionistName": "Nguyễn Thị B",
+    "estimatedWaitTime": 30
+  },
+  "serviceName": "Khám tổng quát",
+  "servicePrice": 200000,
+  "timestamp": "2024-01-15T10:30:00Z",
+  "metadata": {
+    "isPregnant": false,
+    "isEmergency": false,
+    "isElderly": true,
+    "isDisabled": false,
+    "isVIP": false,
+    "priorityLevel": "HIGH"
+  }
+}
+```
+
+## Cách sử dụng
+
+### 1. Khởi động Kafka
+```bash
+cd kafka
+docker-compose up -d
+```
+
+### 2. Chạy Counter Listener
+```bash
+# Lắng nghe cho một quầy cụ thể
+KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments node kafka/counter-listener.js <COUNTER_ID>
+```
+
+### 3. Quét hóa đơn từ ứng dụng Electron
+```javascript
+// Trong ứng dụng Electron
+const response = await fetch('http://localhost:3000/counter-assignment/scan-invoice', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  },
+  body: JSON.stringify({
+    invoiceId: scannedInvoiceId,
+    scannedBy: currentReceptionistId,
+    deviceId: electronAppId
+  })
+});
+
+const result = await response.json();
+console.log('Patient assigned to:', result.assignment.counterName);
+```
+
+### 4. Phân bổ trực tiếp từ ứng dụng Electron
+```javascript
+// Trong ứng dụng Electron - nút "Bốc số"
+const response = await fetch('http://localhost:3000/counter-assignment/direct-assignment', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  },
+  body: JSON.stringify({
+    patientName: formData.patientName,
+    patientAge: formData.patientAge,
+    patientGender: formData.patientGender,
+    patientPhone: formData.patientPhone,
+    serviceName: formData.serviceName,
+    servicePrice: formData.servicePrice,
+    isElderly: formData.isElderly,
+    isPregnant: formData.isPregnant,
+    isEmergency: formData.isEmergency,
+    isDisabled: formData.isDisabled,
+    isVIP: formData.isVIP,
+    priorityLevel: formData.priorityLevel,
+    notes: formData.notes,
+    assignedBy: currentReceptionistId
+  })
+});
+
+const result = await response.json();
+console.log('Patient assigned to:', result.assignment.counterName);
+```
+
+## Luồng hoạt động
+
+### Luồng 1: Bệnh nhân có hóa đơn
+1. **Bệnh nhân đến quầy** với hóa đơn đã thanh toán
+2. **Quét mã QR/hóa đơn** bằng ứng dụng Electron
+3. **Hệ thống tự động**:
+   - Xác định thông tin bệnh nhân
+   - Tính điểm ưu tiên
+   - Chọn quầy tối ưu
+   - Gửi thông báo qua Kafka
+4. **Quầy nhận thông báo** và hiển thị thông tin bệnh nhân
+5. **Bệnh nhân được hướng dẫn** đến quầy được phân bổ
+
+### Luồng 2: Bệnh nhân không đặt trước
+1. **Bệnh nhân đến quầy** không có hóa đơn
+2. **Receptionist nhập thông tin** vào form Electron
+3. **Nhấn nút "Bốc số"** để phân bổ trực tiếp
+4. **Hệ thống tự động**:
+   - Tính điểm ưu tiên dựa trên thông tin nhập
+   - Chọn quầy tối ưu
+   - Gửi thông báo qua Kafka
+5. **Quầy nhận thông báo** và hiển thị thông tin bệnh nhân
+6. **Bệnh nhân được hướng dẫn** đến quầy được phân bổ
+
+## Cấu hình Environment Variables
+
+```bash
+# Kafka Configuration
+KAFKA_BROKERS=localhost:9092
+KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments
+
+# Counter Assignment Settings
+MAX_QUEUE_LENGTH_PER_COUNTER=5
+AVERAGE_PROCESSING_TIME_MINUTES=15
+```
+
+## Monitoring và Logging
+
+- Tất cả events được log qua Kafka
+- Có thể monitor real-time qua counter listener
+- API endpoints trả về thông tin chi tiết về trạng thái hệ thống
+
+## Tích hợp với Electron App
+
+Hệ thống được thiết kế để tích hợp dễ dàng với ứng dụng Electron:
+
+1. **QR Code Scanner**: Quét mã QR từ hóa đơn
+2. **Real-time Updates**: Nhận thông báo qua Kafka
+3. **UI Updates**: Cập nhật giao diện người dùng real-time
+4. **Sound Notifications**: Phát âm thanh thông báo
+
+## Troubleshooting
+
+### Kafka không kết nối được
+```bash
+# Kiểm tra Kafka status
+docker-compose ps
+
+# Restart Kafka
+docker-compose restart
+```
+
+### Counter không nhận được thông báo
+```bash
+# Kiểm tra topic
+kafka-topics --list --bootstrap-server localhost:9092
+
+# Kiểm tra consumer group
+kafka-consumer-groups --bootstrap-server localhost:9092 --describe --group revita-counter-<counter-id>
+```
+
+### Lỗi phân bổ
+- Kiểm tra quầy có available không
+- Kiểm tra thông tin appointment và invoice
+- Kiểm tra quyền truy cập API

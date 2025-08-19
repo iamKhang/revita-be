@@ -1,0 +1,317 @@
+{
+  "info": {
+    "name": "Counter Assignment API",
+    "description": "Collection để test hệ thống phân bổ quầy khám với Kafka",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "your-jwt-token-here",
+      "type": "string"
+    },
+    {
+      "key": "receptionistId",
+      "value": "c9d215bc-a273-4dac-99c2-0ef6031889b2",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Counter Assignment",
+      "item": [
+        {
+          "name": "1. Get Available Counters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/counters/available",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "counters", "available"]
+            },
+            "description": "Lấy danh sách các quầy có sẵn"
+          }
+        },
+        {
+          "name": "2. Get System Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/counters/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "counters", "status"]
+            },
+            "description": "Xem tổng quan trạng thái hệ thống"
+          }
+        },
+        {
+          "name": "3. Simple Assignment (Bốc số đơn thuần)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/simple-assignment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "simple-assignment"]
+            },
+            "description": "Bốc số đơn thuần - không cần thông tin gì"
+          }
+        },
+        {
+          "name": "4. Direct Assignment (Nhập thông tin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Nguyễn Văn A\",\n  \"patientAge\": 75,\n  \"patientGender\": \"MALE\",\n  \"patientPhone\": \"0901234567\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"isElderly\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Bệnh nhân cao tuổi, cần ưu tiên\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "direct-assignment"]
+            },
+            "description": "Phân bổ với thông tin chi tiết"
+          }
+        },
+        {
+          "name": "5. Scan Invoice Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": \"your-invoice-id-here\",\n  \"deviceId\": \"electron-app-001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/scan-invoice",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "scan-invoice"]
+            },
+            "description": "Quét hóa đơn và phân bổ"
+          }
+        },
+        {
+          "name": "6. Get Counter Queue",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{receptionistId}}/queue",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "counters", "{{receptionistId}}", "queue"]
+            },
+            "description": "Xem hàng đợi của một quầy cụ thể"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Test Cases",
+      "item": [
+        {
+          "name": "Test Case 1: Bệnh nhân cao tuổi",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Nguyễn Thị Bà\",\n  \"patientAge\": 78,\n  \"patientGender\": \"FEMALE\",\n  \"patientPhone\": \"0901234568\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"isElderly\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Bệnh nhân cao tuổi, cần ưu tiên\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "direct-assignment"]
+            },
+            "description": "Test case cho bệnh nhân cao tuổi (>70)"
+          }
+        },
+        {
+          "name": "Test Case 2: Phụ nữ có thai",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Trần Thị C\",\n  \"patientAge\": 28,\n  \"patientGender\": \"FEMALE\",\n  \"patientPhone\": \"0901234569\",\n  \"serviceName\": \"Khám thai\",\n  \"servicePrice\": 300000,\n  \"isPregnant\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Phụ nữ có thai, cần ưu tiên\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "direct-assignment"]
+            },
+            "description": "Test case cho phụ nữ có thai"
+          }
+        },
+        {
+          "name": "Test Case 3: Bệnh nhân cấp cứu",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Lê Văn D\",\n  \"patientAge\": 45,\n  \"patientGender\": \"MALE\",\n  \"patientPhone\": \"0901234570\",\n  \"serviceName\": \"Cấp cứu\",\n  \"servicePrice\": 500000,\n  \"isEmergency\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Bệnh nhân cấp cứu, cần ưu tiên cao nhất\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "direct-assignment"]
+            },
+            "description": "Test case cho bệnh nhân cấp cứu"
+          }
+        },
+        {
+          "name": "Test Case 4: Bệnh nhân thường",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Phạm Thị E\",\n  \"patientAge\": 35,\n  \"patientGender\": \"FEMALE\",\n  \"patientPhone\": \"0901234571\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"priorityLevel\": \"MEDIUM\",\n  \"notes\": \"Bệnh nhân thường\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "direct-assignment"]
+            },
+            "description": "Test case cho bệnh nhân thường"
+          }
+        },
+        {
+          "name": "Test Case 5: Bốc số đơn thuần",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/simple-assignment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "simple-assignment"]
+            },
+            "description": "Test case cho bốc số đơn thuần"
+          }
+        }
+      ]
+    }
+  ]
+}
