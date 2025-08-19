@@ -16,15 +16,20 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
       clientId: 'revita-api',
       brokers,
     });
-    this.producer = kafka.producer({ createPartitioner: Partitioners.LegacyPartitioner });
+    this.producer = kafka.producer({
+      createPartitioner: Partitioners.LegacyPartitioner,
+    });
     try {
       await this.producer.connect();
       this.isConnected = true;
     } catch (err) {
       this.isConnected = false;
       // Do not crash app if Kafka is not available
-      // eslint-disable-next-line no-console
-      console.warn('[Kafka] Failed to connect on init. Will try on first publish.', err);
+
+      console.warn(
+        '[Kafka] Failed to connect on init. Will try on first publish.',
+        err,
+      );
     }
   }
 
@@ -39,7 +44,10 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async publish(topic: string, messages: Array<{ key?: string; value: unknown }>): Promise<void> {
+  async publish(
+    topic: string,
+    messages: Array<{ key?: string; value: unknown }>,
+  ): Promise<void> {
     if (!this.producer) {
       throw new Error('Kafka producer not initialized');
     }
@@ -53,9 +61,10 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
     }
     await this.producer.send({
       topic,
-      messages: messages.map((m) => ({ key: m.key, value: JSON.stringify(m.value) })),
+      messages: messages.map((m) => ({
+        key: m.key,
+        value: JSON.stringify(m.value),
+      })),
     });
   }
 }
-
-

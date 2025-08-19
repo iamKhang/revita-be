@@ -80,7 +80,9 @@ export class RegisterService {
 
     if (!sendSuccess) {
       // Nếu gửi thất bại, vẫn log ra console để development
-      console.log(`🔐 OTP cho ${phone || email}: ${otp} (Gửi thất bại, hiển thị để test)`);
+      console.log(
+        `🔐 OTP cho ${phone || email}: ${otp} (Gửi thất bại, hiển thị để test)`,
+      );
       console.log(`📱 Session ID: ${sessionId}`);
     }
 
@@ -101,8 +103,12 @@ export class RegisterService {
     const { otp, sessionId } = verifyDto;
 
     // Lấy thông tin session
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const sessionData = await this.redisService.getSession(sessionId);
+    const sessionData = (await this.redisService.getSession(sessionId)) as {
+      phone?: string;
+      email?: string;
+      step?: number;
+      verified?: boolean;
+    } | null;
     if (!sessionData) {
       throw new NotFoundException('Session không tồn tại hoặc đã hết hạn');
     }
@@ -119,9 +125,7 @@ export class RegisterService {
     }
 
     // Cập nhật session - đánh dấu đã xác thực
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     sessionData.verified = true;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     sessionData.step = 2;
     await this.redisService.setSession(sessionId, sessionData, 1800); // 30 phút
 
@@ -152,14 +156,19 @@ export class RegisterService {
     } = completeDto;
 
     // Lấy thông tin session
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const sessionData = await this.redisService.getSession(sessionId);
+
+    const sessionData = (await this.redisService.getSession(sessionId)) as {
+      phone?: string;
+      email?: string;
+      step?: number;
+      verified?: boolean;
+    } | null;
     if (!sessionData) {
       throw new NotFoundException('Session không tồn tại hoặc đã hết hạn');
     }
 
     // Kiểm tra xem đã xác thực OTP chưa
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
     if (!sessionData.verified || sessionData.step !== 2) {
       throw new BadRequestException(
         'Chưa xác thực OTP hoặc session không hợp lệ',
@@ -192,9 +201,7 @@ export class RegisterService {
             citizenId,
             avatar,
             role: Role.PATIENT, // Mặc định là PATIENT
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             phone: sessionData.phone,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             email: sessionData.email,
             password: hashedPassword,
           },
@@ -246,13 +253,15 @@ export class RegisterService {
    */
   async resendOtp(sessionId: string): Promise<{ message: string }> {
     // Lấy thông tin session
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const sessionData = await this.redisService.getSession(sessionId);
+    const sessionData = (await this.redisService.getSession(sessionId)) as {
+      phone?: string;
+      email?: string;
+      verified?: boolean;
+    } | null;
     if (!sessionData) {
       throw new NotFoundException('Session không tồn tại hoặc đã hết hạn');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (sessionData.verified) {
       throw new BadRequestException('OTP đã được xác thực');
     }
@@ -273,7 +282,9 @@ export class RegisterService {
 
     if (!sendSuccess) {
       // Nếu gửi thất bại, vẫn log ra console để development
-      console.log(`🔐 OTP mới cho ${sessionData.phone || sessionData.email}: ${otp} (Gửi thất bại, hiển thị để test)`);
+      console.log(
+        `🔐 OTP mới cho ${sessionData.phone || sessionData.email}: ${otp} (Gửi thất bại, hiển thị để test)`,
+      );
     }
 
     return {

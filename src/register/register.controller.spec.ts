@@ -6,7 +6,6 @@ import { PrismaClient } from '@prisma/client';
 
 describe('RegisterController', () => {
   let controller: RegisterController;
-  let service: RegisterService;
 
   const mockRegisterService = {
     registerStep1: jest.fn(),
@@ -59,7 +58,6 @@ describe('RegisterController', () => {
     }).compile();
 
     controller = module.get<RegisterController>(RegisterController);
-    service = module.get<RegisterService>(RegisterService);
   });
 
   it('should be defined', () => {
@@ -78,7 +76,7 @@ describe('RegisterController', () => {
 
       const result = await controller.registerStep1(dto);
 
-      expect(service.registerStep1).toHaveBeenCalledWith(dto);
+      expect(mockRegisterService.registerStep1).toHaveBeenCalledWith(dto);
       expect(result).toEqual(expectedResult);
     });
   });
@@ -88,14 +86,15 @@ describe('RegisterController', () => {
       const dto = { otp: '123456', sessionId: 'test-session-id' };
       const expectedResult = {
         sessionId: 'test-session-id',
-        message: 'Xác thực OTP thành công. Vui lòng hoàn tất thông tin đăng ký.',
+        message:
+          'Xác thực OTP thành công. Vui lòng hoàn tất thông tin đăng ký.',
       };
 
       mockRegisterService.verifyOtp.mockResolvedValue(expectedResult);
 
       const result = await controller.verifyOtp(dto);
 
-      expect(service.verifyOtp).toHaveBeenCalledWith(dto);
+      expect(mockRegisterService.verifyOtp).toHaveBeenCalledWith(dto);
       expect(result).toEqual(expectedResult);
     });
   });
@@ -115,11 +114,15 @@ describe('RegisterController', () => {
         userId: 'test-user-id',
       };
 
-      mockRegisterService.completeRegistration.mockResolvedValue(expectedResult);
+      mockRegisterService.completeRegistration.mockResolvedValue(
+        expectedResult,
+      );
 
       const result = await controller.completeRegistration(dto);
 
-      expect(service.completeRegistration).toHaveBeenCalledWith(dto);
+      expect(mockRegisterService.completeRegistration).toHaveBeenCalledWith(
+        dto,
+      );
       expect(result).toEqual(expectedResult);
     });
   });
@@ -135,7 +138,7 @@ describe('RegisterController', () => {
 
       const result = await controller.resendOtp(sessionId);
 
-      expect(service.resendOtp).toHaveBeenCalledWith(sessionId);
+      expect(mockRegisterService.resendOtp).toHaveBeenCalledWith(sessionId);
       expect(result).toEqual(expectedResult);
     });
   });

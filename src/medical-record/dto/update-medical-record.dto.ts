@@ -6,7 +6,6 @@ export class UpdateMedicalRecordDto {
   @IsOptional()
   content?: object;
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   @IsEnum(MedicalRecordStatus)
   @IsOptional()
   status?: MedicalRecordStatus;

@@ -1021,12 +1021,14 @@ async function main() {
 
   // 3. TẠM THỜI BỎ cách phát sinh phòng khám và dịch vụ theo for để tránh nhân bản service theo từng phòng
   // Vui lòng sử dụng file `prisma/seed_clinic.ts` để seed dữ liệu phòng, bác sĩ, dịch vụ và mapping n-n.
-  const targetSpecialties: never[] = [];
+  // const targetSpecialties: never[] = [];
 
   const password = await bcrypt.hash('123456789', 10);
 
   // 4. Tạo các user và auth cho từng role
-  let doctorAuth = await prisma.auth.findUnique({ where: { email: 'doctor@gmail.com' } });
+  let doctorAuth = await prisma.auth.findUnique({
+    where: { email: 'doctor@gmail.com' },
+  });
   if (!doctorAuth) {
     doctorAuth = await prisma.auth.create({
       data: {
@@ -1044,7 +1046,9 @@ async function main() {
     });
   }
 
-  const existedDefaultDoctor = await prisma.doctor.findUnique({ where: { authId: doctorAuth.id } });
+  const existedDefaultDoctor = await prisma.doctor.findUnique({
+    where: { authId: doctorAuth.id },
+  });
   if (!existedDefaultDoctor) {
     await prisma.doctor.create({
       data: {
@@ -1061,7 +1065,9 @@ async function main() {
   }
 
   // Patient
-  let patientAuth = await prisma.auth.findUnique({ where: { email: 'patient@gmail.com' } });
+  let patientAuth = await prisma.auth.findUnique({
+    where: { email: 'patient@gmail.com' },
+  });
   if (!patientAuth) {
     patientAuth = await prisma.auth.create({
       data: {
@@ -1079,7 +1085,9 @@ async function main() {
     });
   }
 
-  const existedPatient = await prisma.patient.findUnique({ where: { authId: patientAuth.id } });
+  const existedPatient = await prisma.patient.findUnique({
+    where: { authId: patientAuth.id },
+  });
   if (!existedPatient) {
     await prisma.patient.create({
       data: {
@@ -1117,7 +1125,9 @@ async function main() {
   }
 
   // Receptionist
-  let receptionistAuth = await prisma.auth.findUnique({ where: { email: 'receptionist@gmail.com' } });
+  let receptionistAuth = await prisma.auth.findUnique({
+    where: { email: 'receptionist@gmail.com' },
+  });
   if (!receptionistAuth) {
     receptionistAuth = await prisma.auth.create({
       data: {
@@ -1135,7 +1145,9 @@ async function main() {
     });
   }
 
-  const existedReceptionist = await prisma.receptionist.findUnique({ where: { authId: receptionistAuth.id } });
+  const existedReceptionist = await prisma.receptionist.findUnique({
+    where: { authId: receptionistAuth.id },
+  });
   if (!existedReceptionist) {
     await prisma.receptionist.create({
       data: {
@@ -1146,7 +1158,9 @@ async function main() {
   }
 
   // Admin
-  let adminAuth = await prisma.auth.findUnique({ where: { email: 'admin@gmail.com' } });
+  let adminAuth = await prisma.auth.findUnique({
+    where: { email: 'admin@gmail.com' },
+  });
   if (!adminAuth) {
     adminAuth = await prisma.auth.create({
       data: {
@@ -1165,7 +1179,9 @@ async function main() {
     });
   }
 
-  const existedAdmin = await prisma.admin.findUnique({ where: { authId: adminAuth.id } });
+  const existedAdmin = await prisma.admin.findUnique({
+    where: { authId: adminAuth.id },
+  });
   if (!existedAdmin) {
     await prisma.admin.create({
       data: {

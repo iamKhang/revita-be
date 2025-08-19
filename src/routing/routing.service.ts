@@ -22,7 +22,12 @@ export type UpdateStatusRequest = {
   roomCode?: string;
 };
 
-export type PatientStatus = 'LEFT_TEMPORARILY' | 'RETURNED' | 'SERVING' | 'COMPLETED' | 'SKIPPED';
+export type PatientStatus =
+  | 'LEFT_TEMPORARILY'
+  | 'RETURNED'
+  | 'SERVING'
+  | 'COMPLETED'
+  | 'SKIPPED';
 
 type ClinicRoomWithDoctor = {
   id: string;
@@ -61,9 +66,10 @@ export class RoutingService {
       include: { patient: { include: { auth: true } } },
     });
     if (!profile) throw new NotFoundException('Patient profile not found');
-    const patientName = (profile.name && profile.name.trim().length > 0)
-      ? profile.name
-      : profile.patient?.auth?.name ?? null;
+    const patientName =
+      profile.name && profile.name.trim().length > 0
+        ? profile.name
+        : (profile.patient?.auth?.name ?? null);
     const status = 'WAITING';
 
     // Find all rooms that can serve given services
@@ -80,7 +86,15 @@ export class RoutingService {
 
     // Group services by room
     const roomIdToServices = new Map<string, string[]>();
-    const roomMeta = new Map<string, { roomCode: string; roomName: string; doctorId: string; doctorCode: string }>();
+    const roomMeta = new Map<
+      string,
+      {
+        roomCode: string;
+        roomName: string;
+        doctorId: string;
+        doctorCode: string;
+      }
+    >();
     for (const rs of roomServices) {
       const room = rs.clinicRoom;
       if (!roomIdToServices.has(room.id)) roomIdToServices.set(room.id, []);
@@ -96,7 +110,9 @@ export class RoutingService {
     }
 
     if (roomIdToServices.size === 0) {
-      throw new NotFoundException('No clinic rooms can fulfill the selected services');
+      throw new NotFoundException(
+        'No clinic rooms can fulfill the selected services',
+      );
     }
 
     // Strategy: choose minimal set of rooms that covers all services
@@ -133,7 +149,9 @@ export class RoutingService {
     }
 
     if (remaining.size > 0) {
-      throw new NotFoundException('Some services cannot be assigned to any clinic room');
+      throw new NotFoundException(
+        'Some services cannot be assigned to any clinic room',
+      );
     }
 
     // Publish to Kafka for each room assignment
@@ -158,7 +176,6 @@ export class RoutingService {
         })),
       );
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[Kafka] publish skipped:', (err as Error).message);
     }
 
@@ -185,9 +202,10 @@ export class RoutingService {
       include: { patient: { include: { auth: true } } },
     });
     if (!profile) throw new NotFoundException('Patient profile not found');
-    const patientName = (profile.name && profile.name.trim().length > 0)
-      ? profile.name
-      : profile.patient?.auth?.name ?? null;
+    const patientName =
+      profile.name && profile.name.trim().length > 0
+        ? profile.name
+        : (profile.patient?.auth?.name ?? null);
 
     // Resolve room by id or code
     let room: ClinicRoomWithDoctor | null = null;
@@ -227,7 +245,6 @@ export class RoutingService {
         },
       ]);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[Kafka] publish skipped:', (err as Error).message);
     }
 
@@ -244,5 +261,3 @@ export class RoutingService {
     };
   }
 }
-
-

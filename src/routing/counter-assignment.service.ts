@@ -1,10 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { KafkaProducerService } from '../kafka/kafka.producer';
 import { AssignCounterDto } from './dto/assign-counter.dto';
 import { ScanInvoiceDto } from './dto/scan-invoice.dto';
 import { DirectAssignmentDto } from './dto/direct-assignment.dto';
 import { SimpleAssignmentDto } from './dto/simple-assignment.dto';
+import { RedisService } from '../cache/redis.service';
 
 export type AssignedCounter = {
   counterId: string;
@@ -29,7 +34,18 @@ export class CounterAssignmentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kafka: KafkaProducerService,
+    private readonly redis: RedisService,
   ) {}
+
+  async setCounterOnline(counterId: string): Promise<{ ok: true }> {
+    await this.redis.setCounterOnline(counterId, 60);
+    return { ok: true };
+  }
+
+  async setCounterOffline(counterId: string): Promise<{ ok: true }> {
+    await this.redis.setCounterOffline(counterId);
+    return { ok: true };
+  }
 
   private calculatePriorityScore(patient: AssignCounterDto): number {
     let score = 0;
@@ -88,63 +104,38 @@ export class CounterAssignmentService {
       include: {
         auth: true,
       },
-      where: {
-        auth: {
-          isActive: true,
-        },
-      },
     });
 
     const counterStatuses: CounterStatus[] = [];
 
     for (const receptionist of receptionists) {
-      // Tính toán trạng thái quầy dựa trên lịch sử gần đây
-      const recentAssignments = await this.prisma.appointment.findMany({
-        where: {
-          bookerId: receptionist.authId,
-          status: {
-            in: ['IN_PROGRESS', 'WAITING'],
-          },
-          date: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0)), // Hôm nay
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        take: 10,
-      });
-
-      const isAvailable = recentAssignments.length < 5; // Giả sử mỗi quầy tối đa 5 bệnh nhân
-      const currentQueueLength = recentAssignments.length;
-      
-      // Tính thời gian xử lý trung bình (giả định)
-      const averageProcessingTime = 15; // 15 phút
+      const isOnline = await this.redis.isCounterOnline(receptionist.id);
+      const currentQueueLength = await this.redis.getCounterQueueLength(
+        receptionist.id,
+      );
+      const isAvailable = isOnline && currentQueueLength < 5;
+      const averageProcessingTime = 15; // có thể tinh chỉnh theo thực tế
 
       counterStatuses.push({
         counterId: receptionist.id,
         isAvailable,
         currentQueueLength,
         averageProcessingTime,
-        lastAssignedAt: recentAssignments[0]?.createdAt?.toISOString(),
+        lastAssignedAt: undefined,
       });
     }
 
     return counterStatuses;
   }
 
-  async assignPatientToCounter(request: AssignCounterDto): Promise<AssignedCounter> {
+  async assignPatientToCounter(
+    request: AssignCounterDto,
+  ): Promise<AssignedCounter> {
     // Verify appointment exists
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: request.appointmentId },
       include: {
-        patientProfile: {
-          include: {
-            patient: {
-              include: { auth: true },
-            },
-          },
-        },
+        patientProfile: true,
         service: true,
       },
     });
@@ -156,6 +147,14 @@ export class CounterAssignmentService {
     // Verify invoice exists
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: request.invoiceId },
+      include: {
+        appointments: {
+          include: {
+            patientProfile: true,
+            service: true,
+          },
+        },
+      },
     });
 
     if (!invoice) {
@@ -163,12 +162,11 @@ export class CounterAssignmentService {
     }
 
     // Lấy thông tin bệnh nhân
-    const patientName = request.patientName || 
-      (appointment.patientProfile.name && appointment.patientProfile.name.trim().length > 0
-        ? appointment.patientProfile.name
-        : appointment.patientProfile.patient?.auth?.name ?? 'Unknown');
+    const patientName =
+      request.patientName || appointment.patientProfile.name || 'Unknown';
 
-    const patientAge = request.patientAge || 
+    const patientAge =
+      request.patientAge ||
       this.calculateAge(appointment.patientProfile.dateOfBirth);
 
     // Tính điểm ưu tiên
@@ -177,32 +175,32 @@ export class CounterAssignmentService {
       patientAge,
     });
 
-    // Lấy danh sách quầy có sẵn
+    // Lấy danh sách quầy có sẵn (dựa trên online + queue hiện tại)
     const availableCounters = await this.getAvailableCounters();
-    const availableReceptionists = availableCounters.filter(c => c.isAvailable);
+    const availableReceptionists = availableCounters.filter(
+      (c) => c.isAvailable,
+    );
 
     if (availableReceptionists.length === 0) {
       throw new NotFoundException('No available counters at the moment');
     }
 
-    // Chọn quầy tốt nhất dựa trên:
-    // 1. Điểm ưu tiên của bệnh nhân
-    // 2. Độ dài hàng đợi hiện tại
-    // 3. Thời gian xử lý trung bình
-    let bestCounter = availableReceptionists[0];
+    // Chấm điểm và chọn ngẫu nhiên trong các quầy có điểm cao nhất
     let bestScore = -1;
-
+    const scored: Array<{ score: number; counter: CounterStatus }> = [];
     for (const counter of availableReceptionists) {
-      // Tính điểm cho quầy này
       const queueScore = Math.max(0, 10 - counter.currentQueueLength) * 10; // Ít hàng đợi = điểm cao hơn
-      const processingScore = Math.max(0, 30 - counter.averageProcessingTime) * 2; // Xử lý nhanh = điểm cao hơn
+      const processingScore =
+        Math.max(0, 30 - counter.averageProcessingTime) * 2; // Xử lý nhanh = điểm cao hơn
       const totalScore = queueScore + processingScore;
-
-      if (totalScore > bestScore) {
-        bestScore = totalScore;
-        bestCounter = counter;
-      }
+      scored.push({ score: totalScore, counter });
+      if (totalScore > bestScore) bestScore = totalScore;
     }
+    const bestCandidates = scored
+      .filter((s) => s.score === bestScore)
+      .map((s) => s.counter);
+    const bestCounter =
+      bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
 
     // Lấy thông tin receptionist
     const receptionist = await this.prisma.receptionist.findUnique({
@@ -222,11 +220,13 @@ export class CounterAssignmentService {
       receptionistId: receptionist.id,
       receptionistName: receptionist.auth.name,
       priorityScore,
-      estimatedWaitTime: bestCounter.currentQueueLength * bestCounter.averageProcessingTime,
+      estimatedWaitTime:
+        bestCounter.currentQueueLength * bestCounter.averageProcessingTime,
     };
 
     // Publish to Kafka
-    const topic = process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
     try {
       await this.kafka.publish(topic, [
         {
@@ -238,7 +238,8 @@ export class CounterAssignmentService {
             invoiceId: request.invoiceId,
             patientName,
             patientAge,
-            patientGender: request.patientGender || appointment.patientProfile.gender,
+            patientGender:
+              request.patientGender || appointment.patientProfile.gender,
             priorityScore,
             assignedCounter,
             serviceName: appointment.service.name,
@@ -250,7 +251,6 @@ export class CounterAssignmentService {
               isElderly: request.isElderly,
               isDisabled: request.isDisabled,
               isVIP: request.isVIP,
-              specialNeeds: request.specialNeeds,
               priorityLevel: request.priorityLevel,
               notes: request.notes,
             },
@@ -258,8 +258,20 @@ export class CounterAssignmentService {
         },
       ]);
     } catch (err) {
-      console.warn('[Kafka] Counter assignment publish failed:', (err as Error).message);
+      console.warn(
+        '[Kafka] Counter assignment publish failed:',
+        (err as Error).message,
+      );
     }
+
+    // Push to runtime queue (optional for real appointments)
+    await this.redis.pushToCounterQueue(receptionist.id, {
+      appointmentId: request.appointmentId,
+      patientName,
+      priorityScore,
+      estimatedWaitTime: assignedCounter.estimatedWaitTime,
+      assignedAt: new Date().toISOString(),
+    });
 
     return assignedCounter;
   }
@@ -269,11 +281,14 @@ export class CounterAssignmentService {
     const birthDate = new Date(dateOfBirth);
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
       age--;
     }
-    
+
     return age;
   }
 
@@ -297,34 +312,21 @@ export class CounterAssignmentService {
       throw new NotFoundException('Counter not found');
     }
 
-    // Lấy danh sách bệnh nhân đang chờ tại quầy này
-    const queue = await this.prisma.appointment.findMany({
-      where: {
-        bookerId: receptionist.authId,
-        status: {
-          in: ['IN_PROGRESS', 'WAITING'],
-        },
-        date: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
-        },
-      },
-      include: {
-        patientProfile: true,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
+    // Read runtime queue from Redis
+    const queueItems = await this.redis.getCounterQueue(counterId);
 
     return {
       counterId,
       receptionistName: receptionist.auth.name,
-      currentQueue: queue.map((appointment, index) => ({
-        appointmentId: appointment.id,
-        patientName: appointment.patientProfile.name,
-        priorityScore: 0, // Cần tính toán lại dựa trên thông tin bệnh nhân
-        estimatedWaitTime: (index + 1) * 15, // Ước tính 15 phút mỗi bệnh nhân
-        assignedAt: appointment.createdAt.toISOString(),
+      currentQueue: queueItems.map((item) => ({
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
+        appointmentId: String(item.appointmentId ?? ''),
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
+        patientName: String(item.patientName ?? ''),
+        priorityScore: Number(item.priorityScore ?? 0),
+        estimatedWaitTime: Number(item.estimatedWaitTime ?? 0),
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
+        assignedAt: String(item.assignedAt ?? ''),
       })),
     };
   }
@@ -343,7 +345,7 @@ export class CounterAssignmentService {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: request.invoiceId },
       include: {
-        appointment: {
+        appointments: {
           include: {
             patientProfile: {
               include: {
@@ -362,25 +364,32 @@ export class CounterAssignmentService {
       throw new NotFoundException('Invoice not found');
     }
 
-    if (invoice.status !== 'PAID') {
+    if (invoice.paymentStatus !== 'PAID') {
       throw new BadRequestException('Invoice must be paid before assignment');
     }
 
-    const appointment = invoice.appointment;
+    const appointment = invoice.appointments[0];
     if (!appointment) {
       throw new NotFoundException('Appointment not found for this invoice');
     }
 
     // Tính tuổi bệnh nhân
-    const patientAge = this.calculateAge(appointment.patientProfile.dateOfBirth);
-    const patientName = appointment.patientProfile.name || 
-      appointment.patientProfile.patient?.auth?.name || 'Unknown';
+    const patientAge = this.calculateAge(
+      appointment.patientProfile.dateOfBirth,
+    );
+    const patientName =
+      appointment.patientProfile.name ||
+      appointment.patientProfile.patient?.auth?.name ||
+      'Unknown';
 
     // Tự động xác định các đặc điểm ưu tiên
     const isElderly = patientAge > 70;
-    const isPregnant = appointment.patientProfile.gender === 'FEMALE' && 
-      (appointment.patientProfile.emergencyContact as any)?.pregnancyStatus === 'PREGNANT';
-    
+    const emergencyContact = appointment.patientProfile
+      .emergencyContact as unknown as { pregnancyStatus?: string } | null;
+    const isPregnant =
+      appointment.patientProfile.gender === 'FEMALE' &&
+      emergencyContact?.pregnancyStatus === 'PREGNANT';
+
     // Tạo request assignment
     const assignmentRequest: AssignCounterDto = {
       appointmentId: appointment.id,
@@ -398,7 +407,7 @@ export class CounterAssignmentService {
       notes: `Scanned by: ${request.scannedBy || 'Unknown'}`,
     };
 
-    // Thực hiện phân bổ
+    // Thực hiện phân bổ (hàm này đã push queue nếu cần)
     const assignment = await this.assignPatientToCounter(assignmentRequest);
 
     return {
@@ -432,12 +441,12 @@ export class CounterAssignmentService {
     // Tự động xác định các đặc điểm ưu tiên
     const isElderly = request.isElderly || request.patientAge > 70;
     const isPregnant = request.isPregnant || false;
-    
-    // Tạo request assignment
-    const assignmentRequest: AssignCounterDto = {
-      appointmentId: `direct-${Date.now()}`, // Tạo ID tạm thời
-      patientProfileId: `direct-${Date.now()}`, // Tạo ID tạm thời
-      invoiceId: `direct-${Date.now()}`, // Tạo ID tạm thời
+
+    // Tính điểm ưu tiên
+    const priorityScore = this.calculatePriorityScore({
+      appointmentId: `direct-${Date.now()}`,
+      patientProfileId: `direct-${Date.now()}`,
+      invoiceId: `direct-${Date.now()}`,
       patientName: request.patientName,
       patientAge: request.patientAge,
       patientGender: request.patientGender,
@@ -446,12 +455,107 @@ export class CounterAssignmentService {
       isEmergency: request.isEmergency || false,
       isDisabled: request.isDisabled || false,
       isVIP: request.isVIP || false,
-      priorityLevel: request.priorityLevel || (isElderly || isPregnant ? 'HIGH' : 'MEDIUM'),
+      priorityLevel:
+        request.priorityLevel || (isElderly || isPregnant ? 'HIGH' : 'MEDIUM'),
       notes: `Direct assignment by: ${request.assignedBy || 'Unknown'}`,
+    });
+
+    // Lấy danh sách quầy và chọn quầy tốt nhất (dựa trên online + queue)
+    const availableCounters = await this.getAvailableCounters();
+    const availableReceptionists = availableCounters.filter(
+      (c) => c.isAvailable,
+    );
+    if (availableReceptionists.length === 0) {
+      throw new NotFoundException('No available counters at the moment');
+    }
+    let bestScore = -1;
+    const scoredDirect: Array<{ score: number; counter: CounterStatus }> = [];
+    for (const counter of availableReceptionists) {
+      const queueScore = Math.max(0, 10 - counter.currentQueueLength) * 10;
+      const processingScore =
+        Math.max(0, 30 - counter.averageProcessingTime) * 2;
+      const totalScore = queueScore + processingScore;
+      scoredDirect.push({ score: totalScore, counter });
+      if (totalScore > bestScore) bestScore = totalScore;
+    }
+    const bestDirectCandidates = scoredDirect
+      .filter((s) => s.score === bestScore)
+      .map((s) => s.counter);
+    const bestCounter =
+      bestDirectCandidates[
+        Math.floor(Math.random() * bestDirectCandidates.length)
+      ];
+
+    // Lấy thông tin receptionist
+    const receptionist = await this.prisma.receptionist.findUnique({
+      where: { id: bestCounter.counterId },
+      include: { auth: true },
+    });
+    if (!receptionist) {
+      throw new NotFoundException('Selected receptionist not found');
+    }
+
+    // Tạo assignment
+    const assignment: AssignedCounter = {
+      counterId: receptionist.id,
+      counterCode: `CTR${receptionist.id.slice(-6)}`,
+      counterName: `Counter ${receptionist.auth.name}`,
+      receptionistId: receptionist.id,
+      receptionistName: receptionist.auth.name,
+      priorityScore,
+      estimatedWaitTime:
+        bestCounter.currentQueueLength * bestCounter.averageProcessingTime,
     };
 
-    // Thực hiện phân bổ
-    const assignment = await this.assignPatientToCounter(assignmentRequest);
+    // Publish to Kafka
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    try {
+      await this.kafka.publish(topic, [
+        {
+          key: receptionist.id,
+          value: {
+            type: 'PATIENT_ASSIGNED_TO_COUNTER',
+            appointmentId: `direct-${Date.now()}`,
+            patientProfileId: `direct-${Date.now()}`,
+            invoiceId: `direct-${Date.now()}`,
+            patientName: request.patientName,
+            patientAge: request.patientAge,
+            patientGender: request.patientGender,
+            priorityScore,
+            assignedCounter: assignment,
+            serviceName: request.serviceName,
+            servicePrice: request.servicePrice,
+            timestamp: new Date().toISOString(),
+            metadata: {
+              isPregnant,
+              isEmergency: request.isEmergency || false,
+              isElderly,
+              isDisabled: request.isDisabled || false,
+              isVIP: request.isVIP || false,
+              priorityLevel:
+                request.priorityLevel ||
+                (isElderly || isPregnant ? 'HIGH' : 'MEDIUM'),
+              notes: `Direct assignment by: ${request.assignedBy || 'Unknown'}`,
+            },
+          },
+        },
+      ]);
+    } catch (err) {
+      console.warn(
+        '[Kafka] Counter direct assignment publish failed:',
+        (err as Error).message,
+      );
+    }
+
+    // Push runtime queue entry
+    await this.redis.pushToCounterQueue(receptionist.id, {
+      appointmentId: `direct-${Date.now()}`,
+      patientName: request.patientName,
+      priorityScore,
+      estimatedWaitTime: assignment.estimatedWaitTime,
+      assignedAt: new Date().toISOString(),
+    });
 
     return {
       success: true,
@@ -473,26 +577,121 @@ export class CounterAssignmentService {
   }> {
     // Tạo số thứ tự
     const queueNumber = `Q${Date.now().toString().slice(-6)}`;
-    
-    // Tạo thông tin bệnh nhân mặc định
-    const assignmentRequest: AssignCounterDto = {
-      appointmentId: `simple-${Date.now()}`,
-      patientProfileId: `simple-${Date.now()}`,
+
+    const generatedAppointmentId = `simple-${Date.now()}`;
+    const generatedProfileId = `simple-${Date.now()}`;
+    const patientName = `Bệnh nhân ${queueNumber}`;
+    const patientAge = 30;
+    const patientGender = 'MALE';
+
+    // Điểm ưu tiên thấp nhất cho bốc số đơn thuần
+    const priorityScore = this.calculatePriorityScore({
+      appointmentId: generatedAppointmentId,
+      patientProfileId: generatedProfileId,
       invoiceId: `simple-${Date.now()}`,
-      patientName: `Bệnh nhân ${queueNumber}`,
-      patientAge: 30, // Tuổi mặc định
-      patientGender: 'MALE', // Giới tính mặc định
+      patientName,
+      patientAge,
+      patientGender,
       isElderly: false,
       isPregnant: false,
       isEmergency: false,
       isDisabled: false,
       isVIP: false,
-      priorityLevel: 'LOW', // Ưu tiên thấp nhất cho bốc số đơn thuần
+      priorityLevel: 'LOW',
       notes: `Simple assignment - Queue number: ${queueNumber} by: ${request.assignedBy || 'Unknown'}`,
+    });
+
+    // Lấy danh sách quầy có sẵn và chọn quầy tốt nhất (dựa trên online + queue)
+    const availableCounters = await this.getAvailableCounters();
+    const availableReceptionists = availableCounters.filter(
+      (c) => c.isAvailable,
+    );
+    if (availableReceptionists.length === 0) {
+      throw new NotFoundException('No available counters at the moment');
+    }
+    let bestScore = -1;
+    const scoredSimple: Array<{ score: number; counter: CounterStatus }> = [];
+    for (const counter of availableReceptionists) {
+      const queueScore = Math.max(0, 10 - counter.currentQueueLength) * 10;
+      const processingScore =
+        Math.max(0, 30 - counter.averageProcessingTime) * 2;
+      const totalScore = queueScore + processingScore;
+      scoredSimple.push({ score: totalScore, counter });
+      if (totalScore > bestScore) bestScore = totalScore;
+    }
+    const bestSimpleCandidates = scoredSimple
+      .filter((s) => s.score === bestScore)
+      .map((s) => s.counter);
+    const bestCounter =
+      bestSimpleCandidates[
+        Math.floor(Math.random() * bestSimpleCandidates.length)
+      ];
+
+    // Lấy thông tin receptionist
+    const receptionist = await this.prisma.receptionist.findUnique({
+      where: { id: bestCounter.counterId },
+      include: { auth: true },
+    });
+    if (!receptionist) {
+      throw new NotFoundException('Selected receptionist not found');
+    }
+
+    const assignment: AssignedCounter = {
+      counterId: receptionist.id,
+      counterCode: `CTR${receptionist.id.slice(-6)}`,
+      counterName: `Counter ${receptionist.auth.name}`,
+      receptionistId: receptionist.id,
+      receptionistName: receptionist.auth.name,
+      priorityScore,
+      estimatedWaitTime:
+        bestCounter.currentQueueLength * bestCounter.averageProcessingTime,
     };
 
-    // Thực hiện phân bổ
-    const assignment = await this.assignPatientToCounter(assignmentRequest);
+    // Publish to Kafka
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    try {
+      await this.kafka.publish(topic, [
+        {
+          key: receptionist.id,
+          value: {
+            type: 'PATIENT_ASSIGNED_TO_COUNTER',
+            appointmentId: generatedAppointmentId,
+            patientProfileId: generatedProfileId,
+            invoiceId: `simple-${Date.now()}`,
+            patientName,
+            patientAge,
+            patientGender,
+            priorityScore,
+            assignedCounter: assignment,
+            timestamp: new Date().toISOString(),
+            metadata: {
+              isPregnant: false,
+              isEmergency: false,
+              isElderly: false,
+              isDisabled: false,
+              isVIP: false,
+              priorityLevel: 'LOW',
+              notes: `Simple assignment - Queue number: ${queueNumber} by: ${request.assignedBy || 'Unknown'}`,
+            },
+          },
+        },
+      ]);
+    } catch (err) {
+      console.warn(
+        '[Kafka] Counter simple assignment publish failed:',
+        (err as Error).message,
+      );
+    }
+
+    // Push runtime queue entry
+    await this.redis.pushToCounterQueue(receptionist.id, {
+      appointmentId: generatedAppointmentId,
+      patientName,
+      priorityScore,
+      estimatedWaitTime: assignment.estimatedWaitTime,
+      assignedAt: new Date().toISOString(),
+    });
 
     return {
       success: true,

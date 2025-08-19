@@ -1,14 +1,23 @@
-import { IsEmail, IsOptional, IsString, ValidateIf, Validate, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  ValidateIf,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 @ValidatorConstraint({ name: 'AtLeastOneField', async: false })
 export class AtLeastOneFieldConstraint implements ValidatorConstraintInterface {
-  validate(_value: any, args: ValidationArguments) {
+  validate(_value: unknown, args: ValidationArguments) {
     const object = args.object as RegisterStep1Dto;
     return !!(object.phone || object.email);
   }
 
-  defaultMessage(_args: ValidationArguments) {
+  defaultMessage(): string {
     return 'Phải cung cấp ít nhất một trong số điện thoại hoặc email';
   }
 }
@@ -35,5 +44,5 @@ export class RegisterStep1Dto {
   email?: string;
 
   @Validate(AtLeastOneFieldConstraint)
-  _atLeastOneField?: any;
+  _atLeastOneField?: unknown;
 }

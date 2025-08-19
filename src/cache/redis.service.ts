@@ -14,7 +14,7 @@ export class RedisService implements OnModuleDestroy {
     });
   }
 
-  async onModuleDestroy() {
+  onModuleDestroy() {
     this.redis.disconnect();
   }
 
@@ -51,7 +51,11 @@ export class RedisService implements OnModuleDestroy {
    * @param data - Dữ liệu session
    * @param ttl - Thời gian hết hạn (giây), mặc định 30 phút
    */
-  async setSession(sessionId: string, data: any, ttl: number = 1800): Promise<void> {
+  async setSession(
+    sessionId: string,
+    data: any,
+    ttl: number = 1800,
+  ): Promise<void> {
     await this.redis.setex(`session:${sessionId}`, ttl, JSON.stringify(data));
   }
 
@@ -60,6 +64,7 @@ export class RedisService implements OnModuleDestroy {
    * @param sessionId - ID của session
    * @returns Dữ liệu session hoặc null nếu không tồn tại
    */
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
   async getSession(sessionId: string): Promise<any | null> {
     const data = await this.redis.get(`session:${sessionId}`);
     return data ? JSON.parse(data) : null;
@@ -90,5 +95,39 @@ export class RedisService implements OnModuleDestroy {
    */
   async getTtl(key: string): Promise<number> {
     return await this.redis.ttl(key);
+  }
+
+  // ------------------ Queue helpers for counters ------------------
+  async pushToCounterQueue(
+    counterId: string,
+    item: Record<string, unknown>,
+  ): Promise<void> {
+    await this.redis.rpush(`counterQueue:${counterId}`, JSON.stringify(item));
+  }
+
+  async getCounterQueue(counterId: string): Promise<Record<string, unknown>[]> {
+    const items = await this.redis.lrange(`counterQueue:${counterId}`, 0, -1);
+    return items.map((s) => JSON.parse(s) as Record<string, unknown>);
+  }
+
+  async clearCounterQueue(counterId: string): Promise<void> {
+    await this.redis.del(`counterQueue:${counterId}`);
+  }
+
+  async getCounterQueueLength(counterId: string): Promise<number> {
+    return await this.redis.llen(`counterQueue:${counterId}`);
+  }
+
+  // ------------------ Presence helpers for counters ------------------
+  async setCounterOnline(counterId: string, ttlSeconds = 30): Promise<void> {
+    await this.redis.setex(`counterOnline:${counterId}`, ttlSeconds, '1');
+  }
+
+  async setCounterOffline(counterId: string): Promise<void> {
+    await this.redis.del(`counterOnline:${counterId}`);
+  }
+
+  async isCounterOnline(counterId: string): Promise<boolean> {
+    return await this.exists(`counterOnline:${counterId}`);
   }
 }

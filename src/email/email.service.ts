@@ -30,13 +30,15 @@ export class EmailService {
         return false;
       }
 
-      this.logger.log(`OTP email sent successfully to ${email}. Message ID: ${data?.id}`);
-      
+      this.logger.log(
+        `OTP email sent successfully to ${email}. Message ID: ${data?.id}`,
+      );
+
       // Log OTP to console for development
       if (process.env.NODE_ENV === 'development') {
         console.log(`🔐 OTP cho email ${email}: ${otp}`);
       }
-      
+
       return true;
     } catch (error) {
       this.logger.error('Error sending OTP email:', error);
@@ -63,7 +65,9 @@ export class EmailService {
         return false;
       }
 
-      this.logger.log(`Welcome email sent successfully to ${email}. Message ID: ${data?.id}`);
+      this.logger.log(
+        `Welcome email sent successfully to ${email}. Message ID: ${data?.id}`,
+      );
       return true;
     } catch (error) {
       this.logger.error('Error sending welcome email:', error);

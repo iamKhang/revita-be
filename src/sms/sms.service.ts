@@ -25,7 +25,7 @@ export class SmsService {
     try {
       // Chuẩn hóa số điện thoại
       const formattedPhone = this.formatPhoneNumber(phoneNumber);
-      
+
       const message = this.generateOtpSmsMessage(otp);
 
       // Chỉ gửi SMS thực tế trong môi trường PRODUCTION
@@ -53,7 +53,9 @@ export class SmsService {
         const result = await this.snsClient.send(command);
 
         if (result.MessageId) {
-          this.logger.log(`OTP SMS sent successfully to ${formattedPhone}. Message ID: ${result.MessageId}`);
+          this.logger.log(
+            `OTP SMS sent successfully to ${formattedPhone}. Message ID: ${result.MessageId}`,
+          );
           return true;
         } else {
           this.logger.error('Failed to send OTP SMS: No message ID returned');
@@ -61,7 +63,9 @@ export class SmsService {
         }
       } else {
         // Môi trường development/test: chỉ log tin nhắn, không gửi thật
-        this.logger.log(`[${process.env.NODE_ENV?.toUpperCase() || 'NON-PRODUCTION'}] SMS simulation - OTP to ${formattedPhone}: ${message}`);
+        this.logger.log(
+          `[${process.env.NODE_ENV?.toUpperCase() || 'NON-PRODUCTION'}] SMS simulation - OTP to ${formattedPhone}: ${message}`,
+        );
         console.log(`🔐 OTP cho SMS ${formattedPhone}: ${otp}`);
         return true;
       }
@@ -106,15 +110,21 @@ export class SmsService {
         const result = await this.snsClient.send(command);
 
         if (result.MessageId) {
-          this.logger.log(`Welcome SMS sent successfully to ${formattedPhone}. Message ID: ${result.MessageId}`);
+          this.logger.log(
+            `Welcome SMS sent successfully to ${formattedPhone}. Message ID: ${result.MessageId}`,
+          );
           return true;
         } else {
-          this.logger.error('Failed to send welcome SMS: No message ID returned');
+          this.logger.error(
+            'Failed to send welcome SMS: No message ID returned',
+          );
           return false;
         }
       } else {
         // Môi trường development/test: chỉ log tin nhắn, không gửi thật
-        this.logger.log(`[${process.env.NODE_ENV?.toUpperCase() || 'NON-PRODUCTION'}] SMS simulation - Welcome to ${formattedPhone}: ${message}`);
+        this.logger.log(
+          `[${process.env.NODE_ENV?.toUpperCase() || 'NON-PRODUCTION'}] SMS simulation - Welcome to ${formattedPhone}: ${message}`,
+        );
         console.log(`📱 Welcome SMS cho ${formattedPhone}: ${message}`);
         return true;
       }
@@ -132,17 +142,17 @@ export class SmsService {
   private formatPhoneNumber(phoneNumber: string): string {
     // Loại bỏ tất cả ký tự không phải số
     let cleaned = phoneNumber.replace(/\D/g, '');
-    
+
     // Nếu bắt đầu bằng 0, thay thế bằng 84
     if (cleaned.startsWith('0')) {
       cleaned = '84' + cleaned.substring(1);
     }
-    
+
     // Nếu chưa có mã quốc gia, thêm 84
     if (!cleaned.startsWith('84')) {
       cleaned = '84' + cleaned;
     }
-    
+
     return '+' + cleaned;
   }
 

@@ -348,8 +348,8 @@ export class AdminController {
   // Quản lý services
   @Get('services')
   @Roles(Role.ADMIN)
-  async findAllServices(@Query('specialtyId') specialtyId?: string) {
-    const where = {};
+  async findAllServices() {
+    const where = {} as const;
     return this.prisma.service.findMany({
       where,
     });

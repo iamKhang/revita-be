@@ -1,12 +1,19 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
-import { RoutingService, AssignRequest, AssignedRoom, UpdateStatusRequest } from './routing.service';
+import {
+  RoutingService,
+  AssignRequest,
+  AssignedRoom,
+  UpdateStatusRequest,
+} from './routing.service';
 
 @Controller('routing')
 export class RoutingController {
   constructor(private readonly routingService: RoutingService) {}
 
   @Post('assign')
-  async assign(@Body() body: AssignRequest): Promise<{ assignments: AssignedRoom[] }> {
+  async assign(
+    @Body() body: AssignRequest,
+  ): Promise<{ assignments: AssignedRoom[] }> {
     const assignments = await this.routingService.assignPatientToRooms(body);
     return { assignments };
   }
@@ -18,7 +25,10 @@ export class RoutingController {
 
   @Post('status/left-temporarily')
   async markLeftTemporarily(@Body() body: UpdateStatusRequest) {
-    return this.routingService.updateStatusForPatientInRoom(body, 'LEFT_TEMPORARILY');
+    return this.routingService.updateStatusForPatientInRoom(
+      body,
+      'LEFT_TEMPORARILY',
+    );
   }
 
   @Post('status/returned')
@@ -41,5 +51,3 @@ export class RoutingController {
     return this.routingService.updateStatusForPatientInRoom(body, 'SKIPPED');
   }
 }
-
-
