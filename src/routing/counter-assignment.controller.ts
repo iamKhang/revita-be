@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Public } from '../rbac/public.decorator';
@@ -87,6 +95,12 @@ export class CounterAssignmentController {
   }
 
   @Public()
+  @Delete('counters/:counterId/queue')
+  async clearCounterQueue(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.clearCounterQueue(counterId);
+  }
+
+  @Public()
   @Post('scan-invoice')
   async scanInvoiceAndAssign(@Body() body: ScanInvoiceDto) {
     return this.counterAssignmentService.scanInvoiceAndAssign(body);
@@ -102,5 +116,11 @@ export class CounterAssignmentController {
   @Post('simple-assignment')
   async assignSimplePatient(@Body() body: SimpleAssignmentDto) {
     return this.counterAssignmentService.assignSimplePatient(body);
+  }
+
+  @Public()
+  @Post('next-patient/:counterId')
+  async callNextPatient(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.callNextPatient(counterId);
   }
 }

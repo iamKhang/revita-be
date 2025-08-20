@@ -1,10 +1,14 @@
 // @ts-nocheck
 const { Kafka } = require('kafkajs');
+const Redis = require('ioredis');
 
 /*
   Usage:
     KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments node kafka/counter-listener.js <COUNTER_ID>
-
+  KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments node kafka/counter-listener.js 418f439e-5b01-4c36-8a22-02abd3227ce4
+  KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments node kafka/counter-listener.js a427fbdd-fd6c-41d8-84d3-1e23ba91263b
+  KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments node kafka/counter-listener.js c9d215bc-a273-4dac-99c2-0ef6031889b2
+  
   Example:
     node kafka/counter-listener.js 5a2f3c2e-...-counter-id
 */
@@ -26,10 +30,30 @@ async function main() {
   const kafka = new Kafka({ clientId: 'revita-counter-listener', brokers });
   const consumer = kafka.consumer({ groupId: `revita-counter-${counterId}` });
 
+  // Redis heartbeat to keep this counter online
+  const redis = new Redis({
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD || undefined,
+    db: parseInt(process.env.REDIS_DB || '0'),
+  });
+
+  const ttl = parseInt(process.env.COUNTER_HEARTBEAT_TTL || '30');
+  const intervalMs = parseInt(process.env.COUNTER_HEARTBEAT_INTERVAL_MS || '10000');
+
+  const heartbeat = async () => {
+    try {
+      await redis.setex(`counterOnline:${counterId}`, ttl, '1');
+    } catch (_) {
+      // ignore
+    }
+  };
+
   process.on('SIGINT', async () => {
     console.log('\nShutting down...');
     try {
       await consumer.disconnect();
+      await redis.disconnect();
     } finally {
       process.exit(0);
     }
@@ -39,6 +63,10 @@ async function main() {
   await consumer.subscribe({ topic, fromBeginning: false });
 
   console.log(`Listening for counter assignments on topic "${topic}" for counterId=${counterId}`);
+
+  // Start heartbeat interval
+  await heartbeat();
+  const interval = setInterval(heartbeat, intervalMs);
 
   await consumer.run({
     eachMessage: async ({ topic: t, partition, message }) => {

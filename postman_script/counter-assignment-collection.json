@@ -7,7 +7,7 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3000",
+      "value": "http://localhost:3000/api",
       "type": "string"
     },
     {
@@ -164,6 +164,66 @@
               "path": ["counter-assignment", "counters", "{{receptionistId}}", "queue"]
             },
             "description": "Xem hàng đợi của một quầy cụ thể"
+          }
+        },
+        {
+          "name": "7. Next Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/next-patient/{{receptionistId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "next-patient", "{{receptionistId}}"]
+            },
+            "description": "Gọi bệnh nhân tiếp theo cho quầy"
+          }
+        },
+        {
+          "name": "8. Set Counter Online",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{receptionistId}}/online",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "counters", "{{receptionistId}}", "online"]
+            },
+            "description": "Đặt quầy online"
+          }
+        },
+        {
+          "name": "9. Set Counter Offline",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{receptionistId}}/offline",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "counters", "{{receptionistId}}", "offline"]
+            },
+            "description": "Đặt quầy offline"
+          }
+        },
+        {
+          "name": "10. Clear Counter Queue",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{receptionistId}}/queue",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "counters", "{{receptionistId}}", "queue"]
+            },
+            "description": "Xóa toàn bộ hàng đợi của quầy"
           }
         }
       ]

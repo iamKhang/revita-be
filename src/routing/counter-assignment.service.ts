@@ -47,6 +47,11 @@ export class CounterAssignmentService {
     return { ok: true };
   }
 
+  async clearCounterQueue(counterId: string): Promise<{ ok: true }> {
+    await this.redis.clearCounterQueue(counterId);
+    return { ok: true };
+  }
+
   private calculatePriorityScore(patient: AssignCounterDto): number {
     let score = 0;
 
@@ -108,12 +113,14 @@ export class CounterAssignmentService {
 
     const counterStatuses: CounterStatus[] = [];
 
+    const maxQueue = parseInt(process.env.COUNTER_MAX_QUEUE || '10');
+
     for (const receptionist of receptionists) {
       const isOnline = await this.redis.isCounterOnline(receptionist.id);
       const currentQueueLength = await this.redis.getCounterQueueLength(
         receptionist.id,
       );
-      const isAvailable = isOnline && currentQueueLength < 5;
+      const isAvailable = isOnline && currentQueueLength < maxQueue;
       const averageProcessingTime = 15; // có thể tinh chỉnh theo thực tế
 
       counterStatuses.push({
@@ -698,5 +705,73 @@ export class CounterAssignmentService {
       assignment,
       queueNumber,
     };
+  }
+
+  async callNextPatient(counterId: string): Promise<{
+    success: boolean;
+    nextPatient?: any;
+    message: string;
+  }> {
+    try {
+      // Lấy queue hiện tại của counter
+      const queue = await this.redis.getCounterQueue(counterId);
+
+      if (queue.length === 0) {
+        return {
+          success: false,
+          message: 'No patients in queue for this counter',
+        };
+      }
+
+      // Lấy patient đầu tiên trong queue
+      const nextPatient = queue[0];
+
+      // Xóa patient khỏi queue (pop từ đầu)
+      await this.redis.clearCounterQueue(counterId);
+      // Thêm lại tất cả patient trừ patient đầu tiên
+      for (let i = 1; i < queue.length; i++) {
+        await this.redis.pushToCounterQueue(counterId, queue[i]);
+      }
+
+      // Publish event đến Kafka để thông báo real-time
+      const topic =
+        process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+      try {
+        await this.kafka.publish(topic, [
+          {
+            key: counterId,
+            value: {
+              type: 'NEXT_PATIENT_CALLED',
+              counterId,
+              patientInfo: nextPatient,
+              timestamp: new Date().toISOString(),
+              metadata: {
+                action: 'CALL_NEXT',
+                queueLength: queue.length - 1,
+              },
+            },
+          },
+        ]);
+      } catch (err) {
+        console.warn(
+          '[Kafka] Next patient call publish failed:',
+          (err as Error).message,
+        );
+      }
+
+      return {
+        success: true,
+        nextPatient,
+        message: `Called next patient: ${
+          (nextPatient as Record<string, any>).patientName || 'Unknown'
+        }`,
+      };
+    } catch (error) {
+      console.error('Error calling next patient:', error);
+      return {
+        success: false,
+        message: 'Failed to call next patient',
+      };
+    }
   }
 }

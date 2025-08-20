@@ -31,7 +31,7 @@ Hệ thống phân bổ quầy khám tự động sử dụng Kafka để quản
 
 ### 1. Phân bổ bệnh nhân
 ```http
-POST /counter-assignment/assign
+POST /api/counter-assignment/assign
 Content-Type: application/json
 Authorization: Bearer <token>
 
@@ -54,7 +54,7 @@ Authorization: Bearer <token>
 
 ### 2. Quét hóa đơn và phân bổ tự động
 ```http
-POST /counter-assignment/scan-invoice
+POST /api/counter-assignment/scan-invoice
 Content-Type: application/json
 Authorization: Bearer <token>
 
@@ -68,7 +68,7 @@ Authorization: Bearer <token>
 
 ### 3. Phân bổ trực tiếp (không cần hóa đơn)
 ```http
-POST /counter-assignment/direct-assignment
+POST /api/counter-assignment/direct-assignment
 Content-Type: application/json
 Authorization: Bearer <token>
 
@@ -92,20 +92,36 @@ Authorization: Bearer <token>
 
 ### 4. Xem trạng thái quầy
 ```http
-GET /counter-assignment/counters/available
+GET /api/counter-assignment/counters/available
 Authorization: Bearer <token>
 ```
 
 ### 5. Xem hàng đợi của quầy
 ```http
-GET /counter-assignment/counters/{counterId}/queue
+GET /api/counter-assignment/counters/{counterId}/queue
 Authorization: Bearer <token>
 ```
 
 ### 6. Xem tổng quan hệ thống
 ```http
-GET /counter-assignment/counters/status
+GET /api/counter-assignment/counters/status
 Authorization: Bearer <token>
+```
+
+### 7. Bật/Tắt quầy (thiết bị hoặc web receptionist)
+```http
+POST /api/counter-assignment/counters/{counterId}/online
+POST /api/counter-assignment/counters/{counterId}/offline
+```
+
+### 8. Gọi số tiếp theo (Realtime Kafka)
+```http
+POST /api/counter-assignment/next-patient/{counterId}
+```
+
+### 9. Xóa hàng đợi của quầy
+```http
+DELETE /api/counter-assignment/counters/{counterId}/queue
 ```
 
 ## Kafka Topics
@@ -162,7 +178,7 @@ KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments
 ### 3. Quét hóa đơn từ ứng dụng Electron
 ```javascript
 // Trong ứng dụng Electron
-const response = await fetch('http://localhost:3000/counter-assignment/scan-invoice', {
+const response = await fetch('http://localhost:3000/api/counter-assignment/scan-invoice', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -182,7 +198,7 @@ console.log('Patient assigned to:', result.assignment.counterName);
 ### 4. Phân bổ trực tiếp từ ứng dụng Electron
 ```javascript
 // Trong ứng dụng Electron - nút "Bốc số"
-const response = await fetch('http://localhost:3000/counter-assignment/direct-assignment', {
+const response = await fetch('http://localhost:3000/api/counter-assignment/direct-assignment', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -242,8 +258,9 @@ KAFKA_BROKERS=localhost:9092
 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments
 
 # Counter Assignment Settings
-MAX_QUEUE_LENGTH_PER_COUNTER=5
-AVERAGE_PROCESSING_TIME_MINUTES=15
+COUNTER_MAX_QUEUE=10
+COUNTER_HEARTBEAT_TTL=30
+COUNTER_HEARTBEAT_INTERVAL_MS=10000
 ```
 
 ## Monitoring và Logging
@@ -285,3 +302,40 @@ kafka-consumer-groups --bootstrap-server localhost:9092 --describe --group revit
 - Kiểm tra quầy có available không
 - Kiểm tra thông tin appointment và invoice
 - Kiểm tra quyền truy cập API
+
+Luồng xử lý (Counter Assignment)
+Online/Offline:
+Mỗi quầy (receptionist) online khi Redis có key counterOnline:{counterId} còn TTL.
+Heartbeat từ listener Kafka tự gia hạn TTL theo chu kỳ để giữ online.
+Offline khi TTL hết hoặc gọi endpoint offline.
+Điều kiện available:
+isAvailable = isOnline && currentQueueLength < COUNTER_MAX_QUEUE
+COUNTER_MAX_QUEUE có thể cấu hình qua biến môi trường (mặc định 10).
+Phân bổ bệnh nhân:
+Hệ thống tính điểm ưu tiên (cấp cứu, cao tuổi, thai sản, khuyết tật, VIP, độ tuổi, priority level).
+Chọn quầy tối ưu dựa trên online + độ dài queue + thời gian xử lý trung bình.
+Publish sự kiện Kafka để listener nhận realtime.
+Gọi số tiếp theo:
+Lấy bệnh nhân đầu queue, loại khỏi queue, publish Kafka sự kiện NEXT_PATIENT_CALLED.
+Endpoint (có prefix /api)
+Nhóm trạng thái quầy
+GET /counter-assignment/counters/available → danh sách quầy và trạng thái available
+GET /counter-assignment/counters/status → tổng quan hệ thống
+GET /counter-assignment/counters/:counterId/queue → xem queue của quầy
+POST /counter-assignment/counters/:counterId/online → set quầy online (thủ công)
+POST /counter-assignment/counters/:counterId/offline → set quầy offline (thủ công)
+DELETE /counter-assignment/counters/:counterId/queue → xóa queue của quầy
+Nhóm phân bổ
+POST /counter-assignment/assign → phân bổ theo appointment/invoice (chuẩn)
+POST /counter-assignment/scan-invoice → quét hóa đơn rồi phân bổ
+POST /counter-assignment/direct-assignment → phân bổ trực tiếp không cần hóa đơn
+POST /counter-assignment/simple-assignment → bốc số đơn giản (tạo record runtime + publish)
+Gọi số tiếp theo
+POST /counter-assignment/next-patient/:counterId → gọi bệnh nhân tiếp theo (publish Kafka realtime)
+Lưu ý: Nếu bạn muốn dùng đúng 3 quầy hoạt động, chỉ chạy 3 listener Kafka (mỗi máy quầy một listener). Không dùng các script auto-online cho tất cả.
+Biến môi trường quan trọng
+COUNTER_MAX_QUEUE: ngưỡng hàng đợi để coi là bận (mặc định 10)
+COUNTER_HEARTBEAT_TTL: TTL Redis (mặc định 30s)
+COUNTER_HEARTBEAT_INTERVAL_MS: chu kỳ heartbeat (mặc định 10s)
+KAFKA_BROKERS, KAFKA_TOPIC_COUNTER_ASSIGNMENTS
+REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_DB
