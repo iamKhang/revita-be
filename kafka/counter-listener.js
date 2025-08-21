@@ -5,12 +5,13 @@ const Redis = require('ioredis');
 /*
   Usage:
     KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments node kafka/counter-listener.js <COUNTER_ID>
-  KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments node kafka/counter-listener.js 418f439e-5b01-4c36-8a22-02abd3227ce4
-  KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments node kafka/counter-listener.js a427fbdd-fd6c-41d8-84d3-1e23ba91263b
-  KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments node kafka/counter-listener.js c9d215bc-a273-4dac-99c2-0ef6031889b2
   
   Example:
-    node kafka/counter-listener.js 5a2f3c2e-...-counter-id
+    node kafka/counter-listener.js 2fbcb7a8-8d35-4eed-83f5-864ad4c876ed
+    node kafka/counter-listener.js aab4c3a1-5bad-4ac0-941e-b8eb54d3df94
+    node kafka/counter-listener.js a7f3fb78-6be0-496d-a979-4ef9d7d7c6c8
+    node kafka/counter-listener.js 594b8989-8f21-4f3f-add7-337d31d87ff7
+    node kafka/counter-listener.js bf5a33ed-3ee1-4520-a670-138074a48026
 */
 
 async function main() {
@@ -62,7 +63,8 @@ async function main() {
   await consumer.connect();
   await consumer.subscribe({ topic, fromBeginning: false });
 
-  console.log(`Listening for counter assignments on topic "${topic}" for counterId=${counterId}`);
+  console.log(`🎧 Listening for counter assignments on topic "${topic}" for counterId=${counterId}`);
+  console.log(`💓 Heartbeat interval: ${intervalMs}ms, TTL: ${ttl}s`);
 
   // Start heartbeat interval
   await heartbeat();
@@ -79,44 +81,86 @@ async function main() {
         return;
       }
       
-      if (!payload || payload.type !== 'PATIENT_ASSIGNED_TO_COUNTER') return;
-      if (payload.assignedCounter.counterId !== counterId) return;
+      if (!payload) return;
 
-      const info = {
-        receivedAt: now,
-        eventType: payload.type,
-        appointmentId: payload.appointmentId,
-        patientProfileId: payload.patientProfileId,
-        invoiceId: payload.invoiceId,
-        patientName: payload.patientName,
-        patientAge: payload.patientAge,
-        patientGender: payload.patientGender,
-        priorityScore: payload.priorityScore,
-        serviceName: payload.serviceName,
-        servicePrice: payload.servicePrice,
-        assignedCounter: {
-          counterId: payload.assignedCounter.counterId,
-          counterCode: payload.assignedCounter.counterCode,
-          counterName: payload.assignedCounter.counterName,
-          receptionistName: payload.assignedCounter.receptionistName,
-          estimatedWaitTime: payload.assignedCounter.estimatedWaitTime,
-        },
-        metadata: payload.metadata,
-        eventTime: payload.timestamp,
-      };
-      
-      console.log(JSON.stringify(info, null, 2));
-      
-      // Ở đây có thể thêm logic để:
-      // 1. Hiển thị thông báo trên màn hình quầy
-      // 2. Phát âm thanh thông báo
-      // 3. Cập nhật giao diện người dùng
-      // 4. Gửi thông báo đến ứng dụng Electron
+      // Handle different event types
+      switch (payload.type) {
+        case 'PATIENT_ASSIGNED_TO_COUNTER':
+          if (payload.assignedCounter.counterId !== counterId) return;
+          
+          const info = {
+            receivedAt: now,
+            eventType: payload.type,
+            appointmentId: payload.appointmentId,
+            patientProfileId: payload.patientProfileId,
+            invoiceId: payload.invoiceId,
+            patientName: payload.patientName,
+            patientAge: payload.patientAge,
+            patientGender: payload.patientGender,
+            priorityScore: payload.priorityScore,
+            serviceName: payload.serviceName,
+            servicePrice: payload.servicePrice,
+            assignedCounter: {
+              counterId: payload.assignedCounter.counterId,
+              counterCode: payload.assignedCounter.counterCode,
+              counterName: payload.assignedCounter.counterName,
+              receptionistName: payload.assignedCounter.receptionistName,
+              estimatedWaitTime: payload.assignedCounter.estimatedWaitTime,
+            },
+            metadata: payload.metadata,
+            eventTime: payload.timestamp,
+          };
+          
+          console.log('\n🎯 NEW PATIENT ASSIGNED!');
+          console.log(JSON.stringify(info, null, 2));
+          
+          // Ở đây có thể thêm logic để:
+          // - Phát âm thanh thông báo
+          // - Hiển thị thông báo trên màn hình
+          // - Cập nhật UI
+          break;
+
+        case 'NEXT_PATIENT_CALLED':
+          if (payload.counterId !== counterId) return;
+          
+          console.log('\n📢 CALLING NEXT PATIENT!');
+          console.log(JSON.stringify({
+            receivedAt: now,
+            eventType: payload.type,
+            counterId: payload.counterId,
+            patient: payload.patient,
+            timestamp: payload.timestamp,
+          }, null, 2));
+          
+          // Ở đây có thể thêm logic để:
+          // - Phát âm thanh gọi số
+          // - Hiển thị thông tin bệnh nhân tiếp theo
+          break;
+
+        case 'RETURN_PREVIOUS_PATIENT':
+          if (payload.counterId !== counterId) return;
+          
+          console.log('\n🔄 RETURNING TO PREVIOUS PATIENT!');
+          console.log(JSON.stringify({
+            receivedAt: now,
+            eventType: payload.type,
+            counterId: payload.counterId,
+            timestamp: payload.timestamp,
+          }, null, 2));
+          
+          // Ở đây có thể thêm logic để:
+          // - Quay lại bệnh nhân trước đó
+          // - Cập nhật UI
+          break;
+
+        default:
+          console.log(`[${now}] Unknown event type: ${payload.type}`);
+      }
     },
   });
 }
 
-main().catch((err) => {
-  console.error('Counter listener failed to start:', err);
+main().catch((error) => {
+  console.error('❌ Error:', error);
   process.exit(1);
 });

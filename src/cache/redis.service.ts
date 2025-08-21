@@ -97,25 +97,52 @@ export class RedisService implements OnModuleDestroy {
     return await this.redis.ttl(key);
   }
 
-  // ------------------ Queue helpers for counters ------------------
+  // ------------------ Queue helpers for counters (priority via ZSET) ------------------
+  // Store queue as a sorted set where score = priorityScore (higher is better)
+  // Key format: counterQueueZ:<counterId>
   async pushToCounterQueue(
     counterId: string,
     item: Record<string, unknown>,
   ): Promise<void> {
-    await this.redis.rpush(`counterQueue:${counterId}`, JSON.stringify(item));
+    const key = `counterQueueZ:${counterId}`;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const priority = Number((item as any)?.priorityScore ?? 0);
+    // Use ZADD with NX to avoid accidental overwrite if member string collides
+    await this.redis.zadd(key, 'NX', priority, JSON.stringify(item));
+  }
+
+  async popNextFromCounterQueue(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const key = `counterQueueZ:${counterId}`;
+    // Pop highest priority first
+    // zpopmax returns [member, score] pairs in RESP; ioredis returns array
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    const res = (await (this.redis as any).zpopmax(key, 1)) as Array<string>;
+    if (!res || res.length === 0) return null;
+    const member = res[0];
+    try {
+      return JSON.parse(member) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
   }
 
   async getCounterQueue(counterId: string): Promise<Record<string, unknown>[]> {
-    const items = await this.redis.lrange(`counterQueue:${counterId}`, 0, -1);
+    const key = `counterQueueZ:${counterId}`;
+    // Highest score first
+    const items = await this.redis.zrevrange(key, 0, -1);
     return items.map((s) => JSON.parse(s) as Record<string, unknown>);
   }
 
   async clearCounterQueue(counterId: string): Promise<void> {
-    await this.redis.del(`counterQueue:${counterId}`);
+    const key = `counterQueueZ:${counterId}`;
+    await this.redis.del(key);
   }
 
   async getCounterQueueLength(counterId: string): Promise<number> {
-    return await this.redis.llen(`counterQueue:${counterId}`);
+    const key = `counterQueueZ:${counterId}`;
+    return await this.redis.zcard(key);
   }
 
   // ------------------ Presence helpers for counters ------------------

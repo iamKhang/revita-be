@@ -16,6 +16,11 @@
       "type": "string"
     },
     {
+      "key": "counterId",
+      "value": "your-counter-id-here",
+      "type": "string"
+    },
+    {
       "key": "receptionistId",
       "value": "c9d215bc-a273-4dac-99c2-0ef6031889b2",
       "type": "string"
@@ -159,9 +164,9 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/counter-assignment/counters/{{receptionistId}}/queue",
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/queue",
               "host": ["{{baseUrl}}"],
-              "path": ["counter-assignment", "counters", "{{receptionistId}}", "queue"]
+              "path": ["counter-assignment", "counters", "{{counterId}}", "queue"]
             },
             "description": "Xem hàng đợi của một quầy cụ thể"
           }
@@ -174,9 +179,9 @@
               { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/counter-assignment/next-patient/{{receptionistId}}",
+              "raw": "{{baseUrl}}/counter-assignment/next-patient/{{counterId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["counter-assignment", "next-patient", "{{receptionistId}}"]
+              "path": ["counter-assignment", "next-patient", "{{counterId}}"]
             },
             "description": "Gọi bệnh nhân tiếp theo cho quầy"
           }
@@ -189,9 +194,9 @@
               { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/counter-assignment/counters/{{receptionistId}}/online",
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/online",
               "host": ["{{baseUrl}}"],
-              "path": ["counter-assignment", "counters", "{{receptionistId}}", "online"]
+              "path": ["counter-assignment", "counters", "{{counterId}}", "online"]
             },
             "description": "Đặt quầy online"
           }
@@ -204,9 +209,9 @@
               { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/counter-assignment/counters/{{receptionistId}}/offline",
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/offline",
               "host": ["{{baseUrl}}"],
-              "path": ["counter-assignment", "counters", "{{receptionistId}}", "offline"]
+              "path": ["counter-assignment", "counters", "{{counterId}}", "offline"]
             },
             "description": "Đặt quầy offline"
           }
@@ -219,11 +224,66 @@
               { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/counter-assignment/counters/{{receptionistId}}/queue",
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/queue",
               "host": ["{{baseUrl}}"],
-              "path": ["counter-assignment", "counters", "{{receptionistId}}", "queue"]
+              "path": ["counter-assignment", "counters", "{{counterId}}", "queue"]
             },
             "description": "Xóa toàn bộ hàng đợi của quầy"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Counter Management",
+      "item": [
+        {
+          "name": "11. Return Previous Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/return-previous/{{counterId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "return-previous", "{{counterId}}"]
+            },
+            "description": "Trả về bệnh nhân trước đó cho quầy"
+          }
+        },
+        {
+          "name": "12. Assign Receptionist to Counter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receptionistId\": \"your-receptionist-id-here\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/assign-receptionist",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "counters", "{{counterId}}", "assign-receptionist"]
+            },
+            "description": "Gán receptionist cho quầy"
+          }
+        },
+        {
+          "name": "13. Unassign Receptionist from Counter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/unassign-receptionist",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "counters", "{{counterId}}", "unassign-receptionist"]
+            },
+            "description": "Bỏ gán receptionist khỏi quầy"
           }
         }
       ]
@@ -249,7 +309,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"patientName\": \"Nguyễn Thị Bà\",\n  \"patientAge\": 78,\n  \"patientGender\": \"FEMALE\",\n  \"patientPhone\": \"0901234568\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"isElderly\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Bệnh nhân cao tuổi, cần ưu tiên\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+              "raw": "{\n  \"patientName\": \"Nguyễn Thị Bà\",\n  \"patientAge\": 78,\n  \"patientGender\": \"FEMALE\",\n  \"patientPhone\": \"0901234568\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"isElderly\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Bệnh nhân cao tuổi, cần ưu tiên\",\n  \"assignedBy\": \"{{counterId}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
@@ -277,7 +337,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"patientName\": \"Trần Thị C\",\n  \"patientAge\": 28,\n  \"patientGender\": \"FEMALE\",\n  \"patientPhone\": \"0901234569\",\n  \"serviceName\": \"Khám thai\",\n  \"servicePrice\": 300000,\n  \"isPregnant\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Phụ nữ có thai, cần ưu tiên\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+              "raw": "{\n  \"patientName\": \"Trần Thị C\",\n  \"patientAge\": 28,\n  \"patientGender\": \"FEMALE\",\n  \"patientPhone\": \"0901234569\",\n  \"serviceName\": \"Khám thai\",\n  \"servicePrice\": 300000,\n  \"isPregnant\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Phụ nữ có thai, cần ưu tiên\",\n  \"assignedBy\": \"{{counterId}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
@@ -305,7 +365,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"patientName\": \"Lê Văn D\",\n  \"patientAge\": 45,\n  \"patientGender\": \"MALE\",\n  \"patientPhone\": \"0901234570\",\n  \"serviceName\": \"Cấp cứu\",\n  \"servicePrice\": 500000,\n  \"isEmergency\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Bệnh nhân cấp cứu, cần ưu tiên cao nhất\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+              "raw": "{\n  \"patientName\": \"Lê Văn D\",\n  \"patientAge\": 45,\n  \"patientGender\": \"MALE\",\n  \"patientPhone\": \"0901234570\",\n  \"serviceName\": \"Cấp cứu\",\n  \"servicePrice\": 500000,\n  \"isEmergency\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Bệnh nhân cấp cứu, cần ưu tiên cao nhất\",\n  \"assignedBy\": \"{{counterId}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
@@ -333,7 +393,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"patientName\": \"Phạm Thị E\",\n  \"patientAge\": 35,\n  \"patientGender\": \"FEMALE\",\n  \"patientPhone\": \"0901234571\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"priorityLevel\": \"MEDIUM\",\n  \"notes\": \"Bệnh nhân thường\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+              "raw": "{\n  \"patientName\": \"Phạm Thị E\",\n  \"patientAge\": 35,\n  \"patientGender\": \"FEMALE\",\n  \"patientPhone\": \"0901234571\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"priorityLevel\": \"MEDIUM\",\n  \"notes\": \"Bệnh nhân thường\",\n  \"assignedBy\": \"{{counterId}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/counter-assignment/direct-assignment",

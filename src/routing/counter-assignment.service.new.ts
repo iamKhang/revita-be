@@ -111,8 +111,16 @@ export class CounterAssignmentService {
   }
 
   async callNextPatient(counterId: string): Promise<{ ok: true; patient?: any }> {
-    const nextPatient = await this.redis.popNextFromCounterQueue(counterId);
-    if (!nextPatient) return { ok: true };
+    const queue = await this.redis.getCounterQueue(counterId);
+    
+    if (queue.length === 0) {
+      return { ok: true };
+    }
+
+    const nextPatient = queue[0];
+    
+    // Remove from queue using Redis command
+    await this.redis['redis'].lpop(`counterQueue:${counterId}`);
 
     // Publish to Kafka
     const topic = process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';

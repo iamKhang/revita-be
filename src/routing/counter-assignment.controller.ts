@@ -123,4 +123,30 @@ export class CounterAssignmentController {
   async callNextPatient(@Param('counterId') counterId: string) {
     return this.counterAssignmentService.callNextPatient(counterId);
   }
+
+  @Public()
+  @Post('return-previous/:counterId')
+  async returnPreviousPatient(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.returnPreviousPatient(counterId);
+  }
+
+  @Public()
+  @Post('counters/:counterId/assign-receptionist')
+  async assignReceptionistToCounter(
+    @Param('counterId') counterId: string,
+    @Body() body: { receptionistId: string },
+  ) {
+    return this.counterAssignmentService.assignReceptionistToCounter(
+      counterId,
+      body.receptionistId,
+    );
+  }
+
+  @Public()
+  @Post('counters/:counterId/unassign-receptionist')
+  async unassignReceptionistFromCounter(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.unassignReceptionistFromCounter(
+      counterId,
+    );
+  }
 }

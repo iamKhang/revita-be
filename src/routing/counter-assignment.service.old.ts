@@ -111,8 +111,16 @@ export class CounterAssignmentService {
   }
 
   async callNextPatient(counterId: string): Promise<{ ok: true; patient?: any }> {
-    const nextPatient = await this.redis.popNextFromCounterQueue(counterId);
-    if (!nextPatient) return { ok: true };
+    const queue = await this.redis.getCounterQueue(counterId);
+    
+    if (queue.length === 0) {
+      return { ok: true };
+    }
+
+    const nextPatient = queue[0];
+    
+    // Remove from queue using Redis command
+    await this.redis['redis'].lpop(`counterQueue:${counterId}`);
 
     // Publish to Kafka
     const topic = process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
@@ -296,18 +304,18 @@ export class CounterAssignmentService {
 
     // Lấy danh sách quầy có sẵn (dựa trên online + queue hiện tại)
     const availableCounters = await this.getAvailableCounters();
-    const availableCountersFiltered = availableCounters.filter(
+    const availableReceptionists = availableCounters.filter(
       (c) => c.isAvailable,
     );
 
-    if (availableCountersFiltered.length === 0) {
+    if (availableReceptionists.length === 0) {
       throw new NotFoundException('No available counters at the moment');
     }
 
     // Chấm điểm và chọn ngẫu nhiên trong các quầy có điểm cao nhất
     let bestScore = -1;
     const scored: Array<{ score: number; counter: CounterStatus }> = [];
-    for (const counter of availableCountersFiltered) {
+    for (const counter of availableReceptionists) {
       const queueScore = Math.max(0, 10 - counter.currentQueueLength) * 10; // Ít hàng đợi = điểm cao hơn
       const processingScore =
         Math.max(0, 30 - counter.averageProcessingTime) * 2; // Xử lý nhanh = điểm cao hơn
@@ -414,6 +422,8 @@ export class CounterAssignmentService {
 
     return age;
   }
+
+
 
   async scanInvoiceAndAssign(request: ScanInvoiceDto): Promise<{
     success: true;
@@ -546,15 +556,15 @@ export class CounterAssignmentService {
 
     // Lấy danh sách quầy và chọn quầy tốt nhất (dựa trên online + queue)
     const availableCounters = await this.getAvailableCounters();
-    const availableCountersFiltered = availableCounters.filter(
+    const availableReceptionists = availableCounters.filter(
       (c) => c.isAvailable,
     );
-    if (availableCountersFiltered.length === 0) {
+    if (availableReceptionists.length === 0) {
       throw new NotFoundException('No available counters at the moment');
     }
     let bestScore = -1;
     const scoredDirect: Array<{ score: number; counter: CounterStatus }> = [];
-    for (const counter of availableCountersFiltered) {
+    for (const counter of availableReceptionists) {
       const queueScore = Math.max(0, 10 - counter.currentQueueLength) * 10;
       const processingScore =
         Math.max(0, 30 - counter.averageProcessingTime) * 2;
@@ -570,26 +580,22 @@ export class CounterAssignmentService {
         Math.floor(Math.random() * bestDirectCandidates.length)
       ];
 
-    // Lấy thông tin counter
-    const counter = await this.prisma.counter.findUnique({
+    // Lấy thông tin receptionist
+    const receptionist = await this.prisma.receptionist.findUnique({
       where: { id: bestCounter.counterId },
-      include: {
-        receptionist: {
-          include: { auth: true },
-        },
-      },
+      include: { auth: true },
     });
-    if (!counter) {
-      throw new NotFoundException('Selected counter not found');
+    if (!receptionist) {
+      throw new NotFoundException('Selected receptionist not found');
     }
 
     // Tạo assignment
     const assignment: AssignedCounter = {
-      counterId: counter.id,
-      counterCode: counter.counterCode,
-      counterName: counter.counterName,
-      receptionistId: counter.receptionistId || undefined,
-      receptionistName: counter.receptionist?.auth?.name || undefined,
+      counterId: receptionist.id,
+      counterCode: `CTR${receptionist.id.slice(-6)}`,
+      counterName: `Counter ${receptionist.auth.name}`,
+      receptionistId: receptionist.id,
+      receptionistName: receptionist.auth.name,
       priorityScore,
       estimatedWaitTime:
         bestCounter.currentQueueLength * bestCounter.averageProcessingTime,
@@ -601,7 +607,7 @@ export class CounterAssignmentService {
     try {
       await this.kafka.publish(topic, [
         {
-          key: counter.id,
+          key: receptionist.id,
           value: {
             type: 'PATIENT_ASSIGNED_TO_COUNTER',
             appointmentId: `direct-${Date.now()}`,
@@ -637,7 +643,7 @@ export class CounterAssignmentService {
     }
 
     // Push runtime queue entry
-    await this.redis.pushToCounterQueue(counter.id, {
+    await this.redis.pushToCounterQueue(receptionist.id, {
       appointmentId: `direct-${Date.now()}`,
       patientName: request.patientName,
       priorityScore,
@@ -691,15 +697,15 @@ export class CounterAssignmentService {
 
     // Lấy danh sách quầy có sẵn và chọn quầy tốt nhất (dựa trên online + queue)
     const availableCounters = await this.getAvailableCounters();
-    const availableCountersFiltered = availableCounters.filter(
+    const availableReceptionists = availableCounters.filter(
       (c) => c.isAvailable,
     );
-    if (availableCountersFiltered.length === 0) {
+    if (availableReceptionists.length === 0) {
       throw new NotFoundException('No available counters at the moment');
     }
     let bestScore = -1;
     const scoredSimple: Array<{ score: number; counter: CounterStatus }> = [];
-    for (const counter of availableCountersFiltered) {
+    for (const counter of availableReceptionists) {
       const queueScore = Math.max(0, 10 - counter.currentQueueLength) * 10;
       const processingScore =
         Math.max(0, 30 - counter.averageProcessingTime) * 2;
@@ -715,25 +721,21 @@ export class CounterAssignmentService {
         Math.floor(Math.random() * bestSimpleCandidates.length)
       ];
 
-    // Lấy thông tin counter
-    const counter = await this.prisma.counter.findUnique({
+    // Lấy thông tin receptionist
+    const receptionist = await this.prisma.receptionist.findUnique({
       where: { id: bestCounter.counterId },
-      include: {
-        receptionist: {
-          include: { auth: true },
-        },
-      },
+      include: { auth: true },
     });
-    if (!counter) {
-      throw new NotFoundException('Selected counter not found');
+    if (!receptionist) {
+      throw new NotFoundException('Selected receptionist not found');
     }
 
     const assignment: AssignedCounter = {
-      counterId: counter.id,
-      counterCode: counter.counterCode,
-      counterName: counter.counterName,
-      receptionistId: counter.receptionistId || undefined,
-      receptionistName: counter.receptionist?.auth?.name || undefined,
+      counterId: receptionist.id,
+      counterCode: `CTR${receptionist.id.slice(-6)}`,
+      counterName: `Counter ${receptionist.auth.name}`,
+      receptionistId: receptionist.id,
+      receptionistName: receptionist.auth.name,
       priorityScore,
       estimatedWaitTime:
         bestCounter.currentQueueLength * bestCounter.averageProcessingTime,
@@ -745,7 +747,7 @@ export class CounterAssignmentService {
     try {
       await this.kafka.publish(topic, [
         {
-          key: counter.id,
+          key: receptionist.id,
           value: {
             type: 'PATIENT_ASSIGNED_TO_COUNTER',
             appointmentId: generatedAppointmentId,
@@ -777,7 +779,7 @@ export class CounterAssignmentService {
     }
 
     // Push runtime queue entry
-    await this.redis.pushToCounterQueue(counter.id, {
+    await this.redis.pushToCounterQueue(receptionist.id, {
       appointmentId: generatedAppointmentId,
       patientName,
       priorityScore,
