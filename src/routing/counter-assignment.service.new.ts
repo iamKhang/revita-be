@@ -110,20 +110,23 @@ export class CounterAssignmentService {
     return await this.redis.getCounterQueue(counterId);
   }
 
-  async callNextPatient(counterId: string): Promise<{ ok: true; patient?: any }> {
+  async callNextPatient(
+    counterId: string,
+  ): Promise<{ ok: true; patient?: any }> {
     const queue = await this.redis.getCounterQueue(counterId);
-    
+
     if (queue.length === 0) {
       return { ok: true };
     }
 
     const nextPatient = queue[0];
-    
+
     // Remove from queue using Redis command
     await this.redis['redis'].lpop(`counterQueue:${counterId}`);
 
     // Publish to Kafka
-    const topic = process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
     try {
       await this.kafka.publish(topic, [
         {
@@ -137,7 +140,10 @@ export class CounterAssignmentService {
         },
       ]);
     } catch (err) {
-      console.warn('[Kafka] Next patient call publish failed:', (err as Error).message);
+      console.warn(
+        '[Kafka] Next patient call publish failed:',
+        (err as Error).message,
+      );
     }
 
     return { ok: true, patient: nextPatient };
@@ -145,7 +151,8 @@ export class CounterAssignmentService {
 
   async returnPreviousPatient(counterId: string): Promise<{ ok: true }> {
     // Publish to Kafka
-    const topic = process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
     try {
       await this.kafka.publish(topic, [
         {
@@ -158,7 +165,10 @@ export class CounterAssignmentService {
         },
       ]);
     } catch (err) {
-      console.warn('[Kafka] Return previous patient publish failed:', (err as Error).message);
+      console.warn(
+        '[Kafka] Return previous patient publish failed:',
+        (err as Error).message,
+      );
     }
 
     return { ok: true };
@@ -435,6 +445,7 @@ export class CounterAssignmentService {
   }> {
     // Tìm hóa đơn
     const invoice = await this.prisma.invoice.findUnique({
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       where: { id: request.invoiceId },
       include: {
         appointments: {

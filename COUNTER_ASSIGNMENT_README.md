@@ -1,5 +1,8 @@
 # Hệ thống Phân bổ Quầy Khám với Kafka
-
+KAFKA_BROKERS=localhost:9092 node kafka/counter-listener.js aab4c3a1-5bad-4ac0-941e-b8eb54d3df94
+KAFKA_BROKERS=localhost:9092 node kafka/counter-listener.js a7f3fb78-6be0-496d-a979-4ef9d7d7c6c8
+KAFKA_BROKERS=localhost:9092 node kafka/counter-listener.js 594b8989-8f21-4f3f-add7-337d31d87ff7
+KAFKA_BROKERS=localhost:9092 node kafka/counter-listener.js 2fbcb7a8-8d35-4eed-83f5-864ad4c876ed
 ## Tổng quan
 
 Hệ thống phân bổ quầy khám tự động sử dụng Kafka để quản lý việc phân bổ bệnh nhân đến các quầy (receptionist) dựa trên hệ thống ưu tiên thông minh.

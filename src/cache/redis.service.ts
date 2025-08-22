@@ -105,9 +105,22 @@ export class RedisService implements OnModuleDestroy {
     item: Record<string, unknown>,
   ): Promise<void> {
     const key = `counterQueueZ:${counterId}`;
+    // Compute composite score: priority bucket first, then FIFO by sequence
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const hasSequence = (item as any)?.sequence !== undefined;
+    if (hasSequence) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const isPriority = Boolean((item as any)?.isPriority);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const sequence = Number((item as any)?.sequence) || 0;
+      const base = isPriority ? 1_000_000_000 : 0;
+      const score = base - sequence;
+      await this.redis.zadd(key, 'NX', score, JSON.stringify(item));
+      return;
+    }
+    // Fallback: use priorityScore only
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const priority = Number((item as any)?.priorityScore ?? 0);
-    // Use ZADD with NX to avoid accidental overwrite if member string collides
     await this.redis.zadd(key, 'NX', priority, JSON.stringify(item));
   }
 
@@ -143,6 +156,17 @@ export class RedisService implements OnModuleDestroy {
   async getCounterQueueLength(counterId: string): Promise<number> {
     const key = `counterQueueZ:${counterId}`;
     return await this.redis.zcard(key);
+  }
+
+  // ------------------ Queue number helpers (per counter, per day) ------------------
+  // Generate an incremental sequence per counter per day, used to build ticket numbers
+  async getNextCounterSequence(counterId: string): Promise<number> {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = `${now.getMonth() + 1}`.padStart(2, '0');
+    const d = `${now.getDate()}`.padStart(2, '0');
+    const key = `counterSeq:${counterId}:${y}${m}${d}`;
+    return await this.redis.incr(key);
   }
 
   // ------------------ Presence helpers for counters ------------------

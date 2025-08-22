@@ -110,12 +110,15 @@ export class CounterAssignmentService {
     return await this.redis.getCounterQueue(counterId);
   }
 
-  async callNextPatient(counterId: string): Promise<{ ok: true; patient?: any }> {
+  async callNextPatient(
+    counterId: string,
+  ): Promise<{ ok: true; patient?: any }> {
     const nextPatient = await this.redis.popNextFromCounterQueue(counterId);
     if (!nextPatient) return { ok: true };
 
     // Publish to Kafka
-    const topic = process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
     try {
       await this.kafka.publish(topic, [
         {
@@ -129,7 +132,10 @@ export class CounterAssignmentService {
         },
       ]);
     } catch (err) {
-      console.warn('[Kafka] Next patient call publish failed:', (err as Error).message);
+      console.warn(
+        '[Kafka] Next patient call publish failed:',
+        (err as Error).message,
+      );
     }
 
     return { ok: true, patient: nextPatient };
@@ -137,7 +143,8 @@ export class CounterAssignmentService {
 
   async returnPreviousPatient(counterId: string): Promise<{ ok: true }> {
     // Publish to Kafka
-    const topic = process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
     try {
       await this.kafka.publish(topic, [
         {
@@ -150,7 +157,10 @@ export class CounterAssignmentService {
         },
       ]);
     } catch (err) {
-      console.warn('[Kafka] Return previous patient publish failed:', (err as Error).message);
+      console.warn(
+        '[Kafka] Return previous patient publish failed:',
+        (err as Error).message,
+      );
     }
 
     return { ok: true };
@@ -388,12 +398,21 @@ export class CounterAssignmentService {
     }
 
     // Push to runtime queue (optional for real appointments)
+    const sequence = await this.redis.getNextCounterSequence(counter.id);
     await this.redis.pushToCounterQueue(counter.id, {
       appointmentId: request.appointmentId,
       patientName,
       priorityScore,
       estimatedWaitTime: assignedCounter.estimatedWaitTime,
       assignedAt: new Date().toISOString(),
+      sequence: sequence,
+      isPriority:
+        request.isEmergency ||
+        request.isVIP ||
+        request.isPregnant ||
+        request.isElderly ||
+        request.isDisabled ||
+        request.priorityLevel === 'HIGH',
     });
 
     return assignedCounter;
@@ -415,9 +434,35 @@ export class CounterAssignmentService {
     return age;
   }
 
+  private extractInvoiceIdFromQr(qrCode: string): string | null {
+    try {
+      const obj = JSON.parse(qrCode) as Record<string, unknown>;
+      const idLike = (obj['invoiceId'] || obj['id'] || obj['invoice_id']) as
+        | string
+        | undefined;
+      if (idLike && typeof idLike === 'string') return idLike;
+    } catch {
+      // ignore parse error and fallback to regex
+    }
+    const match = qrCode.match(
+      /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}/,
+    );
+    return match ? match[0] : null;
+  }
+
+  private async buildQueueNumberForCounter(
+    counterCode: string,
+    counterId: string,
+  ): Promise<string> {
+    const seq = await this.redis.getNextCounterSequence(counterId);
+    const padded = String(seq).padStart(3, '0');
+    return `${counterCode}-${padded}`;
+  }
+
   async scanInvoiceAndAssign(request: ScanInvoiceDto): Promise<{
     success: true;
     assignment: AssignedCounter;
+    queueNumber: string;
     patientInfo: {
       name: string;
       age: number;
@@ -425,9 +470,15 @@ export class CounterAssignmentService {
       appointmentDetails: any;
     };
   }> {
+    // Lấy invoiceId từ QR
+    const invoiceId = this.extractInvoiceIdFromQr(request.qrCode);
+    if (!invoiceId) {
+      throw new BadRequestException('QR code không hợp lệ');
+    }
+
     // Tìm hóa đơn
     const invoice = await this.prisma.invoice.findUnique({
-      where: { id: request.invoiceId },
+      where: { id: invoiceId },
       include: {
         appointments: {
           include: {
@@ -494,9 +545,32 @@ export class CounterAssignmentService {
     // Thực hiện phân bổ (hàm này đã push queue nếu cần)
     const assignment = await this.assignPatientToCounter(assignmentRequest);
 
+    // Sinh số thứ tự theo quầy và lưu kèm vào queue item
+    const sequence = await this.redis.getNextCounterSequence(
+      assignment.counterId,
+    );
+    const queueNumber = `${assignment.counterCode}-${String(sequence).padStart(3, '0')}`;
+    await this.redis.pushToCounterQueue(assignment.counterId, {
+      appointmentId: assignmentRequest.appointmentId,
+      patientName,
+      priorityScore: assignment.priorityScore,
+      estimatedWaitTime: assignment.estimatedWaitTime,
+      assignedAt: new Date().toISOString(),
+      queueNumber,
+      sequence: sequence,
+      isPriority:
+        assignmentRequest.isEmergency ||
+        assignmentRequest.isVIP ||
+        assignmentRequest.isPregnant ||
+        assignmentRequest.isElderly ||
+        assignmentRequest.isDisabled ||
+        assignmentRequest.priorityLevel === 'HIGH',
+    });
+
     return {
       success: true,
       assignment,
+      queueNumber,
       patientInfo: {
         name: patientName,
         age: patientAge,
@@ -637,12 +711,21 @@ export class CounterAssignmentService {
     }
 
     // Push runtime queue entry
+    const sequence = await this.redis.getNextCounterSequence(counter.id);
     await this.redis.pushToCounterQueue(counter.id, {
       appointmentId: `direct-${Date.now()}`,
       patientName: request.patientName,
       priorityScore,
       estimatedWaitTime: assignment.estimatedWaitTime,
       assignedAt: new Date().toISOString(),
+      sequence: sequence,
+      isPriority:
+        request.isEmergency ||
+        request.isVIP ||
+        request.isPregnant ||
+        request.isElderly ||
+        request.isDisabled ||
+        request.priorityLevel === 'HIGH',
     });
 
     return {
@@ -663,14 +746,14 @@ export class CounterAssignmentService {
     assignment: AssignedCounter;
     queueNumber: string;
   }> {
-    // Tạo số thứ tự
-    const queueNumber = `Q${Date.now().toString().slice(-6)}`;
-
     const generatedAppointmentId = `simple-${Date.now()}`;
     const generatedProfileId = `simple-${Date.now()}`;
-    const patientName = `Bệnh nhân ${queueNumber}`;
-    const patientAge = 30;
-    const patientGender = 'MALE';
+    const patientName = `Khách lẻ`;
+    const patientAge = 0;
+    const patientGender = 'UNKNOWN';
+
+    const chosenPriority: 'HIGH' | 'MEDIUM' | 'LOW' =
+      request.priorityLevel || 'LOW';
 
     // Điểm ưu tiên thấp nhất cho bốc số đơn thuần
     const priorityScore = this.calculatePriorityScore({
@@ -680,13 +763,13 @@ export class CounterAssignmentService {
       patientName,
       patientAge,
       patientGender,
-      isElderly: false,
-      isPregnant: false,
-      isEmergency: false,
-      isDisabled: false,
-      isVIP: false,
-      priorityLevel: 'LOW',
-      notes: `Simple assignment - Queue number: ${queueNumber} by: ${request.assignedBy || 'Unknown'}`,
+      isElderly: request.isElderly ?? false,
+      isPregnant: request.isPregnant ?? false,
+      isEmergency: request.isEmergency ?? false,
+      isDisabled: request.isDisabled ?? false,
+      isVIP: request.isVIP ?? false,
+      priorityLevel: chosenPriority,
+      notes: `Simple assignment by: ${request.assignedBy || 'Unknown'}`,
     });
 
     // Lấy danh sách quầy có sẵn và chọn quầy tốt nhất (dựa trên online + queue)
@@ -728,6 +811,10 @@ export class CounterAssignmentService {
       throw new NotFoundException('Selected counter not found');
     }
 
+    // Get sequence once and use for both queueNumber and queue item
+    const sequence = await this.redis.getNextCounterSequence(counter.id);
+    const queueNumber = `${counter.counterCode}-${String(sequence).padStart(3, '0')}`;
+
     const assignment: AssignedCounter = {
       counterId: counter.id,
       counterCode: counter.counterCode,
@@ -758,13 +845,13 @@ export class CounterAssignmentService {
             assignedCounter: assignment,
             timestamp: new Date().toISOString(),
             metadata: {
-              isPregnant: false,
-              isEmergency: false,
-              isElderly: false,
-              isDisabled: false,
-              isVIP: false,
-              priorityLevel: 'LOW',
-              notes: `Simple assignment - Queue number: ${queueNumber} by: ${request.assignedBy || 'Unknown'}`,
+              isPregnant: request.isPregnant ?? false,
+              isEmergency: request.isEmergency ?? false,
+              isElderly: request.isElderly ?? false,
+              isDisabled: request.isDisabled ?? false,
+              isVIP: request.isVIP ?? false,
+              priorityLevel: chosenPriority,
+              notes: `Simple assignment by: ${request.assignedBy || 'Unknown'}`,
             },
           },
         },
@@ -783,6 +870,15 @@ export class CounterAssignmentService {
       priorityScore,
       estimatedWaitTime: assignment.estimatedWaitTime,
       assignedAt: new Date().toISOString(),
+      queueNumber,
+      sequence: sequence,
+      isPriority:
+        (request.isEmergency ?? false) ||
+        (request.isVIP ?? false) ||
+        (request.isPregnant ?? false) ||
+        (request.isElderly ?? false) ||
+        (request.isDisabled ?? false) ||
+        chosenPriority === 'HIGH',
     });
 
     return {
