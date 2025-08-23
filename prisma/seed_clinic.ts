@@ -68,29 +68,47 @@ async function ensureSpecialtyWithId(id: string, name: string) {
 }
 
 async function ensureAuthAndDoctor(opts: {
-  auth: { id: string; name: string; email: string; role: 'DOCTOR'; phone?: string | null };
-  doctor: { id?: string; doctorCode: string; degrees: Prisma.InputJsonValue; yearsExperience: number; rating: number; workHistory: string; description: string };
+  auth: {
+    id: string;
+    name: string;
+    email: string;
+    role: 'DOCTOR';
+    phone?: string | null;
+  };
+  doctor: {
+    id?: string;
+    doctorCode: string;
+    degrees: Prisma.InputJsonValue;
+    yearsExperience: number;
+    rating: number;
+    workHistory: string;
+    description: string;
+  };
 }) {
   const password = await bcrypt.hash('123456789', 10);
   let auth = await prisma.auth.findUnique({ where: { id: opts.auth.id } });
   if (!auth) {
     // fallback if existed by email with different id
-    const byEmail = await prisma.auth.findUnique({ where: { email: opts.auth.email } });
-    auth = byEmail ?? (await prisma.auth.create({
-      data: {
-        id: opts.auth.id,
-        name: opts.auth.name,
-        dateOfBirth: new Date('1985-01-01'),
-        email: opts.auth.email,
-        phone: opts.auth.phone ?? null,
-        password,
-        gender: 'male',
-        avatar: null,
-        address: 'TP HCM',
-        citizenId: null,
-        role: 'DOCTOR',
-      },
-    }));
+    const byEmail = await prisma.auth.findUnique({
+      where: { email: opts.auth.email },
+    });
+    auth =
+      byEmail ??
+      (await prisma.auth.create({
+        data: {
+          id: opts.auth.id,
+          name: opts.auth.name,
+          dateOfBirth: new Date('1985-01-01'),
+          email: opts.auth.email,
+          phone: opts.auth.phone ?? null,
+          password,
+          gender: 'male',
+          avatar: null,
+          address: 'TP HCM',
+          citizenId: null,
+          role: 'DOCTOR',
+        },
+      }));
   }
   let doctor = await prisma.doctor.findUnique({ where: { authId: auth.id } });
   if (!doctor) {
@@ -110,35 +128,55 @@ async function ensureAuthAndDoctor(opts: {
   return { auth, doctor };
 }
 
-async function ensureServiceWithId(id: string, serviceCode: string, name: string, price: number, description: string) {
+async function ensureServiceWithId(
+  id: string,
+  serviceCode: string,
+  name: string,
+  price: number,
+  description: string,
+) {
   let s = await prisma.service.findUnique({ where: { id } });
   if (!s) {
     const byCode = await prisma.service.findFirst({ where: { serviceCode } });
-    s = byCode ?? (await prisma.service.create({ data: { id, serviceCode, name, price, description } }));
+    s =
+      byCode ??
+      (await prisma.service.create({
+        data: { id, serviceCode, name, price, description },
+      }));
   }
   return s;
 }
 
-async function ensureAuthWithId(opts: { id: string; name: string; email: string; role: 'PATIENT'; phone?: string | null }) {
+async function ensureAuthWithId(opts: {
+  id: string;
+  name: string;
+  email: string;
+  role: 'PATIENT';
+  phone?: string | null;
+}) {
   const password = await bcrypt.hash('123456789', 10);
   let auth = await prisma.auth.findUnique({ where: { id: opts.id } });
   if (!auth) {
-    const byEmail = await prisma.auth.findUnique({ where: { email: opts.email } });
-    auth = byEmail ?? (await prisma.auth.create({
-      data: {
-        id: opts.id,
-        name: opts.name,
-        dateOfBirth: new Date('1990-01-01'),
-        email: opts.email,
-        phone: opts.phone ?? null,
-        password,
-        gender: 'male',
-        avatar: null,
-        address: 'TP HCM',
-        citizenId: null,
-        role: 'PATIENT',
-      },
-    }));
+    const byEmail = await prisma.auth.findUnique({
+      where: { email: opts.email },
+    });
+    auth =
+      byEmail ??
+      (await prisma.auth.create({
+        data: {
+          id: opts.id,
+          name: opts.name,
+          dateOfBirth: new Date('1990-01-01'),
+          email: opts.email,
+          phone: opts.phone ?? null,
+          password,
+          gender: 'male',
+          avatar: null,
+          address: 'TP HCM',
+          citizenId: null,
+          role: 'PATIENT',
+        },
+      }));
   }
   return auth;
 }
@@ -146,7 +184,9 @@ async function ensureAuthWithId(opts: { id: string; name: string; email: string;
 async function ensurePatientByAuthId(authId: string, patientCode: string) {
   let patient = await prisma.patient.findUnique({ where: { authId } });
   if (!patient) {
-    patient = await prisma.patient.create({ data: { id: authId, patientCode, authId, loyaltyPoints: 0 } });
+    patient = await prisma.patient.create({
+      data: { id: authId, patientCode, authId, loyaltyPoints: 0 },
+    });
   }
   return patient;
 }
@@ -160,67 +200,101 @@ async function ensurePatientProfileWithId(opts: {
   gender: string;
   address?: string | null;
 }) {
-  let profile = await prisma.patientProfile.findUnique({ where: { id: opts.id } });
+  let profile = await prisma.patientProfile.findUnique({
+    where: { id: opts.id },
+  });
   if (!profile) {
-    const byCode = await prisma.patientProfile.findFirst({ where: { profileCode: opts.profileCode } });
-    profile = byCode ?? (await prisma.patientProfile.create({
-      data: {
-        id: opts.id,
-        profileCode: opts.profileCode,
-        patientId: opts.patientId,
-        name: opts.name,
-        dateOfBirth: opts.dateOfBirth,
-        gender: opts.gender,
-        address: opts.address ?? 'TP HCM',
-        occupation: 'Nhân viên',
-        emergencyContact: { name: 'Liên hệ khẩn cấp', phone: '0900000000' },
-        healthInsurance: null,
-        relationship: 'self',
-      },
-    }));
+    const byCode = await prisma.patientProfile.findFirst({
+      where: { profileCode: opts.profileCode },
+    });
+    profile =
+      byCode ??
+      (await prisma.patientProfile.create({
+        data: {
+          id: opts.id,
+          profileCode: opts.profileCode,
+          patientId: opts.patientId,
+          name: opts.name,
+          dateOfBirth: opts.dateOfBirth,
+          gender: opts.gender,
+          address: opts.address ?? 'TP HCM',
+          occupation: 'Nhân viên',
+          emergencyContact: { name: 'Liên hệ khẩn cấp', phone: '0900000000' },
+          healthInsurance: null,
+          relationship: 'self',
+        },
+      }));
   }
   return profile;
 }
 
-async function ensureRoomWithId(id: string, roomCode: string, roomName: string, specialtyId: string, doctorId: string, description?: string | null) {
+async function ensureRoomWithId(
+  id: string,
+  roomCode: string,
+  roomName: string,
+  specialtyId: string,
+  doctorId: string,
+  description?: string | null,
+) {
   let room = await prisma.clinicRoom.findUnique({ where: { id } });
   if (!room) {
     const byCode = await prisma.clinicRoom.findUnique({ where: { roomCode } });
-    room = byCode ?? (await prisma.clinicRoom.create({
-      data: {
-        id,
-        roomCode,
-        roomName,
-        specialtyId,
-        doctorId,
-        description: description ?? null,
-      },
-    }));
+    room =
+      byCode ??
+      (await prisma.clinicRoom.create({
+        data: {
+          id,
+          roomCode,
+          roomName,
+          specialtyId,
+          doctorId,
+          description: description ?? null,
+        },
+      }));
   }
   return room;
 }
 
 async function linkRoomServices(roomId: string, serviceIds: string[]) {
   for (const serviceId of serviceIds) {
-    const link = await prisma.clinicRoomService.findFirst({ where: { clinicRoomId: roomId, serviceId } });
+    const link = await prisma.clinicRoomService.findFirst({
+      where: { clinicRoomId: roomId, serviceId },
+    });
     if (!link) {
-      await prisma.clinicRoomService.create({ data: { clinicRoomId: roomId, serviceId } });
+      await prisma.clinicRoomService.create({
+        data: { clinicRoomId: roomId, serviceId },
+      });
     }
   }
 }
 
 async function main() {
   // Specialties (curated)
-  const specDental = await ensureSpecialtyWithId(IDS.specialties.dental, 'Răng hàm mặt');
+  const specDental = await ensureSpecialtyWithId(
+    IDS.specialties.dental,
+    'Răng hàm mặt',
+  );
   const specEye = await ensureSpecialtyWithId(IDS.specialties.eye, 'Mắt');
-  const specInternal = await ensureSpecialtyWithId(IDS.specialties.internal, 'Nội tổng quát');
-  const specENT = await ensureSpecialtyWithId(IDS.specialties.ent, 'Tai mũi họng');
+  const specInternal = await ensureSpecialtyWithId(
+    IDS.specialties.internal,
+    'Nội tổng quát',
+  );
+  const specENT = await ensureSpecialtyWithId(
+    IDS.specialties.ent,
+    'Tai mũi họng',
+  );
 
   // Doctors (curated)
   const { doctor: doctorDental1 } = await ensureAuthAndDoctor({
-    auth: { id: IDS.auth.rhm01, name: 'Bác sĩ RHM 01', email: 'doctor.rhm01@example.com', role: 'DOCTOR' },
+    auth: {
+      id: IDS.auth.rhm01,
+      name: 'Bác sĩ RHM 01',
+      email: 'doctor.rhm01@example.com',
+      role: 'DOCTOR',
+    },
     doctor: {
       doctorCode: 'DOC_RHM_01',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       degrees: JSON.parse(JSON.stringify(['BS CKI', 'Răng hàm mặt'])),
       yearsExperience: 10,
       rating: 4.6,
@@ -229,9 +303,15 @@ async function main() {
     },
   });
   const { doctor: doctorDental2 } = await ensureAuthAndDoctor({
-    auth: { id: IDS.auth.rhm02, name: 'Bác sĩ RHM 02', email: 'doctor.rhm02@example.com', role: 'DOCTOR' },
+    auth: {
+      id: IDS.auth.rhm02,
+      name: 'Bác sĩ RHM 02',
+      email: 'doctor.rhm02@example.com',
+      role: 'DOCTOR',
+    },
     doctor: {
       doctorCode: 'DOC_RHM_02',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       degrees: JSON.parse(JSON.stringify(['BS CKI', 'Răng hàm mặt'])),
       yearsExperience: 8,
       rating: 4.5,
@@ -240,9 +320,15 @@ async function main() {
     },
   });
   const { doctor: doctorEye1 } = await ensureAuthAndDoctor({
-    auth: { id: IDS.auth.mat01, name: 'Bác sĩ Mắt 01', email: 'doctor.mat01@example.com', role: 'DOCTOR' },
+    auth: {
+      id: IDS.auth.mat01,
+      name: 'Bác sĩ Mắt 01',
+      email: 'doctor.mat01@example.com',
+      role: 'DOCTOR',
+    },
     doctor: {
       doctorCode: 'DOC_MAT_01',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       degrees: JSON.parse(JSON.stringify(['BS CKI', 'Mắt'])),
       yearsExperience: 9,
       rating: 4.7,
@@ -251,9 +337,15 @@ async function main() {
     },
   });
   const { doctor: doctorInternal1 } = await ensureAuthAndDoctor({
-    auth: { id: IDS.auth.noi01, name: 'Bác sĩ Nội 01', email: 'doctor.noi01@example.com', role: 'DOCTOR' },
+    auth: {
+      id: IDS.auth.noi01,
+      name: 'Bác sĩ Nội 01',
+      email: 'doctor.noi01@example.com',
+      role: 'DOCTOR',
+    },
     doctor: {
       doctorCode: 'DOC_NOI_01',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       degrees: JSON.parse(JSON.stringify(['BS CKI', 'Nội tổng quát'])),
       yearsExperience: 12,
       rating: 4.6,
@@ -262,9 +354,15 @@ async function main() {
     },
   });
   const { doctor: doctorENT1 } = await ensureAuthAndDoctor({
-    auth: { id: IDS.auth.tmh01, name: 'Bác sĩ TMH 01', email: 'doctor.tmh01@example.com', role: 'DOCTOR' },
+    auth: {
+      id: IDS.auth.tmh01,
+      name: 'Bác sĩ TMH 01',
+      email: 'doctor.tmh01@example.com',
+      role: 'DOCTOR',
+    },
     doctor: {
       doctorCode: 'DOC_TMH_01',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       degrees: JSON.parse(JSON.stringify(['BS CKI', 'Tai mũi họng'])),
       yearsExperience: 7,
       rating: 4.4,
@@ -274,47 +372,233 @@ async function main() {
   });
 
   // Rooms (curated)
-  const roomRHM01 = await ensureRoomWithId(IDS.rooms.RHM01, 'RHM-01', 'Phòng RHM 01', specDental.id, doctorDental1.id, 'Phòng răng hàm mặt số 01');
-  const roomRHM02 = await ensureRoomWithId(IDS.rooms.RHM02, 'RHM-02', 'Phòng RHM 02', specDental.id, doctorDental2.id, 'Phòng răng hàm mặt số 02');
-  const roomMAT01 = await ensureRoomWithId(IDS.rooms.MAT01, 'MAT-01', 'Phòng Mắt 01', specEye.id, doctorEye1.id, 'Phòng mắt số 01');
-  const roomNOI01 = await ensureRoomWithId(IDS.rooms.NOI01, 'NOI-01', 'Phòng Nội 01', specInternal.id, doctorInternal1.id, 'Phòng nội tổng quát 01');
-  const roomTMH01 = await ensureRoomWithId(IDS.rooms.TMH01, 'TMH-01', 'Phòng TMH 01', specENT.id, doctorENT1.id, 'Phòng tai mũi họng 01');
+  const roomRHM01 = await ensureRoomWithId(
+    IDS.rooms.RHM01,
+    'RHM-01',
+    'Phòng RHM 01',
+    specDental.id,
+    doctorDental1.id,
+    'Phòng răng hàm mặt số 01',
+  );
+  const roomRHM02 = await ensureRoomWithId(
+    IDS.rooms.RHM02,
+    'RHM-02',
+    'Phòng RHM 02',
+    specDental.id,
+    doctorDental2.id,
+    'Phòng răng hàm mặt số 02',
+  );
+  const roomMAT01 = await ensureRoomWithId(
+    IDS.rooms.MAT01,
+    'MAT-01',
+    'Phòng Mắt 01',
+    specEye.id,
+    doctorEye1.id,
+    'Phòng mắt số 01',
+  );
+  const roomNOI01 = await ensureRoomWithId(
+    IDS.rooms.NOI01,
+    'NOI-01',
+    'Phòng Nội 01',
+    specInternal.id,
+    doctorInternal1.id,
+    'Phòng nội tổng quát 01',
+  );
+  const roomTMH01 = await ensureRoomWithId(
+    IDS.rooms.TMH01,
+    'TMH-01',
+    'Phòng TMH 01',
+    specENT.id,
+    doctorENT1.id,
+    'Phòng tai mũi họng 01',
+  );
 
   // Services (global curated, reused across rooms)
-  const svcKhamRHM = await ensureServiceWithId(IDS.services.KHAM_RHM, 'KHAM_RHM', 'Khám răng tổng quát', 150000, 'Khám răng tổng quát');
-  const svcCaoRang = await ensureServiceWithId(IDS.services.CAORANG, 'CAORANG', 'Lấy cao răng', 200000, 'Lấy cao răng');
-  const svcTram = await ensureServiceWithId(IDS.services.TRAM, 'TRAM', 'Trám răng', 300000, 'Trám răng');
+  const svcKhamRHM = await ensureServiceWithId(
+    IDS.services.KHAM_RHM,
+    'KHAM_RHM',
+    'Khám răng tổng quát',
+    150000,
+    'Khám răng tổng quát',
+  );
+  const svcCaoRang = await ensureServiceWithId(
+    IDS.services.CAORANG,
+    'CAORANG',
+    'Lấy cao răng',
+    200000,
+    'Lấy cao răng',
+  );
+  const svcTram = await ensureServiceWithId(
+    IDS.services.TRAM,
+    'TRAM',
+    'Trám răng',
+    300000,
+    'Trám răng',
+  );
 
-  const svcKhamMat = await ensureServiceWithId(IDS.services.KHAM_MAT, 'KHAM_MAT', 'Khám mắt tổng quát', 150000, 'Khám mắt tổng quát');
-  const svcDoThiLuc = await ensureServiceWithId(IDS.services.DOTHILUC, 'DOTHILUC', 'Đo thị lực', 120000, 'Đo thị lực');
-  const svcKhucXa = await ensureServiceWithId(IDS.services.KHUCXA, 'KHUCXA', 'Đo khúc xạ', 180000, 'Đo khúc xạ');
+  const svcKhamMat = await ensureServiceWithId(
+    IDS.services.KHAM_MAT,
+    'KHAM_MAT',
+    'Khám mắt tổng quát',
+    150000,
+    'Khám mắt tổng quát',
+  );
+  const svcDoThiLuc = await ensureServiceWithId(
+    IDS.services.DOTHILUC,
+    'DOTHILUC',
+    'Đo thị lực',
+    120000,
+    'Đo thị lực',
+  );
+  const svcKhucXa = await ensureServiceWithId(
+    IDS.services.KHUCXA,
+    'KHUCXA',
+    'Đo khúc xạ',
+    180000,
+    'Đo khúc xạ',
+  );
 
-  const svcKhamNoi = await ensureServiceWithId(IDS.services.KHAM_NOI, 'KHAM_NOI', 'Khám nội tổng quát', 150000, 'Khám nội tổng quát');
-  const svcKhamTMH = await ensureServiceWithId(IDS.services.KHAM_TMH, 'KHAM_TMH', 'Khám tai mũi họng', 150000, 'Khám tai mũi họng');
+  const svcKhamNoi = await ensureServiceWithId(
+    IDS.services.KHAM_NOI,
+    'KHAM_NOI',
+    'Khám nội tổng quát',
+    150000,
+    'Khám nội tổng quát',
+  );
+  const svcKhamTMH = await ensureServiceWithId(
+    IDS.services.KHAM_TMH,
+    'KHAM_TMH',
+    'Khám tai mũi họng',
+    150000,
+    'Khám tai mũi họng',
+  );
 
   // Link rooms <-> services (many-to-many)
-  await linkRoomServices(roomRHM01.id, [svcKhamRHM.id, svcCaoRang.id, svcTram.id]);
+  await linkRoomServices(roomRHM01.id, [
+    svcKhamRHM.id,
+    svcCaoRang.id,
+    svcTram.id,
+  ]);
   await linkRoomServices(roomRHM02.id, [svcKhamRHM.id, svcCaoRang.id]);
-  await linkRoomServices(roomMAT01.id, [svcKhamMat.id, svcDoThiLuc.id, svcKhucXa.id]);
+  await linkRoomServices(roomMAT01.id, [
+    svcKhamMat.id,
+    svcDoThiLuc.id,
+    svcKhucXa.id,
+  ]);
   await linkRoomServices(roomNOI01.id, [svcKhamNoi.id]);
   await linkRoomServices(roomTMH01.id, [svcKhamTMH.id]);
 
   // Create 10 patients with one profile each (stable IDs)
   const patientDefs = [
-    { idx: '01', authId: IDS.auth.patient01, email: 'patient01@example.com', name: 'Nguyễn Văn A', profileId: IDS.profiles.pp01, profileCode: 'PP_U01', gender: 'male', dob: new Date('1990-01-15') },
-    { idx: '02', authId: IDS.auth.patient02, email: 'patient02@example.com', name: 'Trần Thị B', profileId: IDS.profiles.pp02, profileCode: 'PP_U02', gender: 'female', dob: new Date('1991-02-20') },
-    { idx: '03', authId: IDS.auth.patient03, email: 'patient03@example.com', name: 'Lê Văn C', profileId: IDS.profiles.pp03, profileCode: 'PP_U03', gender: 'male', dob: new Date('1989-03-10') },
-    { idx: '04', authId: IDS.auth.patient04, email: 'patient04@example.com', name: 'Phạm Thị D', profileId: IDS.profiles.pp04, profileCode: 'PP_U04', gender: 'female', dob: new Date('1992-04-05') },
-    { idx: '05', authId: IDS.auth.patient05, email: 'patient05@example.com', name: 'Huỳnh Văn E', profileId: IDS.profiles.pp05, profileCode: 'PP_U05', gender: 'male', dob: new Date('1993-05-25') },
-    { idx: '06', authId: IDS.auth.patient06, email: 'patient06@example.com', name: 'Võ Thị F', profileId: IDS.profiles.pp06, profileCode: 'PP_U06', gender: 'female', dob: new Date('1994-06-18') },
-    { idx: '07', authId: IDS.auth.patient07, email: 'patient07@example.com', name: 'Đặng Văn G', profileId: IDS.profiles.pp07, profileCode: 'PP_U07', gender: 'male', dob: new Date('1995-07-12') },
-    { idx: '08', authId: IDS.auth.patient08, email: 'patient08@example.com', name: 'Bùi Thị H', profileId: IDS.profiles.pp08, profileCode: 'PP_U08', gender: 'female', dob: new Date('1996-08-30') },
-    { idx: '09', authId: IDS.auth.patient09, email: 'patient09@example.com', name: 'Phan Văn I', profileId: IDS.profiles.pp09, profileCode: 'PP_U09', gender: 'male', dob: new Date('1990-09-09') },
-    { idx: '10', authId: IDS.auth.patient10, email: 'patient10@example.com', name: 'Ngô Thị K', profileId: IDS.profiles.pp10, profileCode: 'PP_U10', gender: 'female', dob: new Date('1991-10-22') },
+    {
+      idx: '01',
+      authId: IDS.auth.patient01,
+      email: 'patient01@example.com',
+      name: 'Nguyễn Văn A',
+      profileId: IDS.profiles.pp01,
+      profileCode: 'PP_U01',
+      gender: 'male',
+      dob: new Date('1990-01-15'),
+    },
+    {
+      idx: '02',
+      authId: IDS.auth.patient02,
+      email: 'patient02@example.com',
+      name: 'Trần Thị B',
+      profileId: IDS.profiles.pp02,
+      profileCode: 'PP_U02',
+      gender: 'female',
+      dob: new Date('1991-02-20'),
+    },
+    {
+      idx: '03',
+      authId: IDS.auth.patient03,
+      email: 'patient03@example.com',
+      name: 'Lê Văn C',
+      profileId: IDS.profiles.pp03,
+      profileCode: 'PP_U03',
+      gender: 'male',
+      dob: new Date('1989-03-10'),
+    },
+    {
+      idx: '04',
+      authId: IDS.auth.patient04,
+      email: 'patient04@example.com',
+      name: 'Phạm Thị D',
+      profileId: IDS.profiles.pp04,
+      profileCode: 'PP_U04',
+      gender: 'female',
+      dob: new Date('1992-04-05'),
+    },
+    {
+      idx: '05',
+      authId: IDS.auth.patient05,
+      email: 'patient05@example.com',
+      name: 'Huỳnh Văn E',
+      profileId: IDS.profiles.pp05,
+      profileCode: 'PP_U05',
+      gender: 'male',
+      dob: new Date('1993-05-25'),
+    },
+    {
+      idx: '06',
+      authId: IDS.auth.patient06,
+      email: 'patient06@example.com',
+      name: 'Võ Thị F',
+      profileId: IDS.profiles.pp06,
+      profileCode: 'PP_U06',
+      gender: 'female',
+      dob: new Date('1994-06-18'),
+    },
+    {
+      idx: '07',
+      authId: IDS.auth.patient07,
+      email: 'patient07@example.com',
+      name: 'Đặng Văn G',
+      profileId: IDS.profiles.pp07,
+      profileCode: 'PP_U07',
+      gender: 'male',
+      dob: new Date('1995-07-12'),
+    },
+    {
+      idx: '08',
+      authId: IDS.auth.patient08,
+      email: 'patient08@example.com',
+      name: 'Bùi Thị H',
+      profileId: IDS.profiles.pp08,
+      profileCode: 'PP_U08',
+      gender: 'female',
+      dob: new Date('1996-08-30'),
+    },
+    {
+      idx: '09',
+      authId: IDS.auth.patient09,
+      email: 'patient09@example.com',
+      name: 'Phan Văn I',
+      profileId: IDS.profiles.pp09,
+      profileCode: 'PP_U09',
+      gender: 'male',
+      dob: new Date('1990-09-09'),
+    },
+    {
+      idx: '10',
+      authId: IDS.auth.patient10,
+      email: 'patient10@example.com',
+      name: 'Ngô Thị K',
+      profileId: IDS.profiles.pp10,
+      profileCode: 'PP_U10',
+      gender: 'female',
+      dob: new Date('1991-10-22'),
+    },
   ];
 
   for (const pd of patientDefs) {
-    const auth = await ensureAuthWithId({ id: pd.authId, name: pd.name, email: pd.email, role: 'PATIENT' });
+    const auth = await ensureAuthWithId({
+      id: pd.authId,
+      name: pd.name,
+      email: pd.email,
+      role: 'PATIENT',
+    });
     const patient = await ensurePatientByAuthId(auth.id, `PAT_${pd.idx}`);
     await ensurePatientProfileWithId({
       id: pd.profileId,
@@ -327,7 +611,9 @@ async function main() {
     });
   }
 
-  console.log('Seed clinic data completed (specialties, doctors, rooms, services, links, patients).');
+  console.log(
+    'Seed clinic data completed (specialties, doctors, rooms, services, links, patients).',
+  );
 }
 
 main()
@@ -338,5 +624,3 @@ main()
   .finally(() => {
     void prisma.$disconnect();
   });
-
-
