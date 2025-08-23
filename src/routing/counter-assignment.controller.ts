@@ -57,6 +57,30 @@ export class CounterAssignmentController {
   }
 
   @Public()
+  @Get('counters/:counterId/current-patient')
+  async getCurrentPatient(@Param('counterId') counterId: string) {
+    const patient =
+      await this.counterAssignmentService.getCurrentPatient(counterId);
+    return {
+      success: true,
+      patient,
+      hasPatient: patient !== null,
+    };
+  }
+
+  @Public()
+  @Get('counters/:counterId/queue-status')
+  async getQueueStatus(@Param('counterId') counterId: string) {
+    const status =
+      await this.counterAssignmentService.getQueueStatus(counterId);
+    return {
+      success: true,
+
+      status,
+    };
+  }
+
+  @Public()
   @Get('counters/status')
   async getAllCountersStatus(): Promise<{
     totalCounters: number;
@@ -128,6 +152,30 @@ export class CounterAssignmentController {
   @Post('return-previous/:counterId')
   async returnPreviousPatient(@Param('counterId') counterId: string) {
     return this.counterAssignmentService.returnPreviousPatient(counterId);
+  }
+
+  @Public()
+  @Post('go-back-previous/:counterId')
+  async goBackToPreviousPatient(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.goBackToPreviousPatient(counterId);
+  }
+
+  @Public()
+  @Post('skip-current/:counterId')
+  async skipCurrentPatient(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.skipCurrentPatient(counterId);
+  }
+
+  @Public()
+  @Post('recall-skipped/:counterId')
+  async recallSkippedPatient(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.recallSkippedPatient(counterId);
+  }
+
+  @Public()
+  @Post('return-current/:counterId')
+  async returnCurrentPatientToQueue(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.returnCurrentPatientToQueue(counterId);
   }
 
   @Public()

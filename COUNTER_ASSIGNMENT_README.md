@@ -1,344 +1,181 @@
-# Hệ thống Phân bổ Quầy Khám với Kafka
-KAFKA_BROKERS=localhost:9092 node kafka/counter-listener.js aab4c3a1-5bad-4ac0-941e-b8eb54d3df94
-KAFKA_BROKERS=localhost:9092 node kafka/counter-listener.js a7f3fb78-6be0-496d-a979-4ef9d7d7c6c8
-KAFKA_BROKERS=localhost:9092 node kafka/counter-listener.js 594b8989-8f21-4f3f-add7-337d31d87ff7
-KAFKA_BROKERS=localhost:9092 node kafka/counter-listener.js 2fbcb7a8-8d35-4eed-83f5-864ad4c876ed
-## Tổng quan
+# Counter Assignment System - Enhanced Features
 
-Hệ thống phân bổ quầy khám tự động sử dụng Kafka để quản lý việc phân bổ bệnh nhân đến các quầy (receptionist) dựa trên hệ thống ưu tiên thông minh.
+## Overview
+Hệ thống phân bổ quầy đã được cải thiện với các tính năng mới để quản lý queue hiệu quả hơn.
 
-## Tính năng chính
+## Enhanced Features
 
-### 1. Hệ thống Ưu tiên
-- **Cấp cứu**: Ưu tiên cao nhất (1000 điểm)
-- **Người cao tuổi (>70)**: 500 điểm
-- **Phụ nữ có thai**: 400 điểm
-- **Người khuyết tật**: 300 điểm
-- **VIP**: 200 điểm
-- **Độ tuổi**: 60+ (100 điểm), 50+ (50 điểm), 40+ (25 điểm)
+### 1. Return Previous Patient Logic
+- **Endpoint**: `POST /counter-assignment/return-previous/:counterId`
+- **Chức năng**: Trả lại patient hiện tại về đầu queue
+- **Logic**:
+  - Lấy patient hiện tại đang được phục vụ (patient đầu tiên trong queue)
+  - Nếu không có patient nào, trả về thông báo
+  - Nếu có patient, đặt lại patient đó vào vị trí đầu queue với priority cao nhất
+  - Publish event đến Kafka để thông báo
+- **Response**:
+  ```json
+  {
+    "ok": true,
+    "patient": {
+      "appointmentId": "...",
+      "patientName": "...",
+      "priorityScore": 100,
+      "queueNumber": "A-001",
+      "sequence": 1,
+      "isPriority": true
+    },
+    "message": "Patient returned to queue successfully"
+  }
+  ```
 
-### 2. Thuật toán Phân bổ
-- Tính điểm ưu tiên cho bệnh nhân
-- Đánh giá tải trọng của từng quầy
-- Chọn quầy tối ưu dựa trên:
-  - Độ dài hàng đợi hiện tại
-  - Thời gian xử lý trung bình
-  - Điểm ưu tiên của bệnh nhân
+### 2. Queue Number Reset Logic
+- **Tự động reset**: Khi queue rỗng, sequence number sẽ được reset về 0
+- **Manual reset**: Khi clear queue, sequence cũng được reset
+- **Logic**:
+  - Mỗi counter có sequence riêng theo ngày (format: `counterSeq:{counterId}:{YYYYMMDD}`)
+  - Khi `callNextPatient` và queue rỗng → tự động reset sequence
+  - Khi `clearCounterQueue` → reset sequence
+  - Queue number format: `{counterCode}-{sequence}` (ví dụ: A-001, B-015)
 
-### 3. Real-time Communication
-- Sử dụng Kafka để gửi thông báo real-time
-- Các quầy nhận được thông báo ngay lập tức
-- Hỗ trợ ứng dụng Electron
+### 3. Current Patient Management
+- **Endpoint**: `GET /counter-assignment/counters/:counterId/current-patient`
+- **Chức năng**: Lấy thông tin patient hiện tại đang được phục vụ
+- **Response**:
+  ```json
+  {
+    "success": true,
+    "patient": {
+      "appointmentId": "...",
+      "patientName": "...",
+      "priorityScore": 100,
+      "queueNumber": "A-001",
+      "sequence": 1,
+      "isPriority": true,
+      "assignedAt": "2024-01-01T10:00:00.000Z"
+    },
+    "hasPatient": true
+  }
+  ```
 
-## API Endpoints
+### 4. Enhanced Call Next Patient
+- **Endpoint**: `POST /counter-assignment/next-patient/:counterId`
+- **Cải thiện**:
+  - Tự động reset sequence khi queue rỗng
+  - Trả về thông báo rõ ràng hơn
+- **Response khi có patient**:
+  ```json
+  {
+    "ok": true,
+    "patient": {
+      "appointmentId": "...",
+      "patientName": "...",
+      "priorityScore": 100,
+      "queueNumber": "A-001"
+    }
+  }
+  ```
+- **Response khi queue rỗng**:
+  ```json
+  {
+    "ok": true,
+    "message": "No patients in queue, sequence reset if queue was empty"
+  }
+  ```
 
-### 1. Phân bổ bệnh nhân
-```http
-POST /api/counter-assignment/assign
-Content-Type: application/json
-Authorization: Bearer <token>
+## Redis Data Structure
 
-{
-  "appointmentId": "uuid",
-  "patientProfileId": "uuid",
-  "invoiceId": "uuid",
-  "patientName": "Nguyễn Văn A",
-  "patientAge": 75,
-  "patientGender": "MALE",
-  "isPregnant": false,
-  "isEmergency": false,
-  "isElderly": true,
-  "isDisabled": false,
-  "isVIP": false,
-  "priorityLevel": "HIGH",
-  "notes": "Bệnh nhân cao tuổi"
-}
-```
+### Queue Storage (ZSET)
+- **Key**: `counterQueueZ:{counterId}`
+- **Score**: Priority-based scoring
+  - Priority patients: `1,000,000,000 - sequence`
+  - Normal patients: `0 - sequence`
+- **Member**: JSON string của patient data
 
-### 2. Quét hóa đơn và phân bổ tự động
-```http
-POST /api/counter-assignment/scan-invoice
-Content-Type: application/json
-Authorization: Bearer <token>
+### Sequence Storage (String)
+- **Key**: `counterSeq:{counterId}:{YYYYMMDD}`
+- **Value**: Incremental number
+- **TTL**: Không có (reset manual)
 
-{
-  "invoiceId": "uuid",
-  "qrCode": "optional-qr-code",
-  "scannedBy": "receptionist-id",
-  "deviceId": "electron-app-id"
-}
-```
+### Counter Online Status (String)
+- **Key**: `counterOnline:{counterId}`
+- **Value**: "1"
+- **TTL**: 30 seconds (auto-refresh)
 
-### 3. Phân bổ trực tiếp (không cần hóa đơn)
-```http
-POST /api/counter-assignment/direct-assignment
-Content-Type: application/json
-Authorization: Bearer <token>
+## API Endpoints Summary
 
-{
-  "patientName": "Nguyễn Văn A",
-  "patientAge": 75,
-  "patientGender": "MALE",
-  "patientPhone": "0901234567",
-  "serviceName": "Khám tổng quát",
-  "servicePrice": 200000,
-  "isElderly": true,
-  "isPregnant": false,
-  "isEmergency": false,
-  "isDisabled": false,
-  "isVIP": false,
-  "priorityLevel": "HIGH",
-  "notes": "Bệnh nhân cao tuổi, cần ưu tiên",
-  "assignedBy": "receptionist-id"
-}
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/counters/:counterId/current-patient` | Lấy patient hiện tại |
+| POST | `/return-previous/:counterId` | Trả lại patient về queue |
+| POST | `/next-patient/:counterId` | Gọi patient tiếp theo |
+| DELETE | `/counters/:counterId/queue` | Clear queue + reset sequence |
+| GET | `/counters/:counterId/queue` | Lấy danh sách queue |
 
-### 4. Xem trạng thái quầy
-```http
-GET /api/counter-assignment/counters/available
-Authorization: Bearer <token>
-```
+## Kafka Events
 
-### 5. Xem hàng đợi của quầy
-```http
-GET /api/counter-assignment/counters/{counterId}/queue
-Authorization: Bearer <token>
-```
-
-### 6. Xem tổng quan hệ thống
-```http
-GET /api/counter-assignment/counters/status
-Authorization: Bearer <token>
-```
-
-### 7. Bật/Tắt quầy (thiết bị hoặc web receptionist)
-```http
-POST /api/counter-assignment/counters/{counterId}/online
-POST /api/counter-assignment/counters/{counterId}/offline
-```
-
-### 8. Gọi số tiếp theo (Realtime Kafka)
-```http
-POST /api/counter-assignment/next-patient/{counterId}
-```
-
-### 9. Xóa hàng đợi của quầy
-```http
-DELETE /api/counter-assignment/counters/{counterId}/queue
-```
-
-## Kafka Topics
-
-### 1. Counter Assignments
-- **Topic**: `counter.assignments`
-- **Event Type**: `PATIENT_ASSIGNED_TO_COUNTER`
-- **Message Format**:
+### Return Previous Patient Event
 ```json
 {
-  "type": "PATIENT_ASSIGNED_TO_COUNTER",
-  "appointmentId": "uuid",
-  "patientProfileId": "uuid",
-  "invoiceId": "uuid",
-  "patientName": "Nguyễn Văn A",
-  "patientAge": 75,
-  "patientGender": "MALE",
-  "priorityScore": 600,
-  "assignedCounter": {
-    "counterId": "uuid",
-    "counterCode": "CTR123456",
-    "counterName": "Counter Nguyễn Thị B",
-    "receptionistName": "Nguyễn Thị B",
-    "estimatedWaitTime": 30
+  "type": "RETURN_PREVIOUS_PATIENT",
+  "counterId": "counter-123",
+  "patient": {
+    "appointmentId": "...",
+    "patientName": "...",
+    "priorityScore": 100
   },
-  "serviceName": "Khám tổng quát",
-  "servicePrice": 200000,
-  "timestamp": "2024-01-15T10:30:00Z",
-  "metadata": {
-    "isPregnant": false,
-    "isEmergency": false,
-    "isElderly": true,
-    "isDisabled": false,
-    "isVIP": false,
-    "priorityLevel": "HIGH"
-  }
+  "timestamp": "2024-01-01T10:00:00.000Z"
 }
 ```
 
-## Cách sử dụng
-
-### 1. Khởi động Kafka
-```bash
-cd kafka
-docker-compose up -d
-```
-
-### 2. Chạy Counter Listener
-```bash
-# Lắng nghe cho một quầy cụ thể
-KAFKA_BROKERS=localhost:9092 KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments node kafka/counter-listener.js <COUNTER_ID>
-```
-
-### 3. Quét hóa đơn từ ứng dụng Electron
-```javascript
-// Trong ứng dụng Electron
-const response = await fetch('http://localhost:3000/api/counter-assignment/scan-invoice', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
+### Next Patient Called Event
+```json
+{
+  "type": "NEXT_PATIENT_CALLED",
+  "counterId": "counter-123",
+  "patient": {
+    "appointmentId": "...",
+    "patientName": "...",
+    "priorityScore": 100
   },
-  body: JSON.stringify({
-    invoiceId: scannedInvoiceId,
-    scannedBy: currentReceptionistId,
-    deviceId: electronAppId
-  })
-});
-
-const result = await response.json();
-console.log('Patient assigned to:', result.assignment.counterName);
+  "timestamp": "2024-01-01T10:00:00.000Z"
+}
 ```
 
-### 4. Phân bổ trực tiếp từ ứng dụng Electron
-```javascript
-// Trong ứng dụng Electron - nút "Bốc số"
-const response = await fetch('http://localhost:3000/api/counter-assignment/direct-assignment', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-  },
-  body: JSON.stringify({
-    patientName: formData.patientName,
-    patientAge: formData.patientAge,
-    patientGender: formData.patientGender,
-    patientPhone: formData.patientPhone,
-    serviceName: formData.serviceName,
-    servicePrice: formData.servicePrice,
-    isElderly: formData.isElderly,
-    isPregnant: formData.isPregnant,
-    isEmergency: formData.isEmergency,
-    isDisabled: formData.isDisabled,
-    isVIP: formData.isVIP,
-    priorityLevel: formData.priorityLevel,
-    notes: formData.notes,
-    assignedBy: currentReceptionistId
-  })
-});
+## Usage Examples
 
-const result = await response.json();
-console.log('Patient assigned to:', result.assignment.counterName);
-```
-
-## Luồng hoạt động
-
-### Luồng 1: Bệnh nhân có hóa đơn
-1. **Bệnh nhân đến quầy** với hóa đơn đã thanh toán
-2. **Quét mã QR/hóa đơn** bằng ứng dụng Electron
-3. **Hệ thống tự động**:
-   - Xác định thông tin bệnh nhân
-   - Tính điểm ưu tiên
-   - Chọn quầy tối ưu
-   - Gửi thông báo qua Kafka
-4. **Quầy nhận thông báo** và hiển thị thông tin bệnh nhân
-5. **Bệnh nhân được hướng dẫn** đến quầy được phân bổ
-
-### Luồng 2: Bệnh nhân không đặt trước
-1. **Bệnh nhân đến quầy** không có hóa đơn
-2. **Receptionist nhập thông tin** vào form Electron
-3. **Nhấn nút "Bốc số"** để phân bổ trực tiếp
-4. **Hệ thống tự động**:
-   - Tính điểm ưu tiên dựa trên thông tin nhập
-   - Chọn quầy tối ưu
-   - Gửi thông báo qua Kafka
-5. **Quầy nhận thông báo** và hiển thị thông tin bệnh nhân
-6. **Bệnh nhân được hướng dẫn** đến quầy được phân bổ
-
-## Cấu hình Environment Variables
-
+### 1. Return Previous Patient
 ```bash
-# Kafka Configuration
-KAFKA_BROKERS=localhost:9092
-KAFKA_TOPIC_COUNTER_ASSIGNMENTS=counter.assignments
-
-# Counter Assignment Settings
-COUNTER_MAX_QUEUE=10
-COUNTER_HEARTBEAT_TTL=30
-COUNTER_HEARTBEAT_INTERVAL_MS=10000
+curl -X POST http://localhost:3000/counter-assignment/return-previous/counter-123
 ```
 
-## Monitoring và Logging
-
-- Tất cả events được log qua Kafka
-- Có thể monitor real-time qua counter listener
-- API endpoints trả về thông tin chi tiết về trạng thái hệ thống
-
-## Tích hợp với Electron App
-
-Hệ thống được thiết kế để tích hợp dễ dàng với ứng dụng Electron:
-
-1. **QR Code Scanner**: Quét mã QR từ hóa đơn
-2. **Real-time Updates**: Nhận thông báo qua Kafka
-3. **UI Updates**: Cập nhật giao diện người dùng real-time
-4. **Sound Notifications**: Phát âm thanh thông báo
-
-## Troubleshooting
-
-### Kafka không kết nối được
+### 2. Get Current Patient
 ```bash
-# Kiểm tra Kafka status
-docker-compose ps
-
-# Restart Kafka
-docker-compose restart
+curl -X GET http://localhost:3000/counter-assignment/counters/counter-123/current-patient
 ```
 
-### Counter không nhận được thông báo
+### 3. Call Next Patient
 ```bash
-# Kiểm tra topic
-kafka-topics --list --bootstrap-server localhost:9092
-
-# Kiểm tra consumer group
-kafka-consumer-groups --bootstrap-server localhost:9092 --describe --group revita-counter-<counter-id>
+curl -X POST http://localhost:3000/counter-assignment/next-patient/counter-123
 ```
 
-### Lỗi phân bổ
-- Kiểm tra quầy có available không
-- Kiểm tra thông tin appointment và invoice
-- Kiểm tra quyền truy cập API
+### 4. Clear Queue (with sequence reset)
+```bash
+curl -X DELETE http://localhost:3000/counter-assignment/counters/counter-123/queue
+```
 
-Luồng xử lý (Counter Assignment)
-Online/Offline:
-Mỗi quầy (receptionist) online khi Redis có key counterOnline:{counterId} còn TTL.
-Heartbeat từ listener Kafka tự gia hạn TTL theo chu kỳ để giữ online.
-Offline khi TTL hết hoặc gọi endpoint offline.
-Điều kiện available:
-isAvailable = isOnline && currentQueueLength < COUNTER_MAX_QUEUE
-COUNTER_MAX_QUEUE có thể cấu hình qua biến môi trường (mặc định 10).
-Phân bổ bệnh nhân:
-Hệ thống tính điểm ưu tiên (cấp cứu, cao tuổi, thai sản, khuyết tật, VIP, độ tuổi, priority level).
-Chọn quầy tối ưu dựa trên online + độ dài queue + thời gian xử lý trung bình.
-Publish sự kiện Kafka để listener nhận realtime.
-Gọi số tiếp theo:
-Lấy bệnh nhân đầu queue, loại khỏi queue, publish Kafka sự kiện NEXT_PATIENT_CALLED.
-Endpoint (có prefix /api)
-Nhóm trạng thái quầy
-GET /counter-assignment/counters/available → danh sách quầy và trạng thái available
-GET /counter-assignment/counters/status → tổng quan hệ thống
-GET /counter-assignment/counters/:counterId/queue → xem queue của quầy
-POST /counter-assignment/counters/:counterId/online → set quầy online (thủ công)
-POST /counter-assignment/counters/:counterId/offline → set quầy offline (thủ công)
-DELETE /counter-assignment/counters/:counterId/queue → xóa queue của quầy
-Nhóm phân bổ
-POST /counter-assignment/assign → phân bổ theo appointment/invoice (chuẩn)
-POST /counter-assignment/scan-invoice → quét hóa đơn rồi phân bổ
-POST /counter-assignment/direct-assignment → phân bổ trực tiếp không cần hóa đơn
-POST /counter-assignment/simple-assignment → bốc số đơn giản (tạo record runtime + publish)
-Gọi số tiếp theo
-POST /counter-assignment/next-patient/:counterId → gọi bệnh nhân tiếp theo (publish Kafka realtime)
-Lưu ý: Nếu bạn muốn dùng đúng 3 quầy hoạt động, chỉ chạy 3 listener Kafka (mỗi máy quầy một listener). Không dùng các script auto-online cho tất cả.
-Biến môi trường quan trọng
-COUNTER_MAX_QUEUE: ngưỡng hàng đợi để coi là bận (mặc định 10)
-COUNTER_HEARTBEAT_TTL: TTL Redis (mặc định 30s)
-COUNTER_HEARTBEAT_INTERVAL_MS: chu kỳ heartbeat (mặc định 10s)
-KAFKA_BROKERS, KAFKA_TOPIC_COUNTER_ASSIGNMENTS
-REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_DB
+## Priority Logic
+
+### Priority Score Calculation
+1. **Emergency**: +1000 points
+2. **Elderly (>70)**: +500 points
+3. **Pregnant**: +400 points
+4. **Disabled**: +300 points
+5. **VIP**: +200 points
+6. **Age-based**: +25-100 points
+7. **Priority Level**: +25-150 points
+
+### Queue Ordering
+- Priority patients được xử lý trước
+- Trong cùng priority level, FIFO (First In, First Out)
+- Score cao hơn = ưu tiên cao hơn

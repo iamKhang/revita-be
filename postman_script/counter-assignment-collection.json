@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Counter Assignment API",
-    "description": "Collection để test hệ thống phân bổ quầy khám với Kafka",
+    "name": "Counter Assignment API V2",
+    "description": "Collection để test hệ thống phân bổ quầy khám với Queue Logic V2 (Next, Previous, Skip, Recall, Return) và Kafka integration",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -237,7 +237,7 @@
       "name": "Counter Management",
       "item": [
         {
-          "name": "11. Return Previous Patient",
+          "name": "11. Return Current Patient to Queue",
           "request": {
             "method": "POST",
             "header": [
@@ -248,11 +248,86 @@
               "host": ["{{baseUrl}}"],
               "path": ["counter-assignment", "return-previous", "{{counterId}}"]
             },
-            "description": "Trả về bệnh nhân trước đó cho quầy"
+            "description": "Đưa bệnh nhân hiện tại quay lại queue (đầu queue)"
           }
         },
         {
-          "name": "12. Assign Receptionist to Counter",
+          "name": "12. Go Back to Previous Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/go-back-previous/{{counterId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "go-back-previous", "{{counterId}}"]
+            },
+            "description": "Quay lại bệnh nhân trước đó từ history"
+          }
+        },
+        {
+          "name": "13. Skip Current Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/skip-current/{{counterId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "skip-current", "{{counterId}}"]
+            },
+            "description": "Skip bệnh nhân hiện tại (chuyển vào skipped queue)"
+          }
+        },
+        {
+          "name": "14. Recall Skipped Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/recall-skipped/{{counterId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "recall-skipped", "{{counterId}}"]
+            },
+            "description": "Gọi lại bệnh nhân đã skip từ skipped queue"
+          }
+        },
+        {
+          "name": "15. Return Current Patient to Queue",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/return-current/{{counterId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "return-current", "{{counterId}}"]
+            },
+            "description": "Đưa bệnh nhân hiện tại quay lại queue (đầu queue)"
+          }
+        },
+        {
+          "name": "16. Get Queue Status (Enhanced)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/queue-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "counters", "{{counterId}}", "queue-status"]
+            },
+            "description": "Lấy trạng thái đầy đủ của queue (current, queue, history, skipped)"
+          }
+        },
+        {
+          "name": "17. Assign Receptionist to Counter",
           "request": {
             "method": "POST",
             "header": [
@@ -272,7 +347,7 @@
           }
         },
         {
-          "name": "13. Unassign Receptionist from Counter",
+          "name": "18. Unassign Receptionist from Counter",
           "request": {
             "method": "POST",
             "header": [
@@ -284,6 +359,95 @@
               "path": ["counter-assignment", "counters", "{{counterId}}", "unassign-receptionist"]
             },
             "description": "Bỏ gán receptionist khỏi quầy"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Queue Logic V2 Testing",
+      "item": [
+        {
+          "name": "Test Case V2-1: Next và Previous Flow",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Test Patient A\",\n  \"patientAge\": 30,\n  \"patientGender\": \"MALE\",\n  \"patientPhone\": \"0901234001\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"priorityLevel\": \"MEDIUM\",\n  \"notes\": \"Test case cho Next/Previous flow\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "direct-assignment"]
+            },
+            "description": "Thêm bệnh nhân A để test Next/Previous"
+          }
+        },
+        {
+          "name": "Test Case V2-2: Skip và Recall Flow",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Test Patient B\",\n  \"patientAge\": 25,\n  \"patientGender\": \"FEMALE\",\n  \"patientPhone\": \"0901234002\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"priorityLevel\": \"MEDIUM\",\n  \"notes\": \"Test case cho Skip/Recall flow\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "direct-assignment"]
+            },
+            "description": "Thêm bệnh nhân B để test Skip/Recall"
+          }
+        },
+        {
+          "name": "Test Case V2-3: Return to Queue Flow",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Test Patient C\",\n  \"patientAge\": 40,\n  \"patientGender\": \"MALE\",\n  \"patientPhone\": \"0901234003\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"priorityLevel\": \"MEDIUM\",\n  \"notes\": \"Test case cho Return to Queue flow\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/direct-assignment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counter-assignment", "direct-assignment"]
+            },
+            "description": "Thêm bệnh nhân C để test Return to Queue"
           }
         }
       ]

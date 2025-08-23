@@ -445,6 +445,7 @@ export class CounterAssignmentService {
   }> {
     // Tìm hóa đơn
     const invoice = await this.prisma.invoice.findUnique({
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       where: { id: request.invoiceId },
       include: {
         appointments: {

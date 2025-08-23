@@ -55,6 +55,8 @@ export class CounterAssignmentService {
 
   async clearCounterQueue(counterId: string): Promise<{ ok: true }> {
     await this.redis.clearCounterQueue(counterId);
+    // Reset sequence khi clear queue
+    await this.redis.resetCounterSequence(counterId);
     return { ok: true };
   }
 
@@ -110,11 +112,163 @@ export class CounterAssignmentService {
     return await this.redis.getCounterQueue(counterId);
   }
 
+  async getCurrentPatient(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    return await this.redis.getCurrentPatient(counterId);
+  }
+
+  async getQueueStatus(counterId: string): Promise<{
+    current: Record<string, unknown> | null;
+    queue: Record<string, unknown>[];
+    history: Record<string, unknown>[];
+    skipped: Record<string, unknown>[];
+  }> {
+    return await this.redis.getQueueStatus(counterId);
+  }
+
+  async skipCurrentPatient(counterId: string): Promise<{
+    ok: true;
+    patient?: any;
+    message?: string;
+  }> {
+    const skippedPatient = await this.redis.skipCurrentPatient(counterId);
+
+    if (!skippedPatient) {
+      return {
+        ok: true,
+        message: 'No current patient to skip',
+      };
+    }
+
+    // Publish to Kafka
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    try {
+      await this.kafka.publish(topic, [
+        {
+          key: counterId,
+          value: {
+            type: 'PATIENT_SKIPPED',
+            counterId,
+            patient: skippedPatient,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      ]);
+    } catch (err) {
+      console.warn(
+        '[Kafka] Patient skip publish failed:',
+        (err as Error).message,
+      );
+    }
+
+    return {
+      ok: true,
+      patient: skippedPatient,
+      message: 'Current patient skipped successfully',
+    };
+  }
+
+  async recallSkippedPatient(counterId: string): Promise<{
+    ok: true;
+    patient?: any;
+    message?: string;
+  }> {
+    const recalledPatient = await this.redis.recallSkippedPatient(counterId);
+
+    if (!recalledPatient) {
+      return {
+        ok: true,
+        message: 'No skipped patients to recall',
+      };
+    }
+
+    // Publish to Kafka
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    try {
+      await this.kafka.publish(topic, [
+        {
+          key: counterId,
+          value: {
+            type: 'SKIPPED_PATIENT_RECALLED',
+            counterId,
+            patient: recalledPatient,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      ]);
+    } catch (err) {
+      console.warn(
+        '[Kafka] Skipped patient recall publish failed:',
+        (err as Error).message,
+      );
+    }
+
+    return {
+      ok: true,
+      patient: recalledPatient,
+      message: 'Skipped patient recalled successfully',
+    };
+  }
+
+  async returnCurrentPatientToQueue(counterId: string): Promise<{
+    ok: true;
+    patient?: any;
+    message?: string;
+  }> {
+    const returnedPatient =
+      await this.redis.returnCurrentPatientToQueue(counterId);
+
+    if (!returnedPatient) {
+      return {
+        ok: true,
+        message: 'No current patient to return to queue',
+      };
+    }
+
+    // Publish to Kafka
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    try {
+      await this.kafka.publish(topic, [
+        {
+          key: counterId,
+          value: {
+            type: 'CURRENT_PATIENT_RETURNED',
+            counterId,
+            patient: returnedPatient,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      ]);
+    } catch (err) {
+      console.warn(
+        '[Kafka] Current patient return publish failed:',
+        (err as Error).message,
+      );
+    }
+
+    return {
+      ok: true,
+      patient: returnedPatient,
+      message: 'Current patient returned to queue successfully',
+    };
+  }
+
   async callNextPatient(
     counterId: string,
-  ): Promise<{ ok: true; patient?: any }> {
-    const nextPatient = await this.redis.popNextFromCounterQueue(counterId);
-    if (!nextPatient) return { ok: true };
+  ): Promise<{ ok: true; patient?: any; message?: string }> {
+    const nextPatient = await this.redis.callNextPatientEnhanced(counterId);
+    if (!nextPatient) {
+      // Kiểm tra và reset sequence nếu queue rỗng
+      await this.redis.checkAndResetSequenceIfEmpty(counterId);
+      return {
+        ok: true,
+        message: 'No patients in queue, sequence reset if queue was empty',
+      };
+    }
 
     // Publish to Kafka
     const topic =
@@ -141,7 +295,22 @@ export class CounterAssignmentService {
     return { ok: true, patient: nextPatient };
   }
 
-  async returnPreviousPatient(counterId: string): Promise<{ ok: true }> {
+  async returnPreviousPatient(counterId: string): Promise<{
+    ok: true;
+    patient?: any;
+    message?: string;
+  }> {
+    // Đưa current patient quay lại queue
+    const returnedPatient =
+      await this.redis.callPreviousPatientEnhanced(counterId);
+
+    if (!returnedPatient) {
+      return {
+        ok: true,
+        message: 'No current patient to return to queue',
+      };
+    }
+
     // Publish to Kafka
     const topic =
       process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
@@ -150,20 +319,69 @@ export class CounterAssignmentService {
         {
           key: counterId,
           value: {
-            type: 'RETURN_PREVIOUS_PATIENT',
+            type: 'CURRENT_PATIENT_RETURNED',
             counterId,
+            patient: returnedPatient,
             timestamp: new Date().toISOString(),
           },
         },
       ]);
     } catch (err) {
       console.warn(
-        '[Kafka] Return previous patient publish failed:',
+        '[Kafka] Current patient return publish failed:',
         (err as Error).message,
       );
     }
 
-    return { ok: true };
+    return {
+      ok: true,
+      patient: returnedPatient,
+      message: 'Current patient returned to queue successfully',
+    };
+  }
+
+  async goBackToPreviousPatient(counterId: string): Promise<{
+    ok: true;
+    patient?: any;
+    message?: string;
+  }> {
+    // Quay lại bệnh nhân trước đó từ history
+    const previousPatient = await this.redis.goBackToPreviousPatient(counterId);
+
+    if (!previousPatient) {
+      return {
+        ok: true,
+        message: 'No previous patients in history',
+      };
+    }
+
+    // Publish to Kafka
+    const topic =
+      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    try {
+      await this.kafka.publish(topic, [
+        {
+          key: counterId,
+          value: {
+            type: 'GO_BACK_PREVIOUS_PATIENT',
+            counterId,
+            patient: previousPatient,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      ]);
+    } catch (err) {
+      console.warn(
+        '[Kafka] Go back previous patient publish failed:',
+        (err as Error).message,
+      );
+    }
+
+    return {
+      ok: true,
+      patient: previousPatient,
+      message: 'Previous patient recalled successfully',
+    };
   }
 
   private calculatePriorityScore(patient: AssignCounterDto): number {

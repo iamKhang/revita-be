@@ -158,6 +158,414 @@ export class RedisService implements OnModuleDestroy {
     return await this.redis.zcard(key);
   }
 
+  // ------------------ Enhanced Queue Management ------------------
+  // Sử dụng 3 phần riêng biệt để hỗ trợ Previous operation
+
+  /**
+   * Lấy patient hiện tại đang được phục vụ
+   * @param counterId - ID của counter
+   * @returns Patient hiện tại hoặc null nếu không có
+   */
+  async getCurrentPatient(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const key = `counterCurrent:${counterId}`;
+    const current = await this.redis.get(key);
+    if (!current) return null;
+    try {
+      return JSON.parse(current) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Set patient hiện tại đang được phục vụ
+   * @param counterId - ID của counter
+   * @param patient - Patient cần set làm current
+   */
+  async setCurrentPatient(
+    counterId: string,
+    patient: Record<string, unknown> | null,
+  ): Promise<void> {
+    const key = `counterCurrent:${counterId}`;
+    if (patient) {
+      await this.redis.set(key, JSON.stringify(patient));
+    } else {
+      await this.redis.del(key);
+    }
+  }
+
+  /**
+   * Lấy patient tiếp theo từ queue (không xóa khỏi queue)
+   * @param counterId - ID của counter
+   * @returns Patient tiếp theo hoặc null nếu queue rỗng
+   */
+  async getNextPatientFromQueue(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const key = `counterQueueZ:${counterId}`;
+    // Lấy patient có priority cao nhất (score cao nhất) nhưng không xóa
+    const items = await this.redis.zrevrange(key, 0, 0);
+    if (items.length === 0) return null;
+    try {
+      return JSON.parse(items[0]) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Xóa patient khỏi queue (sau khi đã được xử lý)
+   * @param counterId - ID của counter
+   * @param patient - Patient cần xóa
+   */
+  async removePatientFromQueue(
+    counterId: string,
+    patient: Record<string, unknown>,
+  ): Promise<void> {
+    const key = `counterQueueZ:${counterId}`;
+    await this.redis.zrem(key, JSON.stringify(patient));
+  }
+
+  /**
+   * Thêm patient vào history (để có thể quay lại)
+   * @param counterId - ID của counter
+   * @param patient - Patient cần thêm vào history
+   */
+  async addPatientToHistory(
+    counterId: string,
+    patient: Record<string, unknown>,
+  ): Promise<void> {
+    const key = `counterHistory:${counterId}`;
+    // Thêm vào cuối history (LIFO - Last In First Out)
+    await this.redis.rpush(key, JSON.stringify(patient));
+  }
+
+  /**
+   * Lấy patient cuối cùng từ history (để quay lại)
+   * @param counterId - ID của counter
+   * @returns Patient cuối cùng hoặc null nếu history rỗng
+   */
+  async getLastPatientFromHistory(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const key = `counterHistory:${counterId}`;
+    const last = await this.redis.rpop(key);
+    if (!last) return null;
+    try {
+      return JSON.parse(last) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Trả lại patient về đầu queue (đặt lại vào vị trí đầu tiên)
+   * @param counterId - ID của counter
+   * @param patient - Thông tin patient cần trả lại
+   */
+  async returnPatientToQueue(
+    counterId: string,
+    patient: Record<string, unknown>,
+  ): Promise<void> {
+    const key = `counterQueueZ:${counterId}`;
+
+    // Tạo score cao nhất để đặt patient lên đầu queue
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const isPriority = Boolean((patient as any)?.isPriority);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const sequence = Number((patient as any)?.sequence) || 0;
+    const base = isPriority ? 1_000_000_000 : 0;
+    const score = base - sequence;
+
+    // Thêm lại vào queue với score cao nhất
+    await this.redis.zadd(key, 'XX', score, JSON.stringify(patient));
+  }
+
+  /**
+   * Enhanced Next operation - lấy patient từ queue và xóa khỏi queue
+   * @param counterId - ID của counter
+   * @returns Patient tiếp theo hoặc null nếu queue rỗng
+   */
+  async callNextPatientEnhanced(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    // Lấy patient hiện tại
+    const currentPatient = await this.getCurrentPatient(counterId);
+
+    // Lấy patient tiếp theo từ queue
+    const nextPatient = await this.getNextPatientFromQueue(counterId);
+
+    if (nextPatient) {
+      // Nếu có patient hiện tại, lưu vào history để có thể return
+      if (currentPatient) {
+        await this.addPatientToHistory(counterId, currentPatient);
+      }
+
+      // Set làm current patient
+      await this.setCurrentPatient(counterId, nextPatient);
+      // Xóa khỏi queue
+      await this.removePatientFromQueue(counterId, nextPatient);
+      return nextPatient;
+    }
+
+    return null;
+  }
+
+  /**
+   * Enhanced Previous operation - đưa current patient quay lại queue
+   * @param counterId - ID của counter
+   * @returns Patient đã được return hoặc null nếu không có current patient
+   */
+  async callPreviousPatientEnhanced(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    // Lấy patient hiện tại
+    const currentPatient = await this.getCurrentPatient(counterId);
+
+    if (!currentPatient) {
+      return null;
+    }
+
+    // Đưa current patient quay lại queue (đầu queue)
+    await this.returnPatientToQueue(counterId, currentPatient);
+
+    // Xóa current patient
+    await this.setCurrentPatient(counterId, null);
+
+    return currentPatient;
+  }
+
+  /**
+   * Skip current patient - chuyển vào skipped queue
+   * @param counterId - ID của counter
+   * @returns Patient đã skip hoặc null nếu không có current patient
+   */
+  async skipCurrentPatient(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    // Lấy patient hiện tại
+    const currentPatient = await this.getCurrentPatient(counterId);
+
+    if (!currentPatient) {
+      return null;
+    }
+
+    // Chuyển current patient vào skipped queue
+    await this.addToSkippedQueue(counterId, currentPatient);
+
+    // Xóa current patient
+    await this.setCurrentPatient(counterId, null);
+
+    return currentPatient;
+  }
+
+  /**
+   * Recall skipped patient - lấy từ skipped queue
+   * @param counterId - ID của counter
+   * @returns Patient đã recall hoặc null nếu không có skipped patient
+   */
+  async recallSkippedPatient(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    // Lấy patient từ skipped queue
+    const recalledPatient = await this.getFromSkippedQueue(counterId);
+
+    if (recalledPatient) {
+      // Set làm current patient
+      await this.setCurrentPatient(counterId, recalledPatient);
+      return recalledPatient;
+    }
+
+    return null;
+  }
+
+  /**
+   * Return current patient to queue - đưa current patient quay lại queue
+   * @param counterId - ID của counter
+   * @returns Patient đã return hoặc null nếu không có current patient
+   */
+  async returnCurrentPatientToQueue(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    // Lấy patient hiện tại
+    const currentPatient = await this.getCurrentPatient(counterId);
+
+    if (!currentPatient) {
+      return null;
+    }
+
+    // Đưa current patient quay lại queue (đầu queue)
+    await this.returnPatientToQueue(counterId, currentPatient);
+
+    // Xóa current patient
+    await this.setCurrentPatient(counterId, null);
+
+    return currentPatient;
+  }
+
+  /**
+   * Go back to previous patient from history
+   * @param counterId - ID của counter
+   * @returns Patient trước đó hoặc null nếu không có history
+   */
+  async goBackToPreviousPatient(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    // Lấy patient hiện tại
+    const currentPatient = await this.getCurrentPatient(counterId);
+
+    // Lấy patient cuối cùng từ history
+    const previousPatient = await this.getLastPatientFromHistory(counterId);
+
+    if (previousPatient) {
+      // Nếu có patient hiện tại, trả về queue
+      if (currentPatient) {
+        await this.returnPatientToQueue(counterId, currentPatient);
+      }
+
+      // Set patient trước đó làm current
+      await this.setCurrentPatient(counterId, previousPatient);
+      return previousPatient;
+    }
+
+    return null;
+  }
+
+  /**
+   * Lấy trạng thái đầy đủ của queue
+   * @param counterId - ID của counter
+   * @returns Trạng thái queue bao gồm current, queue, history, và skipped
+   */
+  async getQueueStatus(counterId: string): Promise<{
+    current: Record<string, unknown> | null;
+    queue: Record<string, unknown>[];
+    history: Record<string, unknown>[];
+    skipped: Record<string, unknown>[];
+  }> {
+    const [current, queue, history, skipped] = await Promise.all([
+      this.getCurrentPatient(counterId),
+      this.getCounterQueue(counterId),
+      this.getHistory(counterId),
+      this.getSkippedQueue(counterId),
+    ]);
+
+    return {
+      current,
+      queue,
+      history,
+      skipped,
+    };
+  }
+
+  /**
+   * Lấy history của counter
+   * @param counterId - ID của counter
+   * @returns Danh sách patients trong history
+   */
+  async getHistory(counterId: string): Promise<Record<string, unknown>[]> {
+    const key = `counterHistory:${counterId}`;
+    const history = await this.redis.lrange(key, 0, -1);
+    return history.map((item) => JSON.parse(item) as Record<string, unknown>);
+  }
+
+  /**
+   * Xóa history của counter
+   * @param counterId - ID của counter
+   */
+  async clearHistory(counterId: string): Promise<void> {
+    const key = `counterHistory:${counterId}`;
+    await this.redis.del(key);
+  }
+
+  /**
+   * Xóa current patient
+   * @param counterId - ID của counter
+   */
+  async clearCurrentPatient(counterId: string): Promise<void> {
+    await this.setCurrentPatient(counterId, null);
+  }
+
+  /**
+   * Thêm patient vào skipped queue
+   * @param counterId - ID của counter
+   * @param patient - Patient cần thêm vào skipped queue
+   */
+  async addToSkippedQueue(
+    counterId: string,
+    patient: Record<string, unknown>,
+  ): Promise<void> {
+    const key = `counterSkipped:${counterId}`;
+    // Thêm vào cuối skipped queue (FIFO)
+    await this.redis.rpush(key, JSON.stringify(patient));
+  }
+
+  /**
+   * Lấy patient từ skipped queue
+   * @param counterId - ID của counter
+   * @returns Patient từ skipped queue hoặc null nếu rỗng
+   */
+  async getFromSkippedQueue(
+    counterId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const key = `counterSkipped:${counterId}`;
+    const skipped = await this.redis.lpop(key);
+    if (!skipped) return null;
+
+    try {
+      return JSON.parse(skipped) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Lấy danh sách patients trong skipped queue
+   * @param counterId - ID của counter
+   * @returns Danh sách patients trong skipped queue
+   */
+  async getSkippedQueue(counterId: string): Promise<Record<string, unknown>[]> {
+    const key = `counterSkipped:${counterId}`;
+    const skipped = await this.redis.lrange(key, 0, -1);
+    return skipped.map((item) => JSON.parse(item) as Record<string, unknown>);
+  }
+
+  /**
+   * Xóa skipped queue
+   * @param counterId - ID của counter
+   */
+  async clearSkippedQueue(counterId: string): Promise<void> {
+    const key = `counterSkipped:${counterId}`;
+    await this.redis.del(key);
+  }
+
+  /**
+   * Reset queue number sequence khi queue rỗng
+   * @param counterId - ID của counter
+   */
+  async resetCounterSequence(counterId: string): Promise<void> {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = `${now.getMonth() + 1}`.padStart(2, '0');
+    const d = `${now.getDate()}`.padStart(2, '0');
+    const key = `counterSeq:${counterId}:${y}${m}${d}`;
+
+    // Xóa sequence key để reset về 0
+    await this.redis.del(key);
+  }
+
+  /**
+   * Kiểm tra và reset sequence nếu queue rỗng
+   * @param counterId - ID của counter
+   */
+  async checkAndResetSequenceIfEmpty(counterId: string): Promise<void> {
+    const queueLength = await this.getCounterQueueLength(counterId);
+    if (queueLength === 0) {
+      await this.resetCounterSequence(counterId);
+    }
+  }
+
   // ------------------ Queue number helpers (per counter, per day) ------------------
   // Generate an incremental sequence per counter per day, used to build ticket numbers
   async getNextCounterSequence(counterId: string): Promise<number> {

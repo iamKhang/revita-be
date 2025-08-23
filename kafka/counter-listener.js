@@ -153,6 +153,91 @@ async function main() {
           // - Cập nhật UI
           break;
 
+        case 'PREVIOUS_PATIENT_CALLED':
+          if (payload.counterId !== counterId) return;
+          
+          console.log('\n🔄 PREVIOUS PATIENT CALLED!');
+          console.log(JSON.stringify({
+            receivedAt: now,
+            eventType: payload.type,
+            counterId: payload.counterId,
+            patient: payload.patient,
+            timestamp: payload.timestamp,
+          }, null, 2));
+          
+          // Ở đây có thể thêm logic để:
+          // - Hiển thị thông tin bệnh nhân trước đó
+          // - Cập nhật UI
+          break;
+
+        case 'PATIENT_SKIPPED':
+          if (payload.counterId !== counterId) return;
+          
+          console.log('\n⏭️ PATIENT SKIPPED!');
+          console.log(JSON.stringify({
+            receivedAt: now,
+            eventType: payload.type,
+            counterId: payload.counterId,
+            patient: payload.patient,
+            timestamp: payload.timestamp,
+          }, null, 2));
+          
+          // Ở đây có thể thêm logic để:
+          // - Thông báo bệnh nhân bị skip
+          // - Cập nhật UI
+          break;
+
+        case 'SKIPPED_PATIENT_RECALLED':
+          if (payload.counterId !== counterId) return;
+          
+          console.log('\n📞 SKIPPED PATIENT RECALLED!');
+          console.log(JSON.stringify({
+            receivedAt: now,
+            eventType: payload.type,
+            counterId: payload.counterId,
+            patient: payload.patient,
+            timestamp: payload.timestamp,
+          }, null, 2));
+          
+          // Ở đây có thể thêm logic để:
+          // - Gọi lại bệnh nhân đã skip
+          // - Cập nhật UI
+          break;
+
+        case 'CURRENT_PATIENT_RETURNED':
+          if (payload.counterId !== counterId) return;
+          
+          console.log('\n↩️ CURRENT PATIENT RETURNED TO QUEUE!');
+          console.log(JSON.stringify({
+            receivedAt: now,
+            eventType: payload.type,
+            counterId: payload.counterId,
+            patient: payload.patient,
+            timestamp: payload.timestamp,
+          }, null, 2));
+          
+          // Ở đây có thể thêm logic để:
+          // - Thông báo bệnh nhân đã được trả về queue
+          // - Cập nhật UI
+          break;
+
+        case 'GO_BACK_PREVIOUS_PATIENT':
+          if (payload.counterId !== counterId) return;
+          
+          console.log('\n⏮️ GO BACK TO PREVIOUS PATIENT!');
+          console.log(JSON.stringify({
+            receivedAt: now,
+            eventType: payload.type,
+            counterId: payload.counterId,
+            patient: payload.patient,
+            timestamp: payload.timestamp,
+          }, null, 2));
+          
+          // Ở đây có thể thêm logic để:
+          // - Quay lại bệnh nhân trước đó từ history
+          // - Cập nhật UI
+          break;
+
         default:
           console.log(`[${now}] Unknown event type: ${payload.type}`);
       }
