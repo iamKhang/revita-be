@@ -81,6 +81,12 @@ export class MedicalRecordService {
 
   async findAll(user: JwtUserPayload) {
     const include = {
+      histories: {
+        select: {
+          changedBy: true,
+          changedAt: true,
+        },
+      },
       patientProfile: true,
       doctor: {
         include: {
@@ -134,6 +140,12 @@ export class MedicalRecordService {
 
   async findByPatientProfile(patientProfileId: string, user: JwtUserPayload) {
     const include = {
+      histories: {
+        select: {
+          changedBy: true,
+          changedAt: true,
+        },
+      },
       patientProfile: true,
       doctor: {
         include: {
@@ -200,6 +212,12 @@ export class MedicalRecordService {
     const record = await this.prisma.medicalRecord.findUnique({
       where: { id },
       include: {
+        histories: {
+          select: {
+            changedBy: true,
+            changedAt: true,
+          },
+        },
         patientProfile: true,
         doctor: {
           include: {
