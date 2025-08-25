@@ -1,4 +1,10 @@
-import { ArrayNotEmpty, IsArray, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class CreatePrescriptionDto {
   @IsString()
@@ -20,5 +26,3 @@ export class CreatePrescriptionDto {
   @IsUUID('4', { each: true })
   serviceIds: string[];
 }
-
-

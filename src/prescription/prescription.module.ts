@@ -9,5 +9,3 @@ import { PrismaModule } from '../prisma/prisma.module';
   providers: [PrescriptionService],
 })
 export class PrescriptionModule {}
-
-

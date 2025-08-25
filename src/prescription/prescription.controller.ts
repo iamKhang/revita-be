@@ -16,5 +16,3 @@ export class PrescriptionController {
     return this.prescriptionService.findByCode(code);
   }
 }
-
-

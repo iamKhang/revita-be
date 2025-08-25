@@ -7,7 +7,8 @@ export class PrescriptionService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreatePrescriptionDto) {
-    const { prescriptionCode, patientProfileId, doctorId, note, serviceIds } = dto;
+    const { prescriptionCode, patientProfileId, doctorId, note, serviceIds } =
+      dto;
 
     const prescription = await this.prisma.prescription.create({
       data: {
@@ -48,5 +49,3 @@ export class PrescriptionService {
     return prescription;
   }
 }
-
-

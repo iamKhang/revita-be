@@ -408,4 +408,7 @@ model WorkSession {
   doctor Doctor @relation(fields: [doctorId], references: [id])
   startTime DateTime @map("start_time")
   endTime DateTime @map("end_time")
+  nextAvailableAt DateTime? @map("next_available_at")
+
+  @@map("work_sessions")
 }

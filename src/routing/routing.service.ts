@@ -5,15 +5,23 @@ import { KafkaProducerService } from '../kafka/kafka.producer';
 export type AssignRequest = {
   patientProfileId: string;
   serviceIds: string[];
+  requestedTime?: Date; // Thời gian bệnh nhân muốn được khám
 };
 
 export type AssignedRoom = {
   roomId: string;
   roomCode: string;
   roomName: string;
+  boothId: string;
+  boothCode: string;
+  boothName: string;
   doctorId: string;
   doctorCode: string;
+  doctorName: string;
   serviceIds: string[];
+  estimatedStartTime: Date;
+  estimatedEndTime: Date;
+  totalDuration: number; // Tổng thời gian thực hiện các dịch vụ (phút)
 };
 
 export type UpdateStatusRequest = {
@@ -72,19 +80,52 @@ export class RoutingService {
         : (profile.patient?.auth?.name ?? null);
     const status = 'WAITING';
 
+    // Get current time or use requested time
+    const currentTime = request.requestedTime || new Date();
+
+    // Get services with their duration
+    const services = await this.prisma.service.findMany({
+      where: { id: { in: request.serviceIds } },
+      select: { id: true, name: true, timePerPatient: true },
+    });
+
+    if (services.length !== request.serviceIds.length) {
+      throw new NotFoundException('Some services not found');
+    }
+
+    // Calculate total duration needed
+    const totalDuration = services.reduce(
+      (sum, service) => sum + service.timePerPatient,
+      0,
+    );
+
     // Find all rooms that can serve given services
     const roomServices = await this.prisma.clinicRoomService.findMany({
       where: { serviceId: { in: request.serviceIds } },
       include: {
         clinicRoom: {
           include: {
-            doctor: true,
+            doctor: {
+              include: { auth: true },
+            },
+            booth: {
+              where: { isActive: true },
+              include: {
+                workSessions: {
+                  where: {
+                    startTime: { lte: currentTime },
+                    endTime: { gte: currentTime },
+                  },
+                  include: { doctor: { include: { auth: true } } },
+                },
+              },
+            },
           },
         },
       },
     });
 
-    // Group services by room
+    // Group services by room and find available booths
     const roomIdToServices = new Map<string, string[]>();
     const roomMeta = new Map<
       string,
@@ -93,18 +134,36 @@ export class RoutingService {
         roomName: string;
         doctorId: string;
         doctorCode: string;
+        doctorName: string;
+        booths: Array<{
+          id: string;
+          boothCode: string;
+          name: string;
+          workSessions: Array<{
+            id: string;
+            doctorId: string;
+            doctor: { doctorCode: string; auth: { name: string } };
+            startTime: Date;
+            endTime: Date;
+            nextAvailableAt: Date | null;
+          }>;
+        }>;
       }
     >();
+
     for (const rs of roomServices) {
       const room = rs.clinicRoom;
       if (!roomIdToServices.has(room.id)) roomIdToServices.set(room.id, []);
       roomIdToServices.get(room.id)!.push(rs.serviceId);
+
       if (!roomMeta.has(room.id)) {
         roomMeta.set(room.id, {
           roomCode: room.roomCode,
           roomName: room.roomName,
           doctorId: room.doctorId,
           doctorCode: room.doctor.doctorCode,
+          doctorName: room.doctor.auth.name,
+          booths: room.booth,
         });
       }
     }
@@ -115,44 +174,72 @@ export class RoutingService {
       );
     }
 
-    // Strategy: choose minimal set of rooms that covers all services
-    // Simple greedy: pick room covering most remaining services, repeat
-    const remaining = new Set(request.serviceIds);
-    const chosen: AssignedRoom[] = [];
-    while (remaining.size > 0) {
-      let bestRoomId: string | null = null;
-      let bestCoverage = 0;
-      for (const [roomId, services] of roomIdToServices) {
-        const coverage = services.filter((s) => remaining.has(s)).length;
-        if (coverage > bestCoverage) {
-          bestCoverage = coverage;
-          bestRoomId = roomId;
+    // Find available booths with doctors
+    const availableAssignments: Array<{
+      roomId: string;
+      roomCode: string;
+      roomName: string;
+      boothId: string;
+      boothCode: string;
+      boothName: string;
+      doctorId: string;
+      doctorCode: string;
+      doctorName: string;
+      serviceIds: string[];
+      estimatedStartTime: Date;
+      estimatedEndTime: Date;
+      totalDuration: number;
+    }> = [];
+
+    for (const [roomId, services] of roomIdToServices) {
+      const meta = roomMeta.get(roomId)!;
+
+      for (const booth of meta.booths) {
+        for (const workSession of booth.workSessions) {
+          // Check if doctor has enough time
+          const sessionEndTime = new Date(workSession.endTime);
+          const availableTime =
+            sessionEndTime.getTime() - currentTime.getTime();
+          const requiredTimeMs = totalDuration * 60 * 1000; // Convert minutes to milliseconds
+
+          if (availableTime >= requiredTimeMs) {
+            const estimatedStartTime = new Date(currentTime);
+            const estimatedEndTime = new Date(
+              currentTime.getTime() + requiredTimeMs,
+            );
+
+            availableAssignments.push({
+              roomId,
+              roomCode: meta.roomCode,
+              roomName: meta.roomName,
+              boothId: booth.id,
+              boothCode: booth.boothCode,
+              boothName: booth.name,
+              doctorId: workSession.doctorId,
+              doctorCode: workSession.doctor.doctorCode,
+              doctorName: workSession.doctor.auth.name,
+              serviceIds: services,
+              estimatedStartTime,
+              estimatedEndTime,
+              totalDuration,
+            });
+          }
         }
       }
-      if (!bestRoomId || bestCoverage === 0) {
-        // cannot cover remaining services
-        break;
-      }
-      const meta = roomMeta.get(bestRoomId)!;
-      const serviceIds = roomIdToServices
-        .get(bestRoomId)!
-        .filter((s) => remaining.has(s));
-      serviceIds.forEach((s) => remaining.delete(s));
-      chosen.push({
-        roomId: bestRoomId,
-        roomCode: meta.roomCode,
-        roomName: meta.roomName,
-        doctorId: meta.doctorId,
-        doctorCode: meta.doctorCode,
-        serviceIds,
-      });
     }
 
-    if (remaining.size > 0) {
+    if (availableAssignments.length === 0) {
       throw new NotFoundException(
-        'Some services cannot be assigned to any clinic room',
+        'No available doctors or booths for the requested services at this time',
       );
     }
+
+    // Sort by earliest available time and return the best option
+    availableAssignments.sort(
+      (a, b) => a.estimatedStartTime.getTime() - b.estimatedStartTime.getTime(),
+    );
+
+    const chosen = availableAssignments.slice(0, 1); // Return the best option
 
     // Publish to Kafka for each room assignment
     const topic = process.env.KAFKA_TOPIC_ASSIGNMENTS || 'clinic.assignments';
@@ -168,9 +255,16 @@ export class RoutingService {
             status,
             roomId: c.roomId,
             roomCode: c.roomCode,
+            boothId: c.boothId,
+            boothCode: c.boothCode,
+            boothName: c.boothName,
             doctorId: c.doctorId,
             doctorCode: c.doctorCode,
+            doctorName: c.doctorName,
             serviceIds: c.serviceIds,
+            estimatedStartTime: c.estimatedStartTime.toISOString(),
+            estimatedEndTime: c.estimatedEndTime.toISOString(),
+            totalDuration: c.totalDuration,
             timestamp: new Date().toISOString(),
           },
         })),
