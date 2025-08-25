@@ -18,6 +18,7 @@ import { JwtAuthGuard } from '../../login/jwt-auth.guard';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { CreateUserDto, UpdateUserDto } from '../dto/admin.dto';
+import { CreateCounterDto, UpdateCounterDto } from '../dto/counter.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('admin')
@@ -353,5 +354,344 @@ export class AdminController {
     return this.prisma.service.findMany({
       where,
     });
+  }
+
+  // ==================== COUNTER MANAGEMENT ====================
+
+  // Lấy tất cả counters
+  @Get('counters')
+  @Roles(Role.ADMIN)
+  async findAllCounters(@Query('isActive') isActive?: string) {
+    const where: Record<string, any> = {};
+    if (isActive !== undefined) {
+      where.isActive = isActive === 'true';
+    }
+
+    return this.prisma.counter.findMany({
+      where,
+      include: {
+        receptionist: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                email: true,
+              },
+            },
+          },
+        },
+        queueItems: {
+          where: {
+            status: 'WAITING',
+          },
+          orderBy: {
+            priorityScore: 'desc',
+          },
+        },
+        _count: {
+          select: {
+            queueItems: {
+              where: {
+                status: 'WAITING',
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        counterCode: 'asc',
+      },
+    });
+  }
+
+  // Lấy counter theo ID
+  @Get('counters/:counterId')
+  @Roles(Role.ADMIN)
+  async findCounterById(@Param('counterId') counterId: string) {
+    const counter = await this.prisma.counter.findUnique({
+      where: { id: counterId },
+      include: {
+        receptionist: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                email: true,
+              },
+            },
+          },
+        },
+        queueItems: {
+          include: {
+            appointment: {
+              include: {
+                patientProfile: true,
+              },
+            },
+          },
+          orderBy: {
+            priorityScore: 'desc',
+          },
+        },
+        assignments: {
+          include: {
+            appointment: {
+              include: {
+                patientProfile: true,
+              },
+            },
+          },
+          orderBy: {
+            assignedAt: 'desc',
+          },
+          take: 10, // Lấy 10 assignment gần nhất
+        },
+      },
+    });
+
+    if (!counter) {
+      throw new NotFoundException('Counter not found');
+    }
+
+    return counter;
+  }
+
+  // Tạo counter mới
+  @Post('counters')
+  @Roles(Role.ADMIN)
+  async createCounter(@Body() body: CreateCounterDto) {
+    const {
+      counterCode,
+      counterName,
+      location,
+      isActive = true,
+      maxQueue = 10,
+      receptionistId,
+    } = body;
+
+    // Kiểm tra counterCode đã tồn tại chưa
+    const existingCounter = await this.prisma.counter.findUnique({
+      where: { counterCode },
+    });
+    if (existingCounter) {
+      throw new BadRequestException('Counter code already exists');
+    }
+
+    // Kiểm tra receptionistId có tồn tại không (nếu có)
+    if (receptionistId) {
+      const receptionist = await this.prisma.receptionist.findUnique({
+        where: { id: receptionistId },
+      });
+      if (!receptionist) {
+        throw new BadRequestException('Receptionist not found');
+      }
+    }
+
+    const counter = await this.prisma.counter.create({
+      data: {
+        counterCode,
+        counterName,
+        location,
+        isActive,
+        maxQueue,
+        receptionistId,
+      },
+      include: {
+        receptionist: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return counter;
+  }
+
+  // Cập nhật counter
+  @Put('counters/:counterId')
+  @Roles(Role.ADMIN)
+  async updateCounter(
+    @Param('counterId') counterId: string,
+    @Body() body: UpdateCounterDto,
+  ) {
+    const counter = await this.prisma.counter.findUnique({
+      where: { id: counterId },
+    });
+    if (!counter) {
+      throw new NotFoundException('Counter not found');
+    }
+
+    const {
+      counterCode,
+      counterName,
+      location,
+      isActive,
+      maxQueue,
+      receptionistId,
+    } = body;
+
+    // Kiểm tra counterCode đã tồn tại chưa (nếu thay đổi)
+    if (counterCode && counterCode !== counter.counterCode) {
+      const existingCounter = await this.prisma.counter.findUnique({
+        where: { counterCode },
+      });
+      if (existingCounter) {
+        throw new BadRequestException('Counter code already exists');
+      }
+    }
+
+    // Kiểm tra receptionistId có tồn tại không (nếu có)
+    if (receptionistId) {
+      const receptionist = await this.prisma.receptionist.findUnique({
+        where: { id: receptionistId },
+      });
+      if (!receptionist) {
+        throw new BadRequestException('Receptionist not found');
+      }
+    }
+
+    const updateData: Record<string, any> = {};
+    if (counterCode !== undefined) updateData.counterCode = counterCode;
+    if (counterName !== undefined) updateData.counterName = counterName;
+    if (location !== undefined) updateData.location = location;
+    if (isActive !== undefined) updateData.isActive = isActive;
+    if (maxQueue !== undefined) updateData.maxQueue = maxQueue;
+    if (receptionistId !== undefined)
+      updateData.receptionistId = receptionistId;
+
+    const updatedCounter = await this.prisma.counter.update({
+      where: { id: counterId },
+      data: updateData,
+      include: {
+        receptionist: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return updatedCounter;
+  }
+
+  // Xóa counter
+  @Delete('counters/:counterId')
+  @Roles(Role.ADMIN)
+  async deleteCounter(@Param('counterId') counterId: string) {
+    const counter = await this.prisma.counter.findUnique({
+      where: { id: counterId },
+      include: {
+        queueItems: {
+          where: {
+            status: 'WAITING',
+          },
+        },
+      },
+    });
+
+    if (!counter) {
+      throw new NotFoundException('Counter not found');
+    }
+
+    // Kiểm tra xem counter có queue items đang chờ không
+    if (counter.queueItems.length > 0) {
+      throw new BadRequestException(
+        'Cannot delete counter with active queue items',
+      );
+    }
+
+    // Xóa các bản ghi liên quan trước
+    await this.prisma.counterQueueItem.deleteMany({
+      where: { counterId },
+    });
+
+    await this.prisma.counterAssignment.deleteMany({
+      where: { counterId },
+    });
+
+    // Xóa counter
+    await this.prisma.counter.delete({
+      where: { id: counterId },
+    });
+
+    return { message: 'Counter deleted successfully' };
+  }
+
+  // Lấy thống kê counter
+  @Get('counters/:counterId/stats')
+  @Roles(Role.ADMIN)
+  async getCounterStats(@Param('counterId') counterId: string) {
+    const counter = await this.prisma.counter.findUnique({
+      where: { id: counterId },
+    });
+    if (!counter) {
+      throw new NotFoundException('Counter not found');
+    }
+
+    // Thống kê queue hiện tại
+    const currentQueueCount = await this.prisma.counterQueueItem.count({
+      where: {
+        counterId,
+        status: 'WAITING',
+      },
+    });
+
+    // Thống kê assignments hôm nay
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayAssignments = await this.prisma.counterAssignment.count({
+      where: {
+        counterId,
+        assignedAt: {
+          gte: today,
+          lt: tomorrow,
+        },
+      },
+    });
+
+    // Thống kê assignments đã hoàn thành hôm nay
+    const todayCompleted = await this.prisma.counterAssignment.count({
+      where: {
+        counterId,
+        completedAt: {
+          gte: today,
+          lt: tomorrow,
+        },
+      },
+    });
+
+    return {
+      counterId,
+      counterName: counter.counterName,
+      currentQueueCount,
+      todayAssignments,
+      todayCompleted,
+      maxQueue: counter.maxQueue,
+      queueUtilization: Math.round(
+        (currentQueueCount / counter.maxQueue) * 100,
+      ),
+    };
   }
 }

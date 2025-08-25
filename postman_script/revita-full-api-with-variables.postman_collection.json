@@ -3,7 +3,7 @@
     "_postman_id": "revita-full-api-collection",
     "name": "Revita Full API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Full API collection for Revita medical system, including login, Google OAuth, register, user, admin, patient, doctor, receptionist, patient-profile, medical-record, and app endpoints."
+    "description": "Full API collection for Revita medical system, including authentication, registration, user management, admin management, patient management, doctor management, receptionist management, patient profiles, medical records, counter management, counter assignment, and app endpoints."
   },
   "values": [
 		{
@@ -86,6 +86,18 @@
 		},
 		{
 			"key": "appointmentId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "counterId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "receptionistId",
 			"value": "",
 			"type": "default",
 			"enabled": true
@@ -697,6 +709,579 @@
             "method": "GET",
             "url": { "raw": "{{baseUrl}}/", "host": ["{{baseUrl}}"], "path": [""] },
             "description": "Lời chào từ server."
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "Public Endpoints",
+          "item": [
+            {
+              "name": "Get All Doctors (Public)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": { "raw": "{{baseUrl}}/users/doctors", "host": ["{{baseUrl}}"], "path": ["users", "doctors"] },
+                "description": "Get all doctors - public endpoint, no authentication required"
+              }
+            },
+            {
+              "name": "Get Doctors by Specialty (Public)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": { 
+                  "raw": "{{baseUrl}}/users/doctors?specialty=Cardiology", 
+                  "host": ["{{baseUrl}}"], 
+                  "path": ["users", "doctors"],
+                  "query": [
+                    {
+                      "key": "specialty",
+                      "value": "Cardiology"
+                    }
+                  ]
+                },
+                "description": "Get doctors filtered by specialty"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authenticated Endpoints",
+          "item": [
+            {
+              "name": "Update My Profile",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Updated Name\",\n  \"phone\": \"0123456789\",\n  \"address\": \"Updated Address\"\n}"
+                },
+                "url": { "raw": "{{baseUrl}}/users/me", "host": ["{{baseUrl}}"], "path": ["users", "me"] },
+                "description": "Update current user's profile"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Role-Based Endpoints",
+          "item": [
+            {
+              "name": "Get Users by Role (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": { 
+                  "raw": "{{baseUrl}}/users/by-role?role=PATIENT", 
+                  "host": ["{{baseUrl}}"], 
+                  "path": ["users", "by-role"],
+                  "query": [
+                    {
+                      "key": "role",
+                      "value": "PATIENT"
+                    }
+                  ]
+                },
+                "description": "Get users filtered by role (Admin can see all roles)"
+              }
+            },
+            {
+              "name": "Get Users by Role with Search (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": { 
+                  "raw": "{{baseUrl}}/users/by-role?role=DOCTOR&search=John", 
+                  "host": ["{{baseUrl}}"], 
+                  "path": ["users", "by-role"],
+                  "query": [
+                    {
+                      "key": "role",
+                      "value": "DOCTOR"
+                    },
+                    {
+                      "key": "search",
+                      "value": "John"
+                    }
+                  ]
+                },
+                "description": "Get users by role with search term"
+              }
+            },
+            {
+              "name": "Get All Doctors (Staff)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": { "raw": "{{baseUrl}}/users/doctors/all", "host": ["{{baseUrl}}"], "path": ["users", "doctors", "all"] },
+                "description": "Get all doctors with detailed info (Admin/Receptionist only)"
+              }
+            },
+            {
+              "name": "Get Doctors by Specialty (Staff)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": { 
+                  "raw": "{{baseUrl}}/users/doctors/all?specialty=Neurology", 
+                  "host": ["{{baseUrl}}"], 
+                  "path": ["users", "doctors", "all"],
+                  "query": [
+                    {
+                      "key": "specialty",
+                      "value": "Neurology"
+                    }
+                  ]
+                },
+                "description": "Get doctors by specialty (Admin/Receptionist only)"
+              }
+            },
+            {
+              "name": "Search Doctors (Staff)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": { 
+                  "raw": "{{baseUrl}}/users/doctors/all?search=Dr. Smith", 
+                  "host": ["{{baseUrl}}"], 
+                  "path": ["users", "doctors", "all"],
+                  "query": [
+                    {
+                      "key": "search",
+                      "value": "Dr. Smith"
+                    }
+                  ]
+                },
+                "description": "Search doctors by name, email, phone, or doctor code"
+              }
+            },
+            {
+              "name": "Get All Receptionists (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": { "raw": "{{baseUrl}}/users/receptionists", "host": ["{{baseUrl}}"], "path": ["users", "receptionists"] },
+                "description": "Get all receptionists (Admin only)"
+              }
+            },
+            {
+              "name": "Search Receptionists (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": { 
+                  "raw": "{{baseUrl}}/users/receptionists?search=Jane", 
+                  "host": ["{{baseUrl}}"], 
+                  "path": ["users", "receptionists"],
+                  "query": [
+                    {
+                      "key": "search",
+                      "value": "Jane"
+                    }
+                  ]
+                },
+                "description": "Search receptionists by name, email, or phone"
+              }
+            },
+            {
+              "name": "Get All Patients (Staff)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": { "raw": "{{baseUrl}}/users/patients", "host": ["{{baseUrl}}"], "path": ["users", "patients"] },
+                "description": "Get all patients (Admin/Receptionist/Doctor)"
+              }
+            },
+            {
+              "name": "Search Patients (Staff)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": { 
+                  "raw": "{{baseUrl}}/users/patients?search=Patient Name", 
+                  "host": ["{{baseUrl}}"], 
+                  "path": ["users", "patients"],
+                  "query": [
+                    {
+                      "key": "search",
+                      "value": "Patient Name"
+                    }
+                  ]
+                },
+                "description": "Search patients by name, email, phone, or patient code"
+              }
+            },
+            {
+              "name": "Get Patients with Loyalty Points (Staff)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" }
+                ],
+                "url": { 
+                  "raw": "{{baseUrl}}/users/patients?hasLoyaltyPoints=true", 
+                  "host": ["{{baseUrl}}"], 
+                  "path": ["users", "patients"],
+                  "query": [
+                    {
+                      "key": "hasLoyaltyPoints",
+                      "value": "true"
+                    }
+                  ]
+                },
+                "description": "Get patients who have loyalty points > 0"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Counter Management",
+      "item": [
+        {
+          "name": "Get All Counters",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/admin/counters", "host": ["{{baseUrl}}"], "path": ["admin", "counters"] },
+            "description": "Get all counters with optional filter by active status"
+          }
+        },
+        {
+          "name": "Get All Active Counters",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { 
+              "raw": "{{baseUrl}}/admin/counters?isActive=true", 
+              "host": ["{{baseUrl}}"], 
+              "path": ["admin", "counters"],
+              "query": [
+                {
+                  "key": "isActive",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Get only active counters"
+          }
+        },
+        {
+          "name": "Get Counter by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/admin/counters/{{counterId}}", "host": ["{{baseUrl}}"], "path": ["admin", "counters", "{{counterId}}"] },
+            "description": "Get detailed information about a specific counter"
+          }
+        },
+        {
+          "name": "Create Counter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"counterCode\": \"CTR001\",\n  \"counterName\": \"Quầy 1\",\n  \"location\": \"Tầng 1\",\n  \"isActive\": true,\n  \"maxQueue\": 15,\n  \"receptionistId\": null\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/counters", "host": ["{{baseUrl}}"], "path": ["admin", "counters"] },
+            "description": "Create a new counter"
+          }
+        },
+        {
+          "name": "Update Counter",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"counterName\": \"Quầy 1 - Cập nhật\",\n  \"location\": \"Tầng 1 - Khu A\",\n  \"maxQueue\": 20,\n  \"isActive\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/counters/{{counterId}}", "host": ["{{baseUrl}}"], "path": ["admin", "counters", "{{counterId}}"] },
+            "description": "Update an existing counter"
+          }
+        },
+        {
+          "name": "Delete Counter",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/admin/counters/{{counterId}}", "host": ["{{baseUrl}}"], "path": ["admin", "counters", "{{counterId}}"] },
+            "description": "Delete a counter (only if no active queue items)"
+          }
+        },
+        {
+          "name": "Get Counter Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/admin/counters/{{counterId}}/stats", "host": ["{{baseUrl}}"], "path": ["admin", "counters", "{{counterId}}", "stats"] },
+            "description": "Get statistics for a specific counter"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Counter Assignment",
+      "item": [
+        {
+          "name": "Get Available Counters",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/counters/available", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "counters", "available"] },
+            "description": "Lấy danh sách các quầy có sẵn"
+          }
+        },
+        {
+          "name": "Get System Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/counters/status", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "counters", "status"] },
+            "description": "Xem tổng quan trạng thái hệ thống"
+          }
+        },
+        {
+          "name": "Simple Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": { "raw": "{{baseUrl}}/counter-assignment/simple-assignment", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "simple-assignment"] },
+            "description": "Bốc số đơn thuần - không cần thông tin gì"
+          }
+        },
+        {
+          "name": "Direct Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Nguyễn Văn A\",\n  \"patientAge\": 75,\n  \"patientGender\": \"MALE\",\n  \"patientPhone\": \"0901234567\",\n  \"serviceName\": \"Khám tổng quát\",\n  \"servicePrice\": 200000,\n  \"isElderly\": true,\n  \"priorityLevel\": \"HIGH\",\n  \"notes\": \"Bệnh nhân cao tuổi, cần ưu tiên\",\n  \"assignedBy\": \"{{receptionistId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/counter-assignment/direct-assignment", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "direct-assignment"] },
+            "description": "Phân bổ với thông tin chi tiết"
+          }
+        },
+        {
+          "name": "Scan Invoice Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": \"your-invoice-id-here\",\n  \"deviceId\": \"electron-app-001\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/counter-assignment/scan-invoice", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "scan-invoice"] },
+            "description": "Quét hóa đơn và phân bổ"
+          }
+        },
+        {
+          "name": "Get Counter Queue",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/queue", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "counters", "{{counterId}}", "queue"] },
+            "description": "Xem hàng đợi của một quầy cụ thể"
+          }
+        },
+        {
+          "name": "Next Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/next-patient/{{counterId}}", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "next-patient", "{{counterId}}"] },
+            "description": "Gọi bệnh nhân tiếp theo cho quầy"
+          }
+        },
+        {
+          "name": "Set Counter Online",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/online", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "counters", "{{counterId}}", "online"] },
+            "description": "Đặt quầy online"
+          }
+        },
+        {
+          "name": "Set Counter Offline",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/offline", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "counters", "{{counterId}}", "offline"] },
+            "description": "Đặt quầy offline"
+          }
+        },
+        {
+          "name": "Clear Counter Queue",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/queue", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "counters", "{{counterId}}", "queue"] },
+            "description": "Xóa toàn bộ hàng đợi của quầy"
+          }
+        },
+        {
+          "name": "Return Current Patient to Queue",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/return-previous/{{counterId}}", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "return-previous", "{{counterId}}"] },
+            "description": "Đưa bệnh nhân hiện tại quay lại queue (đầu queue)"
+          }
+        },
+        {
+          "name": "Go Back to Previous Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/go-back-previous/{{counterId}}", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "go-back-previous", "{{counterId}}"] },
+            "description": "Quay lại bệnh nhân trước đó từ history"
+          }
+        },
+        {
+          "name": "Skip Current Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/skip-current/{{counterId}}", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "skip-current", "{{counterId}}"] },
+            "description": "Skip bệnh nhân hiện tại (chuyển vào skipped queue)"
+          }
+        },
+        {
+          "name": "Recall Skipped Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/recall-skipped/{{counterId}}", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "recall-skipped", "{{counterId}}"] },
+            "description": "Gọi lại bệnh nhân đã skip từ skipped queue"
+          }
+        },
+        {
+          "name": "Return Current Patient to Queue (Alternative)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/return-current/{{counterId}}", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "return-current", "{{counterId}}"] },
+            "description": "Đưa bệnh nhân hiện tại quay lại queue (đầu queue)"
+          }
+        },
+        {
+          "name": "Get Queue Status (Enhanced)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/queue-status", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "counters", "{{counterId}}", "queue-status"] },
+            "description": "Lấy trạng thái đầy đủ của queue (current, queue, history, skipped)"
+          }
+        },
+        {
+          "name": "Assign Receptionist to Counter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receptionistId\": \"your-receptionist-id-here\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/assign-receptionist", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "counters", "{{counterId}}", "assign-receptionist"] },
+            "description": "Gán receptionist cho quầy"
+          }
+        },
+        {
+          "name": "Unassign Receptionist from Counter",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/counter-assignment/counters/{{counterId}}/unassign-receptionist", "host": ["{{baseUrl}}"], "path": ["counter-assignment", "counters", "{{counterId}}", "unassign-receptionist"] },
+            "description": "Bỏ gán receptionist khỏi quầy"
           }
         }
       ]
