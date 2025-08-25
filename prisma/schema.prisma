@@ -63,11 +63,11 @@ model Doctor {
   workHistory     String   @map("work_history")
   description     String   @map("description")
   auth            Auth     @relation(fields: [authId], references: [id])
-  schedules       Schedule[]
   appointments    Appointment[]
   medicalRecords  MedicalRecord[]
   clinicRooms     ClinicRoom[]
   prescriptions   Prescription[]
+  workSessions WorkSession[]
 
   @@map("doctors")
 }
@@ -213,6 +213,7 @@ model ClinicRoom {
   isActive    Boolean     @default(true) @map("is_active")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
+  booth Booth[]
   
   specialty   Specialty   @relation(fields: [specialtyId], references: [id])
   doctor      Doctor      @relation(fields: [doctorId], references: [id])
@@ -244,21 +245,8 @@ model Service {
   appointments Appointment[]
   prescriptions PrescriptionService[]
   invoiceDetails InvoiceDetail[]
+  timePerPatient Int @default(15) @map("time_per_patient") @db.SmallInt
   @@map("services")
-}
-
-// Bảng Schedule cho lịch làm việc của bác sĩ
-model Schedule {
-  id          String      @id @default(uuid())
-  doctorId    String      @map("doctor_id")
-  month       Int      @map("month") // Tháng (1-12)
-  year        Int      @map("year") // Năm
-  dayOfWeek   String   @map("day_of_week") // Ngày trong tuần, ví dụ: "Thứ 2", "Thứ 4"
-  startTime   String   @map("start_time") // Thời gian bắt đầu, ví dụ: "08:00"
-  endTime     String   @map("end_time") // Thời gian kết thúc, ví dụ: "14:00"
-  doctor      Doctor   @relation(fields: [doctorId], references: [id])
-
-  @@map("schedules")
 }
 
 // Bảng Appointment cho lịch hẹn
@@ -396,4 +384,28 @@ model PrescriptionService {
 
   @@unique([prescriptionId, serviceId])
   @@map("prescription_services")
+}
+
+model Booth {
+  id String @id @default(uuid())
+  boothCode String @map("booth_code")
+  name String @map("name")
+  roomId String
+  room ClinicRoom @relation(fields: [roomId], references: [id])
+
+  description String? @map("description")
+  isActive Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workSessions WorkSession[]
+}
+
+model WorkSession {
+  id String @id @default(uuid())
+  boothId String?
+  booth Booth? @relation(fields: [boothId], references: [id])
+  doctorId String
+  doctor Doctor @relation(fields: [doctorId], references: [id])
+  startTime DateTime @map("start_time")
+  endTime DateTime @map("end_time")
 }
