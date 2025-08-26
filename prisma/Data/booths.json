@@ -1,0 +1,258 @@
+[
+    { "roomCode": "NOI-101", "boothCode": "NOI-101-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NOI-101", "boothCode": "NOI-101-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NOI-101", "boothCode": "NOI-101-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NOI-102", "boothCode": "NOI-102-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NOI-102", "boothCode": "NOI-102-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NOI-102", "boothCode": "NOI-102-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NOI-103", "boothCode": "NOI-103-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NOI-103", "boothCode": "NOI-103-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NOI-103", "boothCode": "NOI-103-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NOI-104", "boothCode": "NOI-104-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NOI-104", "boothCode": "NOI-104-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NOI-104", "boothCode": "NOI-104-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "RHM-201", "boothCode": "RHM-201-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "RHM-201", "boothCode": "RHM-201-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "RHM-201", "boothCode": "RHM-201-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "RHM-202", "boothCode": "RHM-202-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "RHM-202", "boothCode": "RHM-202-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "RHM-202", "boothCode": "RHM-202-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "RHM-203", "boothCode": "RHM-203-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "RHM-203", "boothCode": "RHM-203-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "RHM-203", "boothCode": "RHM-203-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "RHM-204", "boothCode": "RHM-204-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "RHM-204", "boothCode": "RHM-204-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "RHM-204", "boothCode": "RHM-204-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "MAT-301", "boothCode": "MAT-301-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "MAT-301", "boothCode": "MAT-301-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "MAT-301", "boothCode": "MAT-301-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "MAT-302", "boothCode": "MAT-302-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "MAT-302", "boothCode": "MAT-302-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "MAT-302", "boothCode": "MAT-302-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "MAT-303", "boothCode": "MAT-303-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "MAT-303", "boothCode": "MAT-303-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "MAT-303", "boothCode": "MAT-303-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "MAT-304", "boothCode": "MAT-304-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "MAT-304", "boothCode": "MAT-304-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "MAT-304", "boothCode": "MAT-304-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NGO-401", "boothCode": "NGO-401-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NGO-401", "boothCode": "NGO-401-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NGO-401", "boothCode": "NGO-401-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NGO-402", "boothCode": "NGO-402-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NGO-402", "boothCode": "NGO-402-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NGO-402", "boothCode": "NGO-402-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NGO-403", "boothCode": "NGO-403-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NGO-403", "boothCode": "NGO-403-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NGO-403", "boothCode": "NGO-403-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NGO-404", "boothCode": "NGO-404-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NGO-404", "boothCode": "NGO-404-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NGO-404", "boothCode": "NGO-404-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "UBU-501", "boothCode": "UBU-501-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "UBU-501", "boothCode": "UBU-501-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "UBU-501", "boothCode": "UBU-501-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "UBU-502", "boothCode": "UBU-502-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "UBU-502", "boothCode": "UBU-502-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "UBU-502", "boothCode": "UBU-502-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "UBU-503", "boothCode": "UBU-503-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "UBU-503", "boothCode": "UBU-503-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "UBU-503", "boothCode": "UBU-503-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "UBU-504", "boothCode": "UBU-504-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "UBU-504", "boothCode": "UBU-504-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "UBU-504", "boothCode": "UBU-504-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TNN-601", "boothCode": "TNN-601-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TNN-601", "boothCode": "TNN-601-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TNN-601", "boothCode": "TNN-601-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TNN-602", "boothCode": "TNN-602-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TNN-602", "boothCode": "TNN-602-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TNN-602", "boothCode": "TNN-602-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TNN-603", "boothCode": "TNN-603-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TNN-603", "boothCode": "TNN-603-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TNN-603", "boothCode": "TNN-603-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TNN-604", "boothCode": "TNN-604-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TNN-604", "boothCode": "TNN-604-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TNN-604", "boothCode": "TNN-604-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NHI-701", "boothCode": "NHI-701-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NHI-701", "boothCode": "NHI-701-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NHI-701", "boothCode": "NHI-701-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NHI-702", "boothCode": "NHI-702-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NHI-702", "boothCode": "NHI-702-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NHI-702", "boothCode": "NHI-702-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NHI-703", "boothCode": "NHI-703-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NHI-703", "boothCode": "NHI-703-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NHI-703", "boothCode": "NHI-703-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NHI-704", "boothCode": "NHI-704-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NHI-704", "boothCode": "NHI-704-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NHI-704", "boothCode": "NHI-704-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "PHU-801", "boothCode": "PHU-801-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "PHU-801", "boothCode": "PHU-801-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "PHU-801", "boothCode": "PHU-801-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "PHU-802", "boothCode": "PHU-802-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "PHU-802", "boothCode": "PHU-802-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "PHU-802", "boothCode": "PHU-802-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "PHU-803", "boothCode": "PHU-803-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "PHU-803", "boothCode": "PHU-803-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "PHU-803", "boothCode": "PHU-803-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "PHU-804", "boothCode": "PHU-804-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "PHU-804", "boothCode": "PHU-804-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "PHU-804", "boothCode": "PHU-804-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "DAL-901", "boothCode": "DAL-901-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "DAL-901", "boothCode": "DAL-901-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "DAL-901", "boothCode": "DAL-901-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "DAL-902", "boothCode": "DAL-902-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "DAL-902", "boothCode": "DAL-902-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "DAL-902", "boothCode": "DAL-902-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "DAL-903", "boothCode": "DAL-903-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "DAL-903", "boothCode": "DAL-903-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "DAL-903", "boothCode": "DAL-903-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "DAL-904", "boothCode": "DAL-904-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "DAL-904", "boothCode": "DAL-904-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "DAL-904", "boothCode": "DAL-904-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "SAN-1001", "boothCode": "SAN-1001-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "SAN-1001", "boothCode": "SAN-1001-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "SAN-1001", "boothCode": "SAN-1001-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "SAN-1002", "boothCode": "SAN-1002-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "SAN-1002", "boothCode": "SAN-1002-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "SAN-1002", "boothCode": "SAN-1002-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "SAN-1003", "boothCode": "SAN-1003-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "SAN-1003", "boothCode": "SAN-1003-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "SAN-1003", "boothCode": "SAN-1003-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "SAN-1004", "boothCode": "SAN-1004-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "SAN-1004", "boothCode": "SAN-1004-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "SAN-1004", "boothCode": "SAN-1004-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TMH-1101", "boothCode": "TMH-1101-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TMH-1101", "boothCode": "TMH-1101-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TMH-1101", "boothCode": "TMH-1101-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TMH-1102", "boothCode": "TMH-1102-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TMH-1102", "boothCode": "TMH-1102-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TMH-1102", "boothCode": "TMH-1102-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TMH-1103", "boothCode": "TMH-1103-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TMH-1103", "boothCode": "TMH-1103-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TMH-1103", "boothCode": "TMH-1103-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TMH-1104", "boothCode": "TMH-1104-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TMH-1104", "boothCode": "TMH-1104-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TMH-1104", "boothCode": "TMH-1104-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "PHC-1201", "boothCode": "PHC-1201-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "PHC-1201", "boothCode": "PHC-1201-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "PHC-1201", "boothCode": "PHC-1201-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "PHC-1202", "boothCode": "PHC-1202-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "PHC-1202", "boothCode": "PHC-1202-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "PHC-1202", "boothCode": "PHC-1202-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "PHC-1203", "boothCode": "PHC-1203-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "PHC-1203", "boothCode": "PHC-1203-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "PHC-1203", "boothCode": "PHC-1203-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "PHC-1204", "boothCode": "PHC-1204-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "PHC-1204", "boothCode": "PHC-1204-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "PHC-1204", "boothCode": "PHC-1204-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "BON-1301", "boothCode": "BON-1301-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "BON-1301", "boothCode": "BON-1301-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "BON-1301", "boothCode": "BON-1301-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "BON-1302", "boothCode": "BON-1302-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "BON-1302", "boothCode": "BON-1302-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "BON-1302", "boothCode": "BON-1302-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "BON-1303", "boothCode": "BON-1303-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "BON-1303", "boothCode": "BON-1303-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "BON-1303", "boothCode": "BON-1303-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "BON-1304", "boothCode": "BON-1304-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "BON-1304", "boothCode": "BON-1304-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "BON-1304", "boothCode": "BON-1304-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "HUY-1401", "boothCode": "HUY-1401-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "HUY-1401", "boothCode": "HUY-1401-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "HUY-1401", "boothCode": "HUY-1401-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "HUY-1402", "boothCode": "HUY-1402-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "HUY-1402", "boothCode": "HUY-1402-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "HUY-1402", "boothCode": "HUY-1402-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "HUY-1403", "boothCode": "HUY-1403-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "HUY-1403", "boothCode": "HUY-1403-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "HUY-1403", "boothCode": "HUY-1403-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "HUY-1404", "boothCode": "HUY-1404-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "HUY-1404", "boothCode": "HUY-1404-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "HUY-1404", "boothCode": "HUY-1404-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TAM-1501", "boothCode": "TAM-1501-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TAM-1501", "boothCode": "TAM-1501-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TAM-1501", "boothCode": "TAM-1501-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TAM-1502", "boothCode": "TAM-1502-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TAM-1502", "boothCode": "TAM-1502-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TAM-1502", "boothCode": "TAM-1502-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TAM-1503", "boothCode": "TAM-1503-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TAM-1503", "boothCode": "TAM-1503-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TAM-1503", "boothCode": "TAM-1503-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "TAM-1504", "boothCode": "TAM-1504-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "TAM-1504", "boothCode": "TAM-1504-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "TAM-1504", "boothCode": "TAM-1504-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NTC-1601", "boothCode": "NTC-1601-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NTC-1601", "boothCode": "NTC-1601-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NTC-1601", "boothCode": "NTC-1601-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NTC-1602", "boothCode": "NTC-1602-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NTC-1602", "boothCode": "NTC-1602-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NTC-1602", "boothCode": "NTC-1602-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NTC-1603", "boothCode": "NTC-1603-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NTC-1603", "boothCode": "NTC-1603-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NTC-1603", "boothCode": "NTC-1603-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "NTC-1604", "boothCode": "NTC-1604-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "NTC-1604", "boothCode": "NTC-1604-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "NTC-1604", "boothCode": "NTC-1604-B3", "name": "Buồng 3", "isActive": true }
+  ]
+  

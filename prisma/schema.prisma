@@ -194,11 +194,13 @@ model Cashier {
 // Bảng Specialty cho chuyên khoa
 model Specialty {
   id          String      @id @default(uuid()) @map("id")
+  specialtyCode String      @unique @map("specialty_code")
   name        String
   clinicRooms ClinicRoom[]
   appointments Appointment[]
   templates   Template[]
 
+  @@unique([specialtyCode, name])
   @@map("specialties")
 }
 
@@ -210,7 +212,7 @@ model ClinicRoom {
   specialtyId String      @map("specialty_id")
   doctorId    String      @unique @map("doctor_id") // Mỗi phòng chỉ gắn với 1 bác sĩ
   description String?     @map("description") // Mô tả phòng
-  isActive    Boolean     @default(true) @map("is_active")
+  address     String?     @map("address") // Địa chỉ phòng
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
   booth Booth[]
@@ -369,6 +371,7 @@ model Prescription {
   patientProfileId String
   patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
   note String?
+  status PrescriptionStatus @default(NOT_STARTED)
   invoiceDetails InvoiceDetail[]
 
   @@map("prescriptions")
@@ -380,10 +383,24 @@ model PrescriptionService {
   serviceId String
   prescription Prescription @relation(fields: [prescriptionId], references: [id])
   service Service @relation(fields: [serviceId], references: [id])
+  status PrescriptionStatus @default(NOT_STARTED)
+  results String[] @map("results")
+  order Int @default(1)
   note String?
 
   @@unique([prescriptionId, serviceId])
   @@map("prescription_services")
+}
+
+enum PrescriptionStatus {
+  NOT_STARTED
+  PENDING
+  WAITING
+  SERVING
+  WAITING_RESULT
+  COMPLETED
+  DELAYED
+  CANCELLED
 }
 
 model Booth {
