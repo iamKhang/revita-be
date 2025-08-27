@@ -334,16 +334,26 @@ export class MedicalRecordService {
         throw new ForbiddenException('Chỉ bác sĩ tạo hồ sơ hoặc admin được xoá');
       }
     }
-    // Lưu lịch sử trước khi xóa
-    await this.prisma.medicalRecordHistory.create({
-      data: {
-        medicalRecordId: id,
-        changedBy: user.id,
-        changes: { action: 'DELETE', data: record },
-      },
-    });
-    return await this.prisma.medicalRecord.delete({
-      where: { id },
+    // Xóa an toàn: tạo lịch sử, xóa histories phụ thuộc, sau đó xóa record trong transaction
+    return await this.prisma.$transaction(async (tx) => {
+      // Lưu lịch sử xóa vào bảng history khác record hiện tại
+      await tx.medicalRecordHistory.create({
+        data: {
+          medicalRecordId: id,
+          changedBy: user.id,
+          changes: { action: 'DELETE', data: record },
+        },
+      });
+
+      // Xóa tất cả history liên quan để tránh lỗi khóa ngoại
+      await tx.medicalRecordHistory.deleteMany({
+        where: { medicalRecordId: id },
+      });
+
+      // Cuối cùng xóa hồ sơ chính
+      return await tx.medicalRecord.delete({
+        where: { id },
+      });
     });
   }
 
