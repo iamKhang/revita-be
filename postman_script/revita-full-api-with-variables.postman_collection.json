@@ -956,6 +956,48 @@
                 },
                 "description": "Get patients who have loyalty points > 0"
               }
+            },
+            {
+              "name": "Search Users (Universal)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/search?query=John",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "search"],
+                  "query": [
+                    {
+                      "key": "query",
+                      "value": "John"
+                    }
+                  ]
+                },
+                "description": "Search users by name, phone, id, or email. Returns user info + patient info if user is a patient (Public - no auth required)"
+              }
+            },
+            {
+              "name": "Search Users by Role",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/search?query=0901234567&role=PATIENT",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "search"],
+                  "query": [
+                    {
+                      "key": "query",
+                      "value": "0901234567"
+                    },
+                    {
+                      "key": "role",
+                      "value": "PATIENT"
+                    }
+                  ]
+                },
+                "description": "Search users by role (PATIENT, DOCTOR, RECEPTIONIST, ADMIN) (Public - no auth required)"
+              }
             }
           ]
         }
