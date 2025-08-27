@@ -1,0 +1,63 @@
+[
+    {
+      "id": "patient-uuid-1",
+      "patientCode": "P-0001",
+      "authId": "auth-uuid-7",
+      "loyaltyPoints": 15
+    },
+    {
+      "id": "patient-uuid-2",
+      "patientCode": "P-0002",
+      "authId": "auth-uuid-8",
+      "loyaltyPoints": 30
+    },
+    {
+      "id": "patient-uuid-3",
+      "patientCode": "P-0003",
+      "authId": "auth-uuid-9",
+      "loyaltyPoints": 25
+    },
+    {
+      "id": "patient-uuid-4",
+      "patientCode": "P-0004",
+      "authId": "auth-uuid-10",
+      "loyaltyPoints": 10
+    },
+    {
+      "id": "patient-uuid-5",
+      "patientCode": "P-0005",
+      "authId": "auth-uuid-11",
+      "loyaltyPoints": 5
+    },
+    {
+      "id": "patient-uuid-6",
+      "patientCode": "P-0006",
+      "authId": "auth-uuid-12",
+      "loyaltyPoints": 40
+    },
+    {
+      "id": "patient-uuid-7",
+      "patientCode": "P-0007",
+      "authId": "auth-uuid-13",
+      "loyaltyPoints": 0
+    },
+    {
+      "id": "patient-uuid-8",
+      "patientCode": "P-0008",
+      "authId": "auth-uuid-14",
+      "loyaltyPoints": 12
+    },
+    {
+      "id": "patient-uuid-9",
+      "patientCode": "P-0009",
+      "authId": "auth-uuid-15",
+      "loyaltyPoints": 20
+    },
+    {
+      "id": "patient-uuid-10",
+      "patientCode": "P-0010",
+      "authId": "auth-uuid-16",
+      "loyaltyPoints": 8
+    }
+  ]
+  

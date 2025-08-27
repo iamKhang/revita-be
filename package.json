@@ -19,6 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:clinic": "ts-node -r tsconfig-paths/register prisma/seed_clinic.ts",
+    "seed:users": "ts-node prisma/seed_users.ts",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
     "db:clear": "ts-node -r tsconfig-paths/register prisma/clear.ts"
   },
