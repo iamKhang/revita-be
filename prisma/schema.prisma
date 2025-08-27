@@ -21,6 +21,7 @@ enum Role {
   PATIENT
   RECEPTIONIST
   ADMIN
+  CASHIER
 }
 
 // Bảng Auth cho thông tin đăng nhập và thông tin cơ bản
@@ -46,8 +47,7 @@ model Auth {
   patient      Patient?
   receptionist Receptionist?
   admin        Admin?
-  invoices     Invoice[]
-  appointments Appointment[] @relation("Booker")
+  cashier      Cashier?
 
   @@map("auths")
 }
@@ -67,6 +67,7 @@ model Doctor {
   appointments    Appointment[]
   medicalRecords  MedicalRecord[]
   clinicRooms     ClinicRoom[]
+  prescriptions   Prescription[]
 
   @@map("doctors")
 }
@@ -102,7 +103,8 @@ model PatientProfile {
   patient           Patient     @relation(fields: [patientId], references: [id])
   appointments      Appointment[]
   medicalRecords    MedicalRecord[]
-
+  prescriptions   Prescription[]
+  invoices        Invoice[]
   @@map("patient_profiles")
 }
 
@@ -180,6 +182,15 @@ model Admin {
   @@map("admins")
 }
 
+// Nhân viên thu ngân
+model Cashier {
+  id       String      @id @default(uuid())
+  authId   String      @unique @map("auth_id")
+  auth     Auth        @relation(fields: [authId], references: [id])
+  invoices Invoice[]
+  @@map("cashiers")
+}
+
 // Bảng Specialty cho chuyên khoa
 model Specialty {
   id          String      @id @default(uuid()) @map("id")
@@ -231,7 +242,8 @@ model Service {
   description String   @map("description")
   clinicRoomServices ClinicRoomService[]
   appointments Appointment[]
-
+  prescriptions PrescriptionService[]
+  invoiceDetails InvoiceDetail[]
   @@map("services")
 }
 
@@ -263,14 +275,12 @@ model Appointment {
   date        DateTime @map("date")
   startTime   String   @map("start_time")
   endTime     String   @map("end_time")
-  booker      Auth     @relation("Booker", fields: [bookerId], references: [id])
   patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
   specialty   Specialty @relation(fields: [specialtyId], references: [id])
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
   service     Service  @relation(fields: [serviceId], references: [id])
   clinicRoom  ClinicRoom? @relation(fields: [clinicRoomId], references: [id])
   invoiceId   String?     @map("invoice_id")
-  invoice     Invoice? @relation(fields: [invoiceId], references: [id])
   medicalRecords MedicalRecord[]
   counterQueueItems CounterQueueItem[]
   counterAssignments CounterAssignment[]
@@ -282,15 +292,30 @@ model Appointment {
 model Invoice {
   id            String      @id @default(uuid())
   invoiceCode   String   @map("invoice_code")
-  authId        String      @map("auth_id")
   totalAmount   Float    @map("total_amount")
   paymentMethod String   @map("payment_method")
   paymentStatus String   @map("payment_status")
   createdAt     DateTime @default(now()) @map("created_at")
-  auth          Auth     @relation(fields: [authId], references: [id])
-  appointments  Appointment[]
-
+  patientProfileId String
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
+  cashierId String
+  cashier Cashier @relation(fields: [cashierId], references: [id])
+  invoiceDetails InvoiceDetail[]
   @@map("invoices")
+}
+
+// Bảng chi tiết thông tin thanh toán
+model InvoiceDetail {
+  invoiceId String
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  serviceId String
+  service Service @relation(fields: [serviceId], references: [id])
+  price Float @map("price")
+  prescriptionId String?
+  prescription Prescription? @relation(fields: [prescriptionId], references: [id])
+
+  @@unique([invoiceId, serviceId])
+  @@map("invoice_details")
 }
 
 // Bảng Template cho mẫu bệnh án
@@ -344,4 +369,31 @@ model MedicalRecordHistory {
   changedAt       DateTime @default(now())
   changes         Json     // Nội dung thay đổi (có thể lưu diff hoặc toàn bộ snapshot)
   medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id])
+}
+
+// Bảng Phiếu chỉ định => Bác sĩ chỉ định dịch vụ cho bệnh nhân
+model Prescription {
+  id          String      @id @default(uuid())
+  prescriptionCode String   @map("prescription_code")
+  doctorId String?
+  doctor Doctor? @relation(fields: [doctorId], references: [id])
+  services PrescriptionService[]
+  patientProfileId String
+  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
+  note String?
+  invoiceDetails InvoiceDetail[]
+
+  @@map("prescriptions")
+}
+
+// Bảng trung gian PrescriptionService cho quan hệ nhiều-nhiều giữa Phiếu chỉ định và Dịch vụ
+model PrescriptionService {
+  prescriptionId String
+  serviceId String
+  prescription Prescription @relation(fields: [prescriptionId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+  note String?
+
+  @@unique([prescriptionId, serviceId])
+  @@map("prescription_services")
 }
