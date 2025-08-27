@@ -1,8 +1,8 @@
 [
-    { "roomCode": "NOI-101", "roomName": "Phòng Nội 101", "specialtyCode": "NOITONGQUA", "description": "Khám nội tổng quát", "address": "Tầng 1 - Khu A" },
-    { "roomCode": "NOI-102", "roomName": "Phòng Nội 102", "specialtyCode": "NOITONGQUA", "description": "Khám nội tổng quát", "address": "Tầng 1 - Khu A" },
-    { "roomCode": "NOI-103", "roomName": "Phòng Nội 103", "specialtyCode": "NOITONGQUA", "description": "Khám nội tổng quát", "address": "Tầng 1 - Khu A" },
-    { "roomCode": "NOI-104", "roomName": "Phòng Nội 104", "specialtyCode": "NOITONGQUA", "description": "Khám nội tổng quát", "address": "Tầng 1 - Khu A" },
+    { "roomCode": "NOI-101", "roomName": "Phòng Nội 101", "specialtyCode": "NOITONGQUAT", "description": "Khám nội tổng quát", "address": "Tầng 1 - Khu A" },
+    { "roomCode": "NOI-102", "roomName": "Phòng Nội 102", "specialtyCode": "NOITONGQUAT", "description": "Khám nội tổng quát", "address": "Tầng 1 - Khu A" },
+    { "roomCode": "NOI-103", "roomName": "Phòng Nội 103", "specialtyCode": "NOITONGQUAT", "description": "Khám nội tổng quát", "address": "Tầng 1 - Khu A" },
+    { "roomCode": "NOI-104", "roomName": "Phòng Nội 104", "specialtyCode": "NOITONGQUAT", "description": "Khám nội tổng quát", "address": "Tầng 1 - Khu A" },
   
     { "roomCode": "RHM-201", "roomName": "Phòng Nha 201", "specialtyCode": "RANGHAMMAT", "description": "Khám răng hàm mặt", "address": "Tầng 2 - Khu B" },
     { "roomCode": "RHM-202", "roomName": "Phòng Nha 202", "specialtyCode": "RANGHAMMAT", "description": "Điều trị nha khoa", "address": "Tầng 2 - Khu B" },
@@ -54,29 +54,29 @@
     { "roomCode": "TMH-1103", "roomName": "Phòng TMH 1103", "specialtyCode": "TAIMUIHONG", "description": "Điều trị TMH", "address": "Tầng 11 - Khu A" },
     { "roomCode": "TMH-1104", "roomName": "Phòng TMH 1104", "specialtyCode": "TAIMUIHONG", "description": "Tư vấn TMH", "address": "Tầng 11 - Khu A" },
   
-    { "roomCode": "PHC-1201", "roomName": "Phòng PHCN 1201", "specialtyCode": "PHUCHOICH", "description": "Phục hồi chức năng", "address": "Tầng 12 - Khu B" },
-    { "roomCode": "PHC-1202", "roomName": "Phòng PHCN 1202", "specialtyCode": "PHUCHOICH", "description": "Vật lý trị liệu", "address": "Tầng 12 - Khu B" },
-    { "roomCode": "PHC-1203", "roomName": "Phòng PHCN 1203", "specialtyCode": "PHUCHOICH", "description": "Âm ngữ trị liệu", "address": "Tầng 12 - Khu B" },
-    { "roomCode": "PHC-1204", "roomName": "Phòng PHCN 1204", "specialtyCode": "PHUCHOICH", "description": "Hoạt động trị liệu", "address": "Tầng 12 - Khu B" },
+    { "roomCode": "PHC-1201", "roomName": "Phòng PHCN 1201", "specialtyCode": "PHUCHOICHNANG", "description": "Phục hồi chức năng", "address": "Tầng 12 - Khu B" },
+    { "roomCode": "PHC-1202", "roomName": "Phòng PHCN 1202", "specialtyCode": "PHUCHOICHNANG", "description": "Vật lý trị liệu", "address": "Tầng 12 - Khu B" },
+    { "roomCode": "PHC-1203", "roomName": "Phòng PHCN 1203", "specialtyCode": "PHUCHOICHNANG", "description": "Âm ngữ trị liệu", "address": "Tầng 12 - Khu B" },
+    { "roomCode": "PHC-1204", "roomName": "Phòng PHCN 1204", "specialtyCode": "PHUCHOICHNANG", "description": "Hoạt động trị liệu", "address": "Tầng 12 - Khu B" },
   
     { "roomCode": "BON-1301", "roomName": "Phòng Bỏng 1301", "specialtyCode": "BONG", "description": "Khám và xử trí bỏng", "address": "Tầng 13 - Khu A" },
     { "roomCode": "BON-1302", "roomName": "Phòng Bỏng 1302", "specialtyCode": "BONG", "description": "Chăm sóc vết bỏng", "address": "Tầng 13 - Khu A" },
     { "roomCode": "BON-1303", "roomName": "Phòng Bỏng 1303", "specialtyCode": "BONG", "description": "Theo dõi sau bỏng", "address": "Tầng 13 - Khu A" },
     { "roomCode": "BON-1304", "roomName": "Phòng Bỏng 1304", "specialtyCode": "BONG", "description": "Tư vấn điều trị bỏng", "address": "Tầng 13 - Khu A" },
   
-    { "roomCode": "HUY-1401", "roomName": "Phòng Huyết học 1401", "specialtyCode": "HUYETHOC", "description": "Khám huyết học", "address": "Tầng 14 - Khu B" },
-    { "roomCode": "HUY-1402", "roomName": "Phòng Truyền máu 1402", "specialtyCode": "HUYETHOC", "description": "Truyền máu - theo dõi", "address": "Tầng 14 - Khu B" },
-    { "roomCode": "HUY-1403", "roomName": "Phòng Huyết học 1403", "specialtyCode": "HUYETHOC", "description": "Xét nghiệm huyết học (tiếp nhận)", "address": "Tầng 14 - Khu B" },
-    { "roomCode": "HUY-1404", "roomName": "Phòng Tư vấn 1404", "specialtyCode": "HUYETHOC", "description": "Tư vấn truyền máu", "address": "Tầng 14 - Khu B" },
+    { "roomCode": "HUY-1401", "roomName": "Phòng Huyết học 1401", "specialtyCode": "HUYETHOCTRUYENMAU", "description": "Khám huyết học", "address": "Tầng 14 - Khu B" },
+    { "roomCode": "HUY-1402", "roomName": "Phòng Truyền máu 1402", "specialtyCode": "HUYETHOCTRUYENMAU", "description": "Truyền máu - theo dõi", "address": "Tầng 14 - Khu B" },
+    { "roomCode": "HUY-1403", "roomName": "Phòng Huyết học 1403", "specialtyCode": "HUYETHOCTRUYENMAU", "description": "Xét nghiệm huyết học (tiếp nhận)", "address": "Tầng 14 - Khu B" },
+    { "roomCode": "HUY-1404", "roomName": "Phòng Tư vấn 1404", "specialtyCode": "HUYETHOCTRUYENMAU", "description": "Tư vấn truyền máu", "address": "Tầng 14 - Khu B" },
   
     { "roomCode": "TAM-1501", "roomName": "Phòng Tâm thần 1501", "specialtyCode": "TAMTHAN", "description": "Khám tâm thần", "address": "Tầng 15 - Khu A" },
     { "roomCode": "TAM-1502", "roomName": "Phòng Tâm lý 1502", "specialtyCode": "TAMTHAN", "description": "Tư vấn tâm lý", "address": "Tầng 15 - Khu A" },
     { "roomCode": "TAM-1503", "roomName": "Phòng Điều trị 1503", "specialtyCode": "TAMTHAN", "description": "Điều trị ngoại trú", "address": "Tầng 15 - Khu A" },
     { "roomCode": "TAM-1504", "roomName": "Phòng Trị liệu 1504", "specialtyCode": "TAMTHAN", "description": "Trị liệu hành vi", "address": "Tầng 15 - Khu A" },
   
-    { "roomCode": "NTC-1601", "roomName": "Phòng Ngoại trú 1601", "specialtyCode": "NGOAITRUCH", "description": "Khám ngoại trú chung", "address": "Tầng 16 - Khu B" },
-    { "roomCode": "NTC-1602", "roomName": "Phòng Ngoại trú 1602", "specialtyCode": "NGOAITRUCH", "description": "Theo dõi điều trị", "address": "Tầng 16 - Khu B" },
-    { "roomCode": "NTC-1603", "roomName": "Phòng Ngoại trú 1603", "specialtyCode": "NGOAITRUCH", "description": "Thủ thuật nhẹ", "address": "Tầng 16 - Khu B" },
-    { "roomCode": "NTC-1604", "roomName": "Phòng Ngoại trú 1604", "specialtyCode": "NGOAITRUCH", "description": "Tư vấn - sàng lọc", "address": "Tầng 16 - Khu B" }
+    { "roomCode": "NTC-1601", "roomName": "Phòng Ngoại trú 1601", "specialtyCode": "NGOAITRUCHUNG", "description": "Khám ngoại trú chung", "address": "Tầng 16 - Khu B" },
+    { "roomCode": "NTC-1602", "roomName": "Phòng Ngoại trú 1602", "specialtyCode": "NGOAITRUCHUNG", "description": "Theo dõi điều trị", "address": "Tầng 16 - Khu B" },
+    { "roomCode": "NTC-1603", "roomName": "Phòng Ngoại trú 1603", "specialtyCode": "NGOAITRUCHUNG", "description": "Thủ thuật nhẹ", "address": "Tầng 16 - Khu B" },
+    { "roomCode": "NTC-1604", "roomName": "Phòng Ngoại trú 1604", "specialtyCode": "NGOAITRUCHUNG", "description": "Tư vấn - sàng lọc", "address": "Tầng 16 - Khu B" }
   ]
   

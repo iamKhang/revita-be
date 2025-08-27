@@ -1,0 +1,458 @@
+{
+  "info": {
+    "name": "Prescription & Invoice API",
+    "description": "Collection for testing Prescription and Invoice modules APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "prescriptionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "prescriptionCode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invoiceCode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "patientProfileId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Prescription APIs",
+      "item": [
+        {
+          "name": "Create Prescription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prescriptionCode\": \"PRESC-{{$timestamp}}\",\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"doctorId\": \"doctor-uuid-here\",\n  \"note\": \"Bệnh nhân cần khám tổng quát\",\n  \"serviceIds\": [\n    \"service-uuid-1\",\n    \"service-uuid-2\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions"]
+            },
+            "description": "Tạo phiếu chỉ định mới với danh sách dịch vụ"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Prescription by Code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions/{{prescriptionCode}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions", "{{prescriptionCode}}"]
+            },
+            "description": "Lấy thông tin phiếu chỉ định theo mã"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Prescription",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doctorId\": \"new-doctor-uuid\",\n  \"note\": \"Cập nhật ghi chú mới\",\n  \"serviceIds\": [\n    \"service-uuid-1\",\n    \"service-uuid-3\",\n    \"service-uuid-4\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions/{{prescriptionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions", "{{prescriptionId}}"]
+            },
+            "description": "Cập nhật thông tin phiếu chỉ định"
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Prescription",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions/{{prescriptionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions", "{{prescriptionId}}"]
+            },
+            "description": "Hủy phiếu chỉ định"
+          },
+          "response": []
+        }
+      ],
+      "description": "APIs cho việc quản lý phiếu chỉ định"
+    },
+    {
+      "name": "Invoice Payment APIs",
+      "item": [
+        {
+          "name": "Scan Prescription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prescriptionCode\": \"{{prescriptionCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/invoice-payments/scan",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoice-payments", "scan"]
+            },
+            "description": "Quét mã phiếu chỉ định để lấy thông tin"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Payment Preview",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prescriptionCode\": \"{{prescriptionCode}}\",\n  \"selectedServiceIds\": [\n    \"service-uuid-1\",\n    \"service-uuid-2\"\n  ],\n  \"paymentMethod\": \"CASH\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/invoice-payments/preview",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoice-payments", "preview"]
+            },
+            "description": "Xem trước thanh toán với các dịch vụ đã chọn"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prescriptionCode\": \"{{prescriptionCode}}\",\n  \"selectedServiceIds\": [\n    \"service-uuid-1\",\n    \"service-uuid-2\"\n  ],\n  \"paymentMethod\": \"CASH\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/invoice-payments/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoice-payments", "create"]
+            },
+            "description": "Tạo hóa đơn thanh toán"
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceCode\": \"{{invoiceCode}}\",\n  \"cashierId\": \"cashier-uuid-here\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/invoice-payments/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoice-payments", "confirm"]
+            },
+            "description": "Xác nhận thanh toán và kích hoạt routing"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payment History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/invoice-payments/history/{{patientProfileId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoice-payments", "history", "{{patientProfileId}}"]
+            },
+            "description": "Lấy lịch sử thanh toán của bệnh nhân"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Prescription Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/invoice-payments/status/{{prescriptionCode}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoice-payments", "status", "{{prescriptionCode}}"]
+            },
+            "description": "Xem trạng thái hiện tại của phiếu chỉ định"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/invoice-payments/invoice/{{invoiceCode}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoice-payments", "invoice", "{{invoiceCode}}"]
+            },
+            "description": "Xem chi tiết hóa đơn"
+          },
+          "response": []
+        }
+      ],
+      "description": "APIs cho việc thanh toán và quản lý hóa đơn"
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login as Cashier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneOrEmail\": \"cashier@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["login"]
+            },
+            "description": "Đăng nhập với tài khoản cashier"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('authToken', response.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as Doctor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneOrEmail\": \"doctor@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["login"]
+            },
+            "description": "Đăng nhập với tài khoản doctor"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('authToken', response.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneOrEmail\": \"patient@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["login"]
+            },
+            "description": "Đăng nhập với tài khoản patient"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('authToken', response.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ],
+      "description": "APIs đăng nhập cho các role khác nhau"
+    },
+    {
+      "name": "Test Data Setup",
+      "item": [
+        {
+          "name": "Create Test Patient Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"profileCode\": \"PROF-{{$timestamp}}\",\n  \"patientId\": \"patient-uuid-here\",\n  \"name\": \"Nguyễn Văn A\",\n  \"dateOfBirth\": \"1990-01-01T00:00:00.000Z\",\n  \"gender\": \"MALE\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"occupation\": \"Nhân viên văn phòng\",\n  \"emergencyContact\": {\n    \"name\": \"Nguyễn Thị B\",\n    \"phone\": \"0123456789\",\n    \"relationship\": \"Vợ\"\n  },\n  \"healthInsurance\": \"BH123456789\",\n  \"relationship\": \"Bản thân\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user-management/patient-profiles",
+              "host": ["{{baseUrl}}"],
+              "path": ["user-management", "patient-profiles"]
+            },
+            "description": "Tạo patient profile để test"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('patientProfileId', response.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Available Services",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user-management/services",
+              "host": ["{{baseUrl}}"],
+              "path": ["user-management", "services"]
+            },
+            "description": "Lấy danh sách dịch vụ có sẵn để test"
+          },
+          "response": []
+        }
+      ],
+      "description": "Setup dữ liệu test cần thiết"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-set timestamp for unique values",
+          "pm.collectionVariables.set('timestamp', Date.now());"
+        ]
+      }
+    }
+  ]
+}
+

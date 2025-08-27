@@ -11,5 +11,6 @@ import { CounterAssignmentController } from './counter-assignment.controller';
   imports: [PrismaModule, CacheModule],
   controllers: [RoutingController, CounterAssignmentController],
   providers: [RoutingService, CounterAssignmentService, KafkaProducerService],
+  exports: [RoutingService, CounterAssignmentService],
 })
 export class RoutingModule {}

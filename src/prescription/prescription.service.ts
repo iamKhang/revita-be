@@ -142,14 +142,12 @@ export class PrescriptionService {
     if (!current) throw new NotFoundException('Service not in prescription');
 
     // If any service is in WAITING, SERVING, or WAITING_RESULT, do not start another
-    const waitingResult = 'WAITING_RESULT' as unknown as PrescriptionStatus;
-    const activeExists = psList.some((s) =>
-      [
-        PrescriptionStatus.WAITING,
-        PrescriptionStatus.SERVING,
-        waitingResult,
-      ].includes(s.status as PrescriptionStatus),
-    );
+    const activeStatuses = [
+      PrescriptionStatus.WAITING,
+      PrescriptionStatus.SERVING,
+      PrescriptionStatus.WAITING_RESULT,
+    ];
+    const activeExists = psList.some((s) => activeStatuses.includes(s.status as any));
 
     await this.prisma.prescriptionService.update({
       where: { prescriptionId_serviceId: { prescriptionId, serviceId } },

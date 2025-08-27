@@ -55,7 +55,7 @@ model Auth {
 // Bảng Doctor cho thông tin bác sĩ
 model Doctor {
   id              String      @id @default(uuid())
-  doctorCode      String      @map("doctor_code")
+  doctorCode      String      @unique @map("doctor_code")
   authId          String      @unique @map("auth_id")
   degrees         Json     // Sửa từ String[] sang Json
   yearsExperience Int      @map("years_experience")
@@ -65,7 +65,6 @@ model Doctor {
   auth            Auth     @relation(fields: [authId], references: [id])
   appointments    Appointment[]
   medicalRecords  MedicalRecord[]
-  clinicRooms     ClinicRoom[]
   prescriptions   Prescription[]
   workSessions WorkSession[]
 
@@ -200,7 +199,6 @@ model Specialty {
   appointments Appointment[]
   templates   Template[]
 
-  @@unique([specialtyCode, name])
   @@map("specialties")
 }
 
@@ -210,7 +208,6 @@ model ClinicRoom {
   roomCode    String      @unique @map("room_code") // Mã phòng
   roomName    String      @map("room_name") // Tên phòng
   specialtyId String      @map("specialty_id")
-  doctorId    String      @unique @map("doctor_id") // Mỗi phòng chỉ gắn với 1 bác sĩ
   description String?     @map("description") // Mô tả phòng
   address     String?     @map("address") // Địa chỉ phòng
   createdAt   DateTime    @default(now()) @map("created_at")
@@ -218,7 +215,6 @@ model ClinicRoom {
   booth Booth[]
   
   specialty   Specialty   @relation(fields: [specialtyId], references: [id])
-  doctor      Doctor      @relation(fields: [doctorId], references: [id])
   services    ClinicRoomService[]
   appointments Appointment[]
 
@@ -239,7 +235,7 @@ model ClinicRoomService {
 // Bảng Service cho dịch vụ
 model Service {
   id          String      @id @default(uuid())
-  serviceCode String   @map("service_code")
+  serviceCode String   @unique @map("service_code")
   name        String   @map("name")
   price       Float    @map("price")
   description String   @map("description")
@@ -286,6 +282,7 @@ model Invoice {
   paymentMethod String   @map("payment_method")
   paymentStatus String   @map("payment_status")
   createdAt     DateTime @default(now()) @map("created_at")
+  isPaid        Boolean  @default(false) @map("is_paid")
   patientProfileId String
   patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
   cashierId String
@@ -405,7 +402,7 @@ enum PrescriptionStatus {
 
 model Booth {
   id String @id @default(uuid())
-  boothCode String @map("booth_code")
+  boothCode String @unique @map("booth_code")
   name String @map("name")
   roomId String
   room ClinicRoom @relation(fields: [roomId], references: [id])
