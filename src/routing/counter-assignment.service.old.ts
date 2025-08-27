@@ -285,12 +285,7 @@ export class CounterAssignmentService {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: request.invoiceId },
       include: {
-        appointments: {
-          include: {
-            patientProfile: true,
-            service: true,
-          },
-        },
+        patientProfile: true,
       },
     });
 
@@ -448,16 +443,11 @@ export class CounterAssignmentService {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       where: { id: request.invoiceId },
       include: {
-        appointments: {
+        patientProfile: {
           include: {
-            patientProfile: {
-              include: {
-                patient: {
-                  include: { auth: true },
-                },
-              },
+            patient: {
+              include: { auth: true },
             },
-            service: true,
           },
         },
       },
@@ -471,7 +461,21 @@ export class CounterAssignmentService {
       throw new BadRequestException('Invoice must be paid before assignment');
     }
 
-    const appointment = invoice.appointments[0];
+    // Tìm appointment liên quan đến invoice này
+    const appointment = await this.prisma.appointment.findFirst({
+      where: { invoiceId: request.invoiceId },
+      include: {
+        patientProfile: {
+          include: {
+            patient: {
+              include: { auth: true },
+            },
+          },
+        },
+        service: true,
+      },
+    });
+
     if (!appointment) {
       throw new NotFoundException('Appointment not found for this invoice');
     }
