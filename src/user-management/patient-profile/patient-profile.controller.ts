@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Body,
+  Patch,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import { RolesGuard } from '../../rbac/roles.guard';
 import { Roles } from '../../rbac/roles.decorator';
 import { Role } from '../../rbac/roles.enum';
 import { JwtUserPayload } from '../../medical-record/dto/jwt-user-payload.dto';
+import { UpdatePatientProfileDto } from '../dto/update-patient-profile.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('patient-profiles')
@@ -51,5 +53,15 @@ export class PatientProfileController {
     @Request() req: { user: JwtUserPayload },
   ) {
     return await this.patientProfileService.findByPatient(patientId, req.user);
+  }
+
+  @Patch(':id')
+  @Roles(Role.PATIENT, Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST)
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdatePatientProfileDto,
+    @Request() req: { user: JwtUserPayload },
+  ): Promise<unknown> {
+    return await this.patientProfileService.update(id, dto, req.user);
   }
 }
