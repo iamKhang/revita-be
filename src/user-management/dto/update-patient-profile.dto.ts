@@ -1,4 +1,10 @@
-import { IsOptional, IsString, IsDateString, IsEnum } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsDateString,
+  IsEnum,
+  IsObject,
+} from 'class-validator';
 
 export enum GenderEnum {
   MALE = 'MALE',
@@ -28,8 +34,8 @@ export class UpdatePatientProfileDto {
   occupation?: string;
 
   @IsOptional()
-  @IsString()
-  emergencyContact?: string;
+  @IsObject()
+  emergencyContact?: object;
 
   @IsOptional()
   @IsString()
