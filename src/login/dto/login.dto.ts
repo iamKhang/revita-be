@@ -109,3 +109,11 @@ export class ErrorResponseDto {
   @ApiProperty({ description: 'Thông báo lỗi' })
   error: string;
 }
+
+export class LogoutResponseDto {
+  @ApiProperty({ description: 'Trạng thái thành công' })
+  success: boolean;
+
+  @ApiProperty({ description: 'Thông báo' })
+  message: string;
+}

@@ -22,6 +22,7 @@ import {
   TokenResponseDto,
   AuthCallbackDto,
   ErrorResponseDto,
+  LogoutResponseDto,
 } from './dto/login.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 
@@ -78,6 +79,27 @@ export class LoginController {
     const accessToken = authHeader.replace('Bearer ', '');
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return this.authService.getUserByToken(accessToken);
+  }
+
+  @Post('logout')
+  @ApiOperation({ summary: 'Đăng xuất người dùng hiện tại' })
+  @ApiResponse({
+    status: 200,
+    description: 'Đăng xuất thành công',
+    type: LogoutResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Thiếu hoặc không hợp lệ authorization header',
+  })
+  async logout(
+    @Headers('authorization') authHeader: string,
+  ): Promise<LogoutResponseDto | ErrorResponseDto> {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return { error: 'Missing or invalid Authorization header' };
+    }
+    const accessToken = authHeader.replace('Bearer ', '');
+    return this.authService.logout(accessToken);
   }
 
   @Get('google')

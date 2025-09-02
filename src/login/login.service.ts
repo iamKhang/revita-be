@@ -309,4 +309,31 @@ export class LoginService {
       throw new UnauthorizedException('Invalid token');
     }
   }
+
+  async logout(
+    accessToken: string,
+  ): Promise<{ success: boolean; message: string }> {
+    // Verify token to get user id
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const payloadRaw = this.jwtService.verify(accessToken);
+    if (typeof payloadRaw !== 'object' || payloadRaw === null) {
+      throw new UnauthorizedException('Invalid token');
+    }
+    const { sub } = payloadRaw as Record<string, unknown>;
+    if (typeof sub !== 'string') {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    // Best-effort: clear stored provider tokens so mobile/web sessions relying on them are invalidated
+    await this.prisma.auth.update({
+      where: { id: sub },
+      data: {
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiry: null,
+      },
+    });
+
+    return { success: true, message: 'Logged out successfully' };
+  }
 }
