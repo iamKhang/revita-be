@@ -32,4 +32,38 @@ export class PrescriptionController {
   async cancel(@Param('id') id: string) {
     return this.prescriptionService.cancel(id);
   }
+
+  // Service status transitions by code + serviceId
+  @Post(':code/services/:serviceId/serving')
+  @Roles(Role.DOCTOR)
+  async markServiceServing(
+    @Param('code') code: string,
+    @Param('serviceId') serviceId: string,
+  ) {
+    const p = await this.prescriptionService.findByCode(code);
+    await this.prescriptionService.markServiceServing(p.id, serviceId);
+    return { ok: true };
+  }
+
+  @Post(':code/services/:serviceId/waiting-result')
+  @Roles(Role.DOCTOR)
+  async markServiceWaitingResult(
+    @Param('code') code: string,
+    @Param('serviceId') serviceId: string,
+  ) {
+    const p = await this.prescriptionService.findByCode(code);
+    await this.prescriptionService.markServiceWaitingResult(p.id, serviceId);
+    return { ok: true };
+  }
+
+  @Post(':code/services/:serviceId/completed')
+  @Roles(Role.DOCTOR)
+  async markServiceCompleted(
+    @Param('code') code: string,
+    @Param('serviceId') serviceId: string,
+  ) {
+    const p = await this.prescriptionService.findByCode(code);
+    await this.prescriptionService.markServiceCompleted(p.id, serviceId);
+    return { ok: true };
+  }
 }

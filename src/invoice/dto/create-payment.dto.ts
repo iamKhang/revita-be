@@ -1,14 +1,17 @@
-import { IsString, IsArray, IsNotEmpty, IsUUID, ArrayNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsArray, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreatePaymentDto {
   @IsString()
   @IsNotEmpty()
   prescriptionCode: string;
 
+  @IsOptional()
   @IsArray()
-  @ArrayNotEmpty()
-  @IsUUID('4', { each: true })
-  selectedServiceIds: string[];
+  selectedServiceIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  selectedServiceCodes?: string[];
 
   @IsString()
   @IsNotEmpty()

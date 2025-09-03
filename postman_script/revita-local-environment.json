@@ -1,0 +1,29 @@
+{
+  "id": "revita-local-env",
+  "name": "Revita Local Environment",
+  "values": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api", "type": "default", "enabled": true },
+    { "key": "doctorIdentifier", "value": "nguyenminhduc@clinic.com", "type": "default", "enabled": true },
+    { "key": "doctorPassword", "value": "123456", "type": "secret", "enabled": true },
+    { "key": "receptionIdentifier", "value": "maithihong@reception.com", "type": "default", "enabled": true },
+    { "key": "receptionPassword", "value": "123456", "type": "secret", "enabled": true },
+    { "key": "cashierIdentifier", "value": "tranthimai@cashier.com", "type": "default", "enabled": true },
+    { "key": "cashierPassword", "value": "123456", "type": "secret", "enabled": true },
+    { "key": "cashierAuthId", "value": "auth-uuid-19", "type": "default", "enabled": true },
+    { "key": "patientProfileId", "value": "profile-uuid-1", "type": "default", "enabled": true },
+    { "key": "scenarioA_all", "value": "[\"CONSULT_STD\",\"BP_CHECK\",\"CBC_TEST\"]", "type": "default", "enabled": true },
+    { "key": "scenarioA_pay", "value": "[\"CONSULT_STD\",\"BP_CHECK\"]", "type": "default", "enabled": true },
+    { "key": "scenarioB_all", "value": "[\"DENTAL_EXAM\",\"TOOTH_EXTRA\",\"DENT_FILL\",\"DENT_SCALING\"]", "type": "default", "enabled": true },
+    { "key": "scenarioB_pay", "value": "[\"DENTAL_EXAM\",\"TOOTH_EXTRA\",\"DENT_FILL\",\"DENT_SCALING\"]", "type": "default", "enabled": true },
+    { "key": "accessToken", "value": "", "type": "secret", "enabled": true },
+    { "key": "refreshToken", "value": "", "type": "secret", "enabled": true },
+    { "key": "prescriptionCode", "value": "", "type": "default", "enabled": true },
+    { "key": "invoiceCode", "value": "", "type": "default", "enabled": true },
+    { "key": "lastDoctorId", "value": "doctor-uuid-1", "type": "default", "enabled": true }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_at": "2025-08-28T00:00:00.000Z",
+  "_postman_exported_using": "Postman/10"
+}
+
+

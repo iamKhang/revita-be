@@ -36,12 +36,16 @@ export class UserController {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       where.doctor = {
         ...where.doctor,
-        clinicRooms: {
+        workSessions: {
           some: {
-            specialty: {
-              name: {
-                contains: specialty,
-                mode: 'insensitive',
+            booth: {
+              room: {
+                specialty: {
+                  name: {
+                    contains: specialty,
+                    mode: 'insensitive',
+                  },
+                },
               },
             },
           },
@@ -64,19 +68,19 @@ export class UserController {
             rating: true,
             workHistory: true,
             description: true,
-            clinicRooms: {
-              select: {
-                id: true,
-                roomCode: true,
-                roomName: true,
-                specialty: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
+            // clinicRooms: {
+            //   select: {
+            //     id: true,
+            //     roomCode: true,
+            //     roomName: true,
+            //     specialty: {
+            //       select: {
+            //         id: true,
+            //         name: true,
+            //       },
+            //     },
+            //   },
+            // },
           },
         },
       },
@@ -164,19 +168,19 @@ export class UserController {
             degrees: true,
             yearsExperience: true,
             rating: true,
-            clinicRooms: {
-              select: {
-                id: true,
-                roomCode: true,
-                roomName: true,
-                specialty: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
+            // clinicRooms: {
+            //   select: {
+            //     id: true,
+            //     roomCode: true,
+            //     roomName: true,
+            //     specialty: {
+            //       select: {
+            //         id: true,
+            //         name: true,
+            //       },
+            //     },
+            //   },
+            // },
           },
         },
         patient: {
@@ -226,12 +230,16 @@ export class UserController {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       where.doctor = {
         ...where.doctor,
-        clinicRooms: {
+        workSessions: {
           some: {
-            specialty: {
-              name: {
-                contains: specialty,
-                mode: 'insensitive',
+            booth: {
+              room: {
+                specialty: {
+                  name: {
+                    contains: specialty,
+                    mode: 'insensitive',
+                  },
+                },
               },
             },
           },
@@ -276,19 +284,19 @@ export class UserController {
             rating: true,
             workHistory: true,
             description: true,
-            clinicRooms: {
-              select: {
-                id: true,
-                roomCode: true,
-                roomName: true,
-                specialty: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
+            // clinicRooms: {
+            //   select: {
+            //     id: true,
+            //     roomCode: true,
+            //     roomName: true,
+            //     specialty: {
+            //       select: {
+            //         id: true,
+            //         name: true,
+            //       },
+            //     },
+            //   },
+            // },
           },
         },
       },

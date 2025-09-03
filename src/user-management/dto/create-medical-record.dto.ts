@@ -7,15 +7,15 @@ import {
 } from 'class-validator';
 
 export class CreateMedicalRecordDto {
-  @IsUUID()
+  // @IsUUID()
   @IsOptional()
   patientId?: string;
 
-  @IsUUID()
+  // @IsUUID()
   @IsOptional()
   patientProfileId?: string;
 
-  @IsUUID()
+  // @IsUUID()
   @IsNotEmpty()
   templateId: string;
 

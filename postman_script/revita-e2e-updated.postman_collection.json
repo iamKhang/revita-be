@@ -1,0 +1,106 @@
+{
+  "info": {
+    "name": "Revita E2E Clinic Flow (Updated)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "End-to-end clinic flow: login, create prescription, preview, payment create+confirm (with auto-routing), status, history."
+  },
+  "variable": [
+    { "key": "authHeader", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const token = pm.environment.get('accessToken');",
+          "if (token) { pm.variables.set('authHeader', 'Bearer ' + token); } else { pm.variables.set('authHeader', ''); }"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Scenario A: Doctor prescribes 3, patient pays 2, routing flow",
+      "item": [
+        { "name": "Auth / Login Doctor", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth","login"] }, "body": { "mode": "raw", "raw": "{\n  \"identifier\": \"{{doctorIdentifier}}\",\n  \"password\": \"{{doctorPassword}}\"\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const j = pm.response.json(); pm.environment.set('accessToken', j.accessToken);"] } } ] },
+        { "name": "Prescription / Create (3 services)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions", "host": ["{{baseUrl}}"], "path": ["prescriptions"] }, "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{lastDoctorId}}\",\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"services\": [\n    { \"serviceCode\": \"CONSULT_STD\", \"order\": 1 },\n    { \"serviceCode\": \"BP_CHECK\", \"order\": 2 },\n    { \"serviceCode\": \"CBC_TEST\", \"order\": 3 }\n  ]\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const p = pm.response.json(); pm.environment.set('prescriptionCode', p.prescriptionCode);"] } } ] },
+        { "name": "Auth / Login Cashier", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth","login"] }, "body": { "mode": "raw", "raw": "{\n  \"identifier\": \"{{cashierIdentifier}}\",\n  \"password\": \"{{cashierPassword}}\"\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const j = pm.response.json(); pm.environment.set('accessToken', j.accessToken);"] } } ] },
+        { "name": "Invoice / Preview (pay 2)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/preview", "host": ["{{baseUrl}}"], "path": ["invoice-payments","preview"] }, "body": { "mode": "raw", "raw": "{\n  \"prescriptionCode\": \"{{prescriptionCode}}\",\n  \"paymentMethod\": \"CASH\",\n  \"selectedServiceCodes\": {{scenarioA_pay}}\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "const res = pm.response.json();",
+          "if (Array.isArray(res.selectedServices)) { pm.environment.set('selectedServiceIds', JSON.stringify(res.selectedServices.map(s => s.serviceId))); pm.environment.set('serviceId1', res.selectedServices[0] && res.selectedServices[0].serviceId); pm.environment.set('serviceId2', res.selectedServices[1] && res.selectedServices[1].serviceId); }"
+        ] } } ] },
+        { "name": "Invoice / Create (pay 2)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/create", "host": ["{{baseUrl}}"], "path": ["invoice-payments","create"] }, "body": { "mode": "raw", "raw": "{\n  \"prescriptionCode\": \"{{prescriptionCode}}\",\n  \"paymentMethod\": \"CASH\",\n  \"cashierId\": \"{{cashierAuthId}}\",\n  \"selectedServiceCodes\": {{scenarioA_pay}}\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const r = pm.response.json(); pm.environment.set('invoiceCode', r.invoiceCode);"] } } ] },
+        { "name": "Invoice / Confirm (with auto-routing)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/confirm", "host": ["{{baseUrl}}"], "path": ["invoice-payments","confirm"] }, "body": { "mode": "raw", "raw": "{\n  \"invoiceCode\": \"{{invoiceCode}}\",\n  \"cashierId\": \"{{cashierAuthId}}\"\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "const res = pm.response.json();",
+          "if (res.routingAssignments && res.routingAssignments.length > 0) {",
+          "  const roomId = res.routingAssignments[0].roomId;",
+          "  pm.environment.set('roomId', roomId);",
+          "  pm.environment.set('roomCode', res.routingAssignments[0].roomCode);",
+          "  pm.environment.set('roomName', res.routingAssignments[0].roomName);",
+          "  pm.environment.set('doctorName', res.routingAssignments[0].doctorName);",
+          "}"
+        ] } } ] },
+        { "name": "Routing / Rooms (for reference)", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/routing/rooms", "host": ["{{baseUrl}}"], "path": ["routing","rooms"] } } },
+        { "name": "Doctor / Service SERVING (first)", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions/{{prescriptionCode}}/services/{{serviceId1}}/serving", "host": ["{{baseUrl}}"], "path": ["prescriptions","{{prescriptionCode}}","services","{{serviceId1}}","serving"] } } },
+        { "name": "Doctor / Service WAITING_RESULT (first)", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions/{{prescriptionCode}}/services/{{serviceId1}}/waiting-result", "host": ["{{baseUrl}}"], "path": ["prescriptions","{{prescriptionCode}}","services","{{serviceId1}}","waiting-result"] } } },
+        { "name": "Doctor / Service COMPLETED (first)", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions/{{prescriptionCode}}/services/{{serviceId1}}/completed", "host": ["{{baseUrl}}"], "path": ["prescriptions","{{prescriptionCode}}","services","{{serviceId1}}","completed"] } } },
+        { "name": "Doctor / Service SERVING (second)", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions/{{prescriptionCode}}/services/{{serviceId2}}/serving", "host": ["{{baseUrl}}"], "path": ["prescriptions","{{prescriptionCode}}","services","{{serviceId2}}","serving"] } } },
+        { "name": "Doctor / Service WAITING_RESULT (second)", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions/{{prescriptionCode}}/services/{{serviceId2}}/waiting-result", "host": ["{{baseUrl}}"], "path": ["prescriptions","{{prescriptionCode}}","services","{{serviceId2}}","waiting-result"] } } },
+        { "name": "Doctor / Service COMPLETED (second)", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions/{{prescriptionCode}}/services/{{serviceId2}}/completed", "host": ["{{baseUrl}}"], "path": ["prescriptions","{{prescriptionCode}}","services","{{serviceId2}}","completed"] } } },
+        { "name": "Invoice / Status", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/status/{{prescriptionCode}}", "host": ["{{baseUrl}}"], "path": ["invoice-payments","status","{{prescriptionCode}}"] } } }
+      ]
+    },
+    {
+      "name": "Scenario C: Additional Payment - Patient pays service 3 later",
+      "item": [
+        { "name": "Auth / Login Cashier", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth","login"] }, "body": { "mode": "raw", "raw": "{\n  \"identifier\": \"{{cashierIdentifier}}\",\n  \"password\": \"{{cashierPassword}}\"\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const j = pm.response.json(); pm.environment.set('accessToken', j.accessToken);"] } } ] },
+        { "name": "Invoice / Preview (pay service 3 only)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/preview", "host": ["{{baseUrl}}"], "path": ["invoice-payments","preview"] }, "body": { "mode": "raw", "raw": "{\n  \"prescriptionCode\": \"{{prescriptionCode}}\",\n  \"paymentMethod\": \"CASH\",\n  \"selectedServiceCodes\": [\"CBC_TEST\"]\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "const res = pm.response.json();",
+          "if (Array.isArray(res.selectedServices)) { pm.environment.set('selectedServiceIds', JSON.stringify(res.selectedServices.map(s => s.serviceId))); pm.environment.set('serviceId3', res.selectedServices[0] && res.selectedServices[0].serviceId); }"
+        ] } } ] },
+        { "name": "Invoice / Create (pay service 3)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/create", "host": ["{{baseUrl}}"], "path": ["invoice-payments","create"] }, "body": { "mode": "raw", "raw": "{\n  \"prescriptionCode\": \"{{prescriptionCode}}\",\n  \"paymentMethod\": \"CASH\",\n  \"cashierId\": \"{{cashierAuthId}}\",\n  \"selectedServiceCodes\": [\"CBC_TEST\"]\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const r = pm.response.json(); pm.environment.set('invoiceCode', r.invoiceCode);"] } } ] },
+        { "name": "Invoice / Confirm (service 3 with auto-routing)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/confirm", "host": ["{{baseUrl}}"], "path": ["invoice-payments","confirm"] }, "body": { "mode": "raw", "raw": "{\n  \"invoiceCode\": \"{{invoiceCode}}\",\n  \"cashierId\": \"{{cashierAuthId}}\"\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "const res = pm.response.json();",
+          "if (res.routingAssignments && res.routingAssignments.length > 0) {",
+          "  const roomId = res.routingAssignments[0].roomId;",
+          "  pm.environment.set('roomId', roomId);",
+          "  pm.environment.set('roomCode', res.routingAssignments[0].roomCode);",
+          "  pm.environment.set('roomName', res.routingAssignments[0].roomName);",
+          "  pm.environment.set('doctorName', res.routingAssignments[0].doctorName);",
+          "}"
+        ] } } ] },
+        { "name": "Doctor / Service SERVING (third)", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions/{{prescriptionCode}}/services/{{serviceId3}}/serving", "host": ["{{baseUrl}}"], "path": ["prescriptions","{{prescriptionCode}}","services","{{serviceId3}}","serving"] } } },
+        { "name": "Doctor / Service WAITING_RESULT (third)", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions/{{prescriptionCode}}/services/{{serviceId3}}/waiting-result", "host": ["{{baseUrl}}"], "path": ["prescriptions","{{prescriptionCode}}","services","{{serviceId3}}","waiting-result"] } } },
+        { "name": "Doctor / Service COMPLETED (third)", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions/{{prescriptionCode}}/services/{{serviceId3}}/completed", "host": ["{{baseUrl}}"], "path": ["prescriptions","{{prescriptionCode}}","services","{{serviceId3}}","completed"] } } },
+        { "name": "Invoice / Status (final)", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/status/{{prescriptionCode}}", "host": ["{{baseUrl}}"], "path": ["invoice-payments","status","{{prescriptionCode}}"] } } }
+      ]
+    },
+    {
+      "name": "Scenario B: Doctor prescribes 4, patient pays all 4, routing full",
+      "item": [
+        { "name": "Auth / Login Doctor", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth","login"] }, "body": { "mode": "raw", "raw": "{\n  \"identifier\": \"{{doctorIdentifier}}\",\n  \"password\": \"{{doctorPassword}}\"\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const j = pm.response.json(); pm.environment.set('accessToken', j.accessToken);"] } } ] },
+        { "name": "Prescription / Create (4 services)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/prescriptions", "host": ["{{baseUrl}}"], "path": ["prescriptions"] }, "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{lastDoctorId}}\",\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"services\": [\n    { \"serviceCode\": \"DENTAL_EXAM\", \"order\": 1 },\n    { \"serviceCode\": \"TOOTH_EXTRA\", \"order\": 2 },\n    { \"serviceCode\": \"DENT_FILL\", \"order\": 3 },\n    { \"serviceCode\": \"DENT_SCALING\", \"order\": 4 }\n  ]\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const p = pm.response.json(); pm.environment.set('prescriptionCode', p.prescriptionCode);"] } } ] },
+        { "name": "Auth / Login Cashier", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth","login"] }, "body": { "mode": "raw", "raw": "{\n  \"identifier\": \"{{cashierIdentifier}}\",\n  \"password\": \"{{cashierPassword}}\"\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const j = pm.response.json(); pm.environment.set('accessToken', j.accessToken);"] } } ] },
+        { "name": "Invoice / Preview (pay all 4)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/preview", "host": ["{{baseUrl}}"], "path": ["invoice-payments","preview"] }, "body": { "mode": "raw", "raw": "{\n  \"prescriptionCode\": \"{{prescriptionCode}}\",\n  \"paymentMethod\": \"CASH\",\n  \"selectedServiceCodes\": {{scenarioB_pay}}\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "const res = pm.response.json();",
+          "if (Array.isArray(res.selectedServices)) { pm.environment.set('selectedServiceIds', JSON.stringify(res.selectedServices.map(s => s.serviceId))); pm.environment.set('serviceId1', res.selectedServices[0] && res.selectedServices[0].serviceId); pm.environment.set('serviceId2', res.selectedServices[1] && res.selectedServices[1].serviceId); }"
+        ] } } ] },
+        { "name": "Invoice / Create (pay all 4)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/create", "host": ["{{baseUrl}}"], "path": ["invoice-payments","create"] }, "body": { "mode": "raw", "raw": "{\n  \"prescriptionCode\": \"{{prescriptionCode}}\",\n  \"paymentMethod\": \"CASH\",\n  \"cashierId\": \"{{cashierAuthId}}\",\n  \"selectedServiceCodes\": {{scenarioB_pay}}\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const r = pm.response.json(); pm.environment.set('invoiceCode', r.invoiceCode);"] } } ] },
+        { "name": "Invoice / Confirm (with auto-routing)", "request": { "method": "POST", "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/confirm", "host": ["{{baseUrl}}"], "path": ["invoice-payments","confirm"] }, "body": { "mode": "raw", "raw": "{\n  \"invoiceCode\": \"{{invoiceCode}}\",\n  \"cashierId\": \"{{cashierAuthId}}\"\n}" } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "const res = pm.response.json();",
+          "if (res.routingAssignments && res.routingAssignments.length > 0) {",
+          "  const roomId = res.routingAssignments[0].roomId;",
+          "  pm.environment.set('roomId', roomId);",
+          "  pm.environment.set('roomCode', res.routingAssignments[0].roomCode);",
+          "  pm.environment.set('roomName', res.routingAssignments[0].roomName);",
+          "  pm.environment.set('doctorName', res.routingAssignments[0].doctorName);",
+          "}"
+        ] } } ] },
+        { "name": "Routing / Rooms (reference)", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/routing/rooms", "host": ["{{baseUrl}}"], "path": ["routing","rooms"] } } },
+        { "name": "Invoice / Status", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{accessToken}}" } ], "url": { "raw": "{{baseUrl}}/invoice-payments/status/{{prescriptionCode}}", "host": ["{{baseUrl}}"], "path": ["invoice-payments","status","{{prescriptionCode}}"] } } }
+      ]
+    }
+  ]
+}
+

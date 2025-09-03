@@ -1,20 +1,38 @@
-import {
-  ArrayNotEmpty,
-  IsArray,
-  IsOptional,
-  IsString,
-  IsUUID,
-} from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CreatePrescriptionServiceItemDto {
+  @IsOptional()
+  @IsString()
+  serviceId?: string;
+
+  @IsOptional()
+  @IsString()
+  serviceCode?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  order?: number;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
 
 export class CreatePrescriptionDto {
-  @IsString()
-  prescriptionCode: string;
+  @IsOptional()
+  prescriptionCode?: string;
 
-  @IsUUID()
+  @IsString()
   patientProfileId: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   doctorId?: string;
 
   @IsOptional()
@@ -23,6 +41,7 @@ export class CreatePrescriptionDto {
 
   @IsArray()
   @ArrayNotEmpty()
-  @IsUUID('4', { each: true })
-  serviceIds: string[];
+  @ValidateNested({ each: true })
+  @Type(() => CreatePrescriptionServiceItemDto)
+  services: CreatePrescriptionServiceItemDto[];
 }

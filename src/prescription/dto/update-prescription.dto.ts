@@ -1,18 +1,42 @@
-import { IsArray, IsOptional, IsString, IsUUID, ArrayNotEmpty } from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsString, ArrayNotEmpty, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class UpdatePrescriptionServiceItemDto {
+  @IsOptional()
+  @IsString()
+  serviceId?: string;
+
+  @IsOptional()
+  @IsString()
+  serviceCode?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  order?: number;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
 
 export class UpdatePrescriptionDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
   doctorId?: string;
 
   @IsOptional()
   @IsString()
   note?: string;
 
-  // Replace service list with this ordered array if provided
   @IsOptional()
   @IsArray()
   @ArrayNotEmpty()
-  @IsUUID('4', { each: true })
-  serviceIds?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => UpdatePrescriptionServiceItemDto)
+  services?: UpdatePrescriptionServiceItemDto[];
 }

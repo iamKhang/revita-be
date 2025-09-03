@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { PrescriptionService } from '../prescription/prescription.service';
 import { RoutingService } from '../routing/routing.service';
+import { KafkaProducerService } from '../kafka/kafka.producer';
 import { ScanPrescriptionDto } from './dto/scan-prescription.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
@@ -57,7 +58,35 @@ export type PaymentResult = {
   prescriptionId: string;
   patientProfileId: string;
   selectedServiceIds: string[];
-  routingAssignments?: any[];
+  routingAssignments?: Array<{
+    roomId: string;
+    roomCode: string;
+    roomName: string;
+    specialtyName?: string;
+    boothId?: string;
+    boothCode?: string;
+    boothName?: string;
+    doctorId?: string;
+    doctorCode?: string;
+    doctorName?: string;
+    nextAvailableAt?: Date;
+  }>;
+  invoiceDetails?: Array<{
+    serviceId: string;
+    serviceCode: string;
+    serviceName: string;
+    price: number;
+  }>;
+  patientInfo?: {
+    name: string;
+    dateOfBirth: Date;
+    gender: string;
+  };
+  prescriptionInfo?: {
+    prescriptionCode: string;
+    status: string;
+    doctorName?: string;
+  };
 };
 
 @Injectable()
@@ -66,7 +95,21 @@ export class InvoicePaymentService {
     private readonly prisma: PrismaService,
     private readonly prescriptionService: PrescriptionService,
     private readonly routingService: RoutingService,
+    private readonly kafka: KafkaProducerService,
   ) {}
+
+  private async resolveCashierId(identifier?: string): Promise<string> {
+    if (!identifier) {
+      throw new BadRequestException('Cashier identifier is required');
+    }
+    // Try direct cashier.id first
+    const byId = await this.prisma.cashier.findUnique({ where: { id: identifier } });
+    if (byId) return byId.id;
+    // Then try by authId
+    const byAuth = await this.prisma.cashier.findFirst({ where: { authId: identifier } });
+    if (byAuth) return byAuth.id;
+    throw new BadRequestException('Invalid cashier identifier');
+  }
 
   async scanPrescription(dto: ScanPrescriptionDto): Promise<PrescriptionDetails> {
     const prescription = await this.prisma.prescription.findFirst({
@@ -99,21 +142,30 @@ export class InvoicePaymentService {
       prescriptionCode: dto.prescriptionCode,
     });
 
-    // Validate that all selected services exist in the prescription
-    const prescriptionServiceIds = prescription.services.map(s => s.serviceId);
-    const invalidServices = dto.selectedServiceIds.filter(
-      id => !prescriptionServiceIds.includes(id)
+    // Determine selected services: if none provided, default to all
+    let selectedIds: string[] = [];
+    const allIds = prescription.services.map(s => s.serviceId);
+    const codeToId = new Map(
+      prescription.services.map(s => [s.service.serviceCode, s.serviceId] as const)
     );
 
-    if (invalidServices.length > 0) {
-      throw new BadRequestException(
-        `Services not found in prescription: ${invalidServices.join(', ')}`
-      );
+    if ((dto.selectedServiceIds && dto.selectedServiceIds.length > 0) || (dto.selectedServiceCodes && dto.selectedServiceCodes.length > 0)) {
+      const idsFromIds = dto.selectedServiceIds || [];
+      const idsFromCodes = (dto.selectedServiceCodes || []).map(code => codeToId.get(code)).filter(Boolean) as string[];
+      selectedIds = Array.from(new Set([...idsFromIds, ...idsFromCodes]));
+
+      // Validate selection in prescription
+      const invalidIds = selectedIds.filter(id => !allIds.includes(id));
+      if (invalidIds.length > 0) {
+        throw new BadRequestException(`Services not found in prescription: ${invalidIds.join(', ')}`);
+      }
+    } else {
+      selectedIds = allIds;
     }
 
     // Get selected services with their details
     const selectedServices = prescription.services
-      .filter(s => dto.selectedServiceIds.includes(s.serviceId))
+      .filter(s => selectedIds.includes(s.serviceId))
       .map(s => ({
         serviceId: s.serviceId,
         serviceCode: s.service.serviceCode,
@@ -134,7 +186,22 @@ export class InvoicePaymentService {
 
   async createPayment(dto: CreatePaymentDto): Promise<PaymentResult> {
     const preview = await this.createPaymentPreview(dto);
+    const effectiveCashierId = await this.resolveCashierId(dto.cashierId);
     const prescription = preview.prescriptionDetails;
+
+    // Check if there are available work sessions for the requested services
+    const currentTime = new Date();
+    const availableAssignments = await this.routingService.assignPatientToRooms({
+      patientProfileId: prescription.patientProfile.id,
+      serviceIds: preview.selectedServices.map(s => s.serviceId),
+      requestedTime: currentTime,
+    });
+
+    if (availableAssignments.length === 0) {
+      throw new BadRequestException(
+        'Hiện tại chưa có nhân sự để phục vụ cho các dịch vụ đã chọn. Vui lòng thử lại sau hoặc liên hệ quầy tiếp tân để được hỗ trợ.'
+      );
+    }
 
     // Generate invoice code
     const invoiceCode = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
@@ -148,7 +215,7 @@ export class InvoicePaymentService {
         paymentStatus: 'PENDING',
         isPaid: false,
         patientProfileId: prescription.patientProfile.id,
-        cashierId: dto.cashierId || 'system', // Fallback for testing
+        cashierId: effectiveCashierId,
         invoiceDetails: {
           create: preview.selectedServices.map(service => ({
             serviceId: service.serviceId,
@@ -170,7 +237,7 @@ export class InvoicePaymentService {
       paymentStatus: invoice.paymentStatus,
       prescriptionId: prescription.id,
       patientProfileId: prescription.patientProfile.id,
-      selectedServiceIds: dto.selectedServiceIds,
+      selectedServiceIds: preview.selectedServices.map(s => s.serviceId),
     };
   }
 
@@ -195,12 +262,13 @@ export class InvoicePaymentService {
     }
 
     // Update invoice to paid
+    const effectiveCashierId = await this.resolveCashierId((dto as any).cashierId);
     await this.prisma.invoice.update({
       where: { id: invoice.id },
       data: {
         paymentStatus: 'PAID',
         isPaid: true,
-        cashierId: dto.cashierId,
+        cashierId: effectiveCashierId,
       },
     });
 
@@ -217,6 +285,9 @@ export class InvoicePaymentService {
           include: { service: true },
           orderBy: { order: 'asc' },
         },
+        doctor: {
+          include: { auth: true },
+        },
       },
     });
 
@@ -227,6 +298,35 @@ export class InvoicePaymentService {
     // Mark paid services in prescription
     const selectedServiceIds = invoice.invoiceDetails.map(detail => detail.serviceId);
     
+    // Get all service IDs from the prescription
+    const allPrescriptionServiceIds = prescription.services.map(s => s.serviceId);
+    
+    // Find services that were in the prescription but not selected for payment in THIS invoice
+    const unselectedServiceIds = allPrescriptionServiceIds.filter(
+      id => !selectedServiceIds.includes(id)
+    );
+    
+    // Only cancel services that are still PENDING (not yet paid in previous invoices)
+    const pendingUnselectedIds: string[] = [];
+    for (const serviceId of unselectedServiceIds) {
+      const service = prescription.services.find(s => s.serviceId === serviceId);
+      if (service && service.status === 'PENDING') {
+        pendingUnselectedIds.push(serviceId);
+      }
+    }
+    
+    // Cancel only pending unselected services
+    if (pendingUnselectedIds.length > 0) {
+      await this.prisma.prescriptionService.updateMany({
+        where: { 
+          prescriptionId, 
+          serviceId: { in: pendingUnselectedIds } 
+        },
+        data: { status: 'CANCELLED' },
+      });
+    }
+    
+    // Mark selected services as paid (which will set the first one to WAITING if no active service)
     for (const serviceId of selectedServiceIds) {
       await this.prescriptionService.markServicePaid(prescription.id, serviceId);
     }
@@ -239,11 +339,65 @@ export class InvoicePaymentService {
         serviceIds: selectedServiceIds,
         requestedTime: new Date(),
       });
-      routingAssignments = routingResult;
+      routingAssignments = routingResult || [];
     } catch (error) {
       console.warn('Routing failed:', error);
       // Continue with payment even if routing fails
     }
+
+    // Get detailed routing information
+    const detailedRoutingAssignments = routingAssignments.map(assignment => ({
+      roomId: assignment.roomId,
+      roomCode: assignment.roomCode,
+      roomName: assignment.roomName,
+      specialtyName: assignment.specialtyName,
+      boothId: assignment.boothId,
+      boothCode: assignment.boothCode,
+      boothName: assignment.boothName,
+      doctorId: assignment.doctorId,
+      doctorCode: assignment.doctorCode,
+      doctorName: assignment.doctorName,
+      nextAvailableAt: assignment.nextAvailableAt,
+    }));
+
+    // Publish patient assignment to Kafka for each room
+    const topic = process.env.KAFKA_TOPIC_ASSIGNMENTS || 'clinic.assignments';
+    try {
+      for (const assignment of detailedRoutingAssignments) {
+        await this.kafka.publish(topic, [
+          {
+            key: assignment.roomId,
+            value: {
+              type: 'PATIENT_ASSIGNED',
+              patientProfileId: invoice.patientProfileId,
+              patientName: invoice.patientProfile.name,
+              status: 'WAITING',
+              roomId: assignment.roomId,
+              roomCode: assignment.roomCode,
+              roomName: assignment.roomName,
+              boothId: assignment.boothId,
+              boothCode: assignment.boothCode,
+              boothName: assignment.boothName,
+              doctorId: assignment.doctorId,
+              doctorCode: assignment.doctorCode,
+              doctorName: assignment.doctorName,
+              serviceIds: selectedServiceIds,
+              prescriptionId: prescription.id,
+              prescriptionCode: prescription.prescriptionCode,
+              timestamp: new Date().toISOString(),
+            },
+          },
+        ]);
+      }
+    } catch (err) {
+      console.warn('[Kafka] Patient assignment publish failed:', (err as Error).message);
+    }
+
+    // Log routing result for debugging
+    console.log('Routing result:', {
+      routingAssignmentsCount: routingAssignments.length,
+      detailedAssignments: detailedRoutingAssignments,
+    });
 
     return {
       invoiceCode: invoice.invoiceCode,
@@ -252,7 +406,23 @@ export class InvoicePaymentService {
       prescriptionId: prescription.id,
       patientProfileId: invoice.patientProfileId,
       selectedServiceIds,
-      routingAssignments,
+      routingAssignments: detailedRoutingAssignments,
+      invoiceDetails: invoice.invoiceDetails.map(detail => ({
+        serviceId: detail.serviceId,
+        serviceCode: detail.service.serviceCode,
+        serviceName: detail.service.name,
+        price: detail.price,
+      })),
+      patientInfo: {
+        name: invoice.patientProfile.name,
+        dateOfBirth: invoice.patientProfile.dateOfBirth,
+        gender: invoice.patientProfile.gender,
+      },
+      prescriptionInfo: {
+        prescriptionCode: prescription.prescriptionCode,
+        status: prescription.status,
+        doctorName: prescription.doctor?.auth.name,
+      },
     };
   }
 

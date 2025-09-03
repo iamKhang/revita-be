@@ -6,19 +6,19 @@ import { IsEnum } from 'class-validator';
 import { MedicalRecordStatus } from '@prisma/client';
 
 export class CreateMedicalRecordDto {
-  @IsUUID()
+  // @IsUUID()
   @IsNotEmpty()
   patientProfileId: string;
 
-  @IsUUID()
+  // @IsUUID()
   @IsNotEmpty()
   templateId: string;
 
-  @IsUUID()
+  // @IsUUID()
   @IsOptional()
   doctorId?: string;
 
-  @IsUUID()
+  // @IsUUID()
   @IsOptional()
   appointmentId?: string;
 

@@ -7,7 +7,8 @@ async function main() {
   await prisma.medicalRecord.deleteMany();
   await prisma.appointment.deleteMany();
   await prisma.invoice.deleteMany();
-  await prisma.schedule.deleteMany();
+  await prisma.workSession.deleteMany();
+  await prisma.booth.deleteMany();
   await prisma.clinicRoomService.deleteMany();
   await prisma.clinicRoom.deleteMany();
   await prisma.service.deleteMany();
@@ -15,6 +16,7 @@ async function main() {
   await prisma.specialty.deleteMany();
   await prisma.patientProfile.deleteMany();
   await prisma.receptionist.deleteMany();
+  await prisma.cashier.deleteMany();
   await prisma.admin.deleteMany();
   await prisma.doctor.deleteMany();
   await prisma.patient.deleteMany();

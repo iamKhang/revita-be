@@ -9,25 +9,51 @@ export class PrescriptionService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreatePrescriptionDto) {
-    const { prescriptionCode, patientProfileId, doctorId, note, serviceIds } =
-      dto;
+    const { prescriptionCode, patientProfileId, doctorId, note, services } = dto as any;
+    const generatedCode = prescriptionCode || `PR-${Date.now()}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
 
-    if (!serviceIds || serviceIds.length === 0) {
-      throw new BadRequestException('serviceIds must not be empty');
+    if (!services || services.length === 0) {
+      throw new BadRequestException('services must not be empty');
+    }
+
+    // Accept serviceId or serviceCode; resolve to IDs
+    const requestedById = services.filter((s: any) => !!s.serviceId).map((s: any) => s.serviceId);
+    const requestedByCode = services.filter((s: any) => !!s.serviceCode).map((s: any) => s.serviceCode);
+    if (requestedById.length + requestedByCode.length !== services.length) {
+      throw new BadRequestException('Each service must include serviceId or serviceCode');
+    }
+    const servicesById = await this.prisma.service.findMany({
+      where: { id: { in: requestedById } },
+      select: { id: true },
+    });
+    const servicesByCode = await this.prisma.service.findMany({
+      where: { serviceCode: { in: requestedByCode } },
+      select: { id: true, serviceCode: true },
+    });
+    const idSet = new Set(servicesById.map((s) => s.id));
+    const codeToId = new Map(servicesByCode.map((s) => [s.serviceCode, s.id] as const));
+    const missingIds = requestedById.filter((id) => !idSet.has(id));
+    const missingCodes = requestedByCode.filter((code) => !codeToId.has(code));
+    if (missingIds.length || missingCodes.length) {
+      const parts = [] as string[];
+      if (missingIds.length) parts.push(`serviceId(s): ${missingIds.join(', ')}`);
+      if (missingCodes.length) parts.push(`serviceCode(s): ${missingCodes.join(', ')}`);
+      throw new BadRequestException(`Invalid ${parts.join(' and ')}`);
     }
 
     const prescription = await this.prisma.prescription.create({
       data: {
-        prescriptionCode,
+        prescriptionCode: generatedCode,
         patientProfileId,
         doctorId: doctorId ?? null,
         note: note ?? null,
         status: PrescriptionStatus.PENDING,
         services: {
-          create: serviceIds.map((serviceId, index) => ({
-            serviceId,
-            status: PrescriptionStatus.PENDING,
-            order: index + 1,
+          create: services.map((s, index) => ({
+            serviceId: s.serviceId ?? codeToId.get(s.serviceCode as string)!,
+            status: (s.status as any) || PrescriptionStatus.PENDING,
+            order: s.order ?? index + 1,
+            note: s.note ?? null,
           })),
         },
       },
@@ -74,8 +100,31 @@ export class PrescriptionService {
       note: dto.note ?? existing.note,
     };
 
-    // If serviceIds provided, we replace the list, reassign order, reset statuses to PENDING
-    if (dto.serviceIds && dto.serviceIds.length > 0) {
+    // If services provided, validate and then replace the list using provided objects
+    if (dto.services && dto.services.length > 0) {
+      const requestedById = dto.services.filter((s: any) => !!s.serviceId).map((s: any) => s.serviceId);
+      const requestedByCode = dto.services.filter((s: any) => !!s.serviceCode).map((s: any) => s.serviceCode);
+      if (requestedById.length + requestedByCode.length !== dto.services.length) {
+        throw new BadRequestException('Each service must include serviceId or serviceCode');
+      }
+      const servicesById = await this.prisma.service.findMany({
+        where: { id: { in: requestedById } },
+        select: { id: true },
+      });
+      const servicesByCode = await this.prisma.service.findMany({
+        where: { serviceCode: { in: requestedByCode } },
+        select: { id: true, serviceCode: true },
+      });
+      const idSet = new Set(servicesById.map((s) => s.id));
+      const codeToId = new Map(servicesByCode.map((s) => [s.serviceCode, s.id] as const));
+      const missingIds = requestedById.filter((sid) => !idSet.has(sid));
+      const missingCodes = requestedByCode.filter((code) => !codeToId.has(code));
+      if (missingIds.length || missingCodes.length) {
+        const parts = [] as string[];
+        if (missingIds.length) parts.push(`serviceId(s): ${missingIds.join(', ')}`);
+        if (missingCodes.length) parts.push(`serviceCode(s): ${missingCodes.join(', ')}`);
+        throw new BadRequestException(`Invalid ${parts.join(' and ')}`);
+      }
       await this.prisma.prescriptionService.deleteMany({
         where: { prescriptionId: id },
       });
@@ -84,10 +133,11 @@ export class PrescriptionService {
         data: {
           ...data,
           services: {
-            create: dto.serviceIds.map((serviceId, index) => ({
-              serviceId,
-              status: PrescriptionStatus.PENDING,
-              order: index + 1,
+            create: dto.services.map((s, index) => ({
+              serviceId: s.serviceId ?? codeToId.get(s.serviceCode as string)!,
+              status: (s.status as any) || PrescriptionStatus.PENDING,
+              order: s.order ?? index + 1,
+              note: s.note ?? null,
             })),
           },
           status: PrescriptionStatus.PENDING,

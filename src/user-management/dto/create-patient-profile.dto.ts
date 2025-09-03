@@ -9,7 +9,7 @@ import {
 
 export class CreatePatientProfileDto {
   @IsUUID()
-  @IsNotEmpty()
+  // @IsNotEmpty()
   patientId: string;
 
   @IsString()

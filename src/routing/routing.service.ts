@@ -37,11 +37,23 @@ export type PatientStatus =
   | 'COMPLETED'
   | 'SKIPPED';
 
-type ClinicRoomWithDoctor = {
+type ClinicRoomWithBooths = {
   id: string;
   roomCode: string;
-  doctorId: string | null;
-  doctor: { doctorCode: string } | null;
+  roomName: string;
+  booth: Array<{
+    id: string;
+    boothCode: string;
+    name: string;
+    workSessions: Array<{
+      id: string;
+      doctorId: string;
+      doctor: { doctorCode: string; auth: { name: string } };
+      startTime: Date;
+      endTime: Date;
+      nextAvailableAt: Date | null;
+    }>;
+  }>;
 };
 
 @Injectable()
@@ -52,19 +64,67 @@ export class RoutingService {
   ) {}
 
   async listRooms() {
+    const now = new Date();
     const rooms = await this.prisma.clinicRoom.findMany({
-      include: {
-        specialty: true,
-        doctor: {
-          include: { auth: true },
+      select: {
+        id: true,
+        roomCode: true,
+        roomName: true,
+        specialty: { select: { name: true } },
+        booth: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            boothCode: true,
+            name: true,
+            workSessions: {
+              where: { startTime: { lte: now }, endTime: { gte: now } },
+              select: {
+                id: true,
+                doctorId: true,
+                startTime: true,
+                endTime: true,
+                nextAvailableAt: true,
+                doctor: { select: { doctorCode: true, auth: { select: { name: true } } } },
+              },
+              orderBy: { startTime: 'asc' },
+              take: 1,
+            },
+          },
         },
         services: {
-          include: { service: true },
+          select: {
+            service: { select: { id: true, serviceCode: true, name: true } },
+          },
         },
       },
       orderBy: { roomCode: 'asc' },
     });
-    return rooms;
+
+    return rooms.map((r) => ({
+      id: r.id,
+      roomCode: r.roomCode,
+      roomName: r.roomName,
+      specialtyName: r.specialty?.name ?? null,
+      services: r.services.map((s) => ({
+        id: s.service.id,
+        code: s.service.serviceCode,
+        name: s.service.name,
+      })),
+      booths: r.booth.map((b) => {
+        const ws = b.workSessions[0];
+        return {
+          id: b.id,
+          boothCode: b.boothCode,
+          name: b.name,
+          doctorId: ws?.doctorId ?? null,
+          doctorCode: ws?.doctor.doctorCode ?? null,
+          doctorName: ws?.doctor.auth.name ?? null,
+          nextAvailableAt: ws?.nextAvailableAt ?? null,
+          sessionEndTime: ws?.endTime ?? null,
+        };
+      }),
+    }));
   }
 
   async assignPatientToRooms(request: AssignRequest): Promise<AssignedRoom[]> {
@@ -105,9 +165,6 @@ export class RoutingService {
       include: {
         clinicRoom: {
           include: {
-            doctor: {
-              include: { auth: true },
-            },
             booth: {
               where: { isActive: true },
               include: {
@@ -116,7 +173,11 @@ export class RoutingService {
                     startTime: { lte: currentTime },
                     endTime: { gte: currentTime },
                   },
-                  include: { doctor: { include: { auth: true } } },
+                  include: { 
+                    doctor: { 
+                      include: { auth: true } 
+                    } 
+                  },
                 },
               },
             },
@@ -132,9 +193,6 @@ export class RoutingService {
       {
         roomCode: string;
         roomName: string;
-        doctorId: string;
-        doctorCode: string;
-        doctorName: string;
         booths: Array<{
           id: string;
           boothCode: string;
@@ -152,18 +210,15 @@ export class RoutingService {
     >();
 
     for (const rs of roomServices) {
-      const room = rs.clinicRoom;
-      if (!roomIdToServices.has(room.id)) roomIdToServices.set(room.id, []);
-      roomIdToServices.get(room.id)!.push(rs.serviceId);
+      const roomId = rs.clinicRoomId;
+      if (!roomIdToServices.has(roomId)) roomIdToServices.set(roomId, []);
+      roomIdToServices.get(roomId)!.push(rs.serviceId);
 
-      if (!roomMeta.has(room.id)) {
-        roomMeta.set(room.id, {
-          roomCode: room.roomCode,
-          roomName: room.roomName,
-          doctorId: room.doctorId,
-          doctorCode: room.doctor.doctorCode,
-          doctorName: room.doctor.auth.name,
-          booths: room.booth,
+      if (!roomMeta.has(roomId)) {
+        roomMeta.set(roomId, {
+          roomCode: rs.clinicRoom.roomCode,
+          roomName: rs.clinicRoom.roomName,
+          booths: rs.clinicRoom.booth,
         });
       }
     }
@@ -229,9 +284,10 @@ export class RoutingService {
     }
 
     if (availableAssignments.length === 0) {
-      throw new NotFoundException(
-        'No available doctors or booths for the requested services at this time',
-      );
+      // Return empty array instead of throwing error
+      // This allows payment to succeed even when routing fails
+      console.warn('No available doctors or booths for the requested services at this time');
+      return [];
     }
 
     // Sort by earliest available time and return the best option
@@ -302,19 +358,66 @@ export class RoutingService {
         : (profile.patient?.auth?.name ?? null);
 
     // Resolve room by id or code
-    let room: ClinicRoomWithDoctor | null = null;
+    let room: ClinicRoomWithBooths | null = null;
     if (request.roomId) {
       room = await this.prisma.clinicRoom.findUnique({
         where: { id: request.roomId },
-        include: { doctor: true },
+        include: {
+          booth: {
+            where: { isActive: true },
+            include: {
+              workSessions: {
+                where: {
+                  startTime: { lte: new Date() },
+                  endTime: { gte: new Date() },
+                },
+                include: { 
+                  doctor: { 
+                    include: { auth: true } 
+                  } 
+                },
+              },
+            },
+          },
+        },
       });
     } else if (request.roomCode) {
       room = await this.prisma.clinicRoom.findUnique({
         where: { roomCode: request.roomCode },
-        include: { doctor: true },
+        include: {
+          booth: {
+            where: { isActive: true },
+            include: {
+              workSessions: {
+                where: {
+                  startTime: { lte: new Date() },
+                  endTime: { gte: new Date() },
+                },
+                include: { 
+                  doctor: { 
+                    include: { auth: true } 
+                  } 
+                },
+              },
+            },
+          },
+        },
       });
     }
     if (!room) throw new NotFoundException('Clinic room not found');
+
+    // Get current doctor from active work session
+    let currentDoctorId: string | null = null;
+    let currentDoctorCode: string | null = null;
+    
+    for (const booth of room.booth) {
+      for (const workSession of booth.workSessions) {
+        currentDoctorId = workSession.doctorId;
+        currentDoctorCode = workSession.doctor.doctorCode;
+        break; // Take the first active doctor
+      }
+      if (currentDoctorId) break;
+    }
 
     const timestamp = new Date().toISOString();
 
@@ -326,8 +429,8 @@ export class RoutingService {
       patientName,
       roomId: room.id,
       roomCode: room.roomCode,
-      doctorId: room.doctorId ?? null,
-      doctorCode: room.doctor?.doctorCode ?? null,
+      doctorId: currentDoctorId,
+      doctorCode: currentDoctorCode,
       timestamp,
     };
 
@@ -352,6 +455,56 @@ export class RoutingService {
       doctorId: event.doctorId,
       doctorCode: event.doctorCode,
       timestamp,
+    };
+  }
+
+  async debugWorkSessions() {
+    const currentTime = new Date();
+    console.log('Current time:', currentTime.toISOString());
+
+    const workSessions = await this.prisma.workSession.findMany({
+      where: {
+        startTime: { lte: currentTime },
+        endTime: { gte: currentTime },
+      },
+      include: {
+        booth: {
+          include: {
+            room: {
+              include: {
+                specialty: true,
+              },
+            },
+          },
+        },
+        doctor: {
+          include: {
+            auth: true,
+          },
+        },
+      },
+      orderBy: {
+        startTime: 'asc',
+      },
+    });
+
+    return {
+      currentTime: currentTime.toISOString(),
+      activeWorkSessions: workSessions.map((ws) => ({
+        id: ws.id,
+        boothId: ws.boothId,
+        boothCode: ws.booth?.boothCode || 'N/A',
+        roomCode: ws.booth?.room.roomCode || 'N/A',
+        roomName: ws.booth?.room.roomName || 'N/A',
+        specialtyName: ws.booth?.room.specialty?.name || 'N/A',
+        doctorId: ws.doctorId,
+        doctorCode: ws.doctor.doctorCode,
+        doctorName: ws.doctor.auth.name,
+        startTime: ws.startTime.toISOString(),
+        endTime: ws.endTime.toISOString(),
+        nextAvailableAt: ws.nextAvailableAt?.toISOString(),
+      })),
+      totalActive: workSessions.length,
     };
   }
 }

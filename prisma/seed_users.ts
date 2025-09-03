@@ -2,6 +2,7 @@
 import { PrismaClient, Role } from "@prisma/client";
 import * as fs from "fs";
 import * as path from "path";
+import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -22,14 +23,22 @@ const asDate = (v: any) => (v ? new Date(v) : undefined);
 
 // Chỉ giữ các field hợp lệ cho Auth (tránh field lạ làm fail)
 // LƯU Ý: Prisma enum Role cần đúng giá trị: "DOCTOR" | "PATIENT" | ...
-function mapAuth(a: any) {
+async function mapAuth(a: any) {
   const role: Role = (Role as any)[a.role] ?? a.role; // hỗ trợ string literal
+  
+  // Mã hóa password nếu có
+  let hashedPassword: string | null = null;
+  if (a.password) {
+    const saltRounds = 10;
+    hashedPassword = await bcrypt.hash(a.password, saltRounds);
+  }
+  
   return {
     id: a.id,
     phone: a.phone ?? null,
     email: a.email ?? null,
     googleId: null,
-    password: a.password ?? null,
+    password: hashedPassword,
     accessToken: null,
     refreshToken: null,
     tokenExpiry: null,
@@ -128,7 +137,7 @@ async function main() {
   // === Seed Auth trước
   console.log("⏳ Seeding Auth...");
   for (const raw of auths) {
-    const data = mapAuth(raw);
+    const data = await mapAuth(raw);
     await prisma.auth.upsert({
       where: { id: data.id },
       update: {},

@@ -10,6 +10,7 @@ import { MedicalRecordModule } from './medical-record/medical-record.module';
 import { RoutingModule } from './routing/routing.module';
 import { PrescriptionModule } from './prescription/prescription.module';
 import { InvoiceModule } from './invoice/invoice.module';
+import { ServiceModule } from './service/service.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { InvoiceModule } from './invoice/invoice.module';
     RoutingModule,
     PrescriptionModule,
     InvoiceModule,
+    ServiceModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],

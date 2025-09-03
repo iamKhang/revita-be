@@ -23,6 +23,11 @@ export class RoutingController {
     return this.routingService.listRooms();
   }
 
+  @Get('debug/work-sessions')
+  async debugWorkSessions() {
+    return this.routingService.debugWorkSessions();
+  }
+
   @Post('status/left-temporarily')
   async markLeftTemporarily(@Body() body: UpdateStatusRequest) {
     return this.routingService.updateStatusForPatientInRoom(

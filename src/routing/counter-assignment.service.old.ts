@@ -285,12 +285,7 @@ export class CounterAssignmentService {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: request.invoiceId },
       include: {
-        appointments: {
-          include: {
-            patientProfile: true,
-            service: true,
-          },
-        },
+        patientProfile: true,
       },
     });
 
@@ -298,13 +293,29 @@ export class CounterAssignmentService {
       throw new NotFoundException('Invoice not found');
     }
 
+    // Find appointment for this patient profile
+    const appointmentForProfile = await this.prisma.appointment.findFirst({
+      where: { 
+        patientProfileId: invoice.patientProfileId,
+        id: request.appointmentId 
+      },
+      include: {
+        patientProfile: true,
+        service: true,
+      },
+    });
+
+    if (!appointmentForProfile) {
+      throw new NotFoundException('Appointment not found for this invoice');
+    }
+
     // Lấy thông tin bệnh nhân
     const patientName =
-      request.patientName || appointment.patientProfile.name || 'Unknown';
+      request.patientName || appointmentForProfile.patientProfile.name || 'Unknown';
 
     const patientAge =
       request.patientAge ||
-      this.calculateAge(appointment.patientProfile.dateOfBirth);
+      this.calculateAge(appointmentForProfile.patientProfile.dateOfBirth);
 
     // Tính điểm ưu tiên
     const priorityScore = this.calculatePriorityScore({
@@ -448,16 +459,11 @@ export class CounterAssignmentService {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       where: { id: request.invoiceId },
       include: {
-        appointments: {
+        patientProfile: {
           include: {
-            patientProfile: {
-              include: {
-                patient: {
-                  include: { auth: true },
-                },
-              },
+            patient: {
+              include: { auth: true },
             },
-            service: true,
           },
         },
       },
@@ -471,7 +477,23 @@ export class CounterAssignmentService {
       throw new BadRequestException('Invoice must be paid before assignment');
     }
 
-    const appointment = invoice.appointments[0];
+    // Find appointment for this patient profile
+    const appointment = await this.prisma.appointment.findFirst({
+      where: { 
+        patientProfileId: invoice.patientProfileId,
+      },
+      include: {
+        patientProfile: {
+          include: {
+            patient: {
+              include: { auth: true },
+            },
+          },
+        },
+        service: true,
+      },
+    });
+
     if (!appointment) {
       throw new NotFoundException('Appointment not found for this invoice');
     }
