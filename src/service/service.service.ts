@@ -28,7 +28,6 @@ export class ServiceService {
             },
           },
         ],
-        isActive: true, // Chỉ lấy các service đang hoạt động
       },
       select: {
         id: true,
@@ -70,7 +69,6 @@ export class ServiceService {
             },
           },
         ],
-        isActive: true,
       },
     });
 
@@ -87,9 +85,6 @@ export class ServiceService {
 
   async getAllServices(limit: number = 50, offset: number = 0) {
     const services = await this.prisma.service.findMany({
-      where: {
-        isActive: true,
-      },
       select: {
         id: true,
         serviceCode: true,
@@ -108,11 +103,7 @@ export class ServiceService {
       ],
     });
 
-    const total = await this.prisma.service.count({
-      where: {
-        isActive: true,
-      },
-    });
+    const total = await this.prisma.service.count();
 
     return {
       services,
