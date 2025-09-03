@@ -9,11 +9,32 @@ export class PrescriptionService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreatePrescriptionDto) {
-    const { prescriptionCode, patientProfileId, doctorId, note, services } = dto as any;
+    const { prescriptionCode, patientProfileId, doctorId, note, services, medicalRecordId } = dto as any;
+    console.log('Creating prescription with data:', { prescriptionCode, patientProfileId, doctorId, note, services, medicalRecordId });
     const generatedCode = prescriptionCode || `PR-${Date.now()}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
 
     if (!services || services.length === 0) {
       throw new BadRequestException('services must not be empty');
+    }
+
+    // Validate patientProfileId exists
+    const patientProfile = await this.prisma.patientProfile.findUnique({
+      where: { id: patientProfileId },
+      select: { id: true },
+    });
+    if (!patientProfile) {
+      throw new NotFoundException('Patient profile not found');
+    }
+
+    // Validate doctorId exists if provided
+    if (doctorId) {
+      const doctor = await this.prisma.doctor.findUnique({
+        where: { id: doctorId },
+        select: { id: true },
+      });
+      if (!doctor) {
+        throw new NotFoundException('Doctor not found');
+      }
     }
 
     // Accept serviceId or serviceCode; resolve to IDs
@@ -41,11 +62,24 @@ export class PrescriptionService {
       throw new BadRequestException(`Invalid ${parts.join(' and ')}`);
     }
 
+    // Optional: validate medicalRecord belongs to same patientProfile
+    if (medicalRecordId) {
+      const mr = await this.prisma.medicalRecord.findUnique({
+        where: { id: medicalRecordId },
+        select: { id: true, patientProfileId: true },
+      });
+      if (!mr) throw new NotFoundException('Medical record not found');
+      if (mr.patientProfileId !== patientProfileId) {
+        throw new BadRequestException('medicalRecordId does not belong to the provided patientProfileId');
+      }
+    }
+
     const prescription = await this.prisma.prescription.create({
       data: {
         prescriptionCode: generatedCode,
         patientProfileId,
         doctorId: doctorId ?? null,
+        medicalRecordId: medicalRecordId ?? null,
         note: note ?? null,
         status: PrescriptionStatus.PENDING,
         services: {
@@ -252,6 +286,28 @@ export class PrescriptionService {
         data: { status: PrescriptionStatus.COMPLETED },
       });
     }
+  }
+
+  async getPrescriptionsByMedicalRecord(medicalRecordId: string) {
+    console.log('Searching for prescriptions with medicalRecordId:', medicalRecordId);
+    
+    const prescriptions = await this.prisma.prescription.findMany({
+      where: { medicalRecordId },
+      include: {
+        services: {
+          include: { service: true },
+          orderBy: { order: 'asc' },
+        },
+        patientProfile: true,
+        doctor: true,
+      },
+      orderBy: { id: 'desc' }, // Sắp xếp theo ID (UUID mới nhất trước)
+    });
+
+    console.log('Found prescriptions:', prescriptions.length);
+    console.log('Prescriptions:', prescriptions);
+
+    return prescriptions;
   }
 
   private async unlockNextPendingService(prescriptionId: string) {

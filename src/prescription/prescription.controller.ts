@@ -21,6 +21,12 @@ export class PrescriptionController {
     return this.prescriptionService.findByCode(code);
   }
 
+  @Get('medical-record/:medicalRecordId')
+  @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST, Role.CASHIER)
+  async getByMedicalRecord(@Param('medicalRecordId') medicalRecordId: string) {
+    return this.prescriptionService.getPrescriptionsByMedicalRecord(medicalRecordId);
+  }
+
   @Patch(':id')
   @Roles(Role.DOCTOR)
   async update(@Param('id') id: string, @Body() dto: UpdatePrescriptionDto) {

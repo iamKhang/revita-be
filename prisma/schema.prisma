@@ -339,6 +339,7 @@ model MedicalRecord {
   patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
   appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  prescriptions Prescription[]
 
   @@map("medical_records")
 }
@@ -370,6 +371,8 @@ model Prescription {
   note String?
   status PrescriptionStatus @default(NOT_STARTED)
   invoiceDetails InvoiceDetail[]
+  medicalRecordId String?
+  medicalRecord   MedicalRecord? @relation(fields: [medicalRecordId], references: [id])
 
   @@map("prescriptions")
 }

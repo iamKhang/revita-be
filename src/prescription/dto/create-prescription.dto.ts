@@ -37,6 +37,10 @@ export class CreatePrescriptionDto {
 
   @IsOptional()
   @IsString()
+  medicalRecordId?: string;
+
+  @IsOptional()
+  @IsString()
   note?: string;
 
   @IsArray()

@@ -331,8 +331,8 @@ export class AdminController {
           const doctorId = doctor.id;
 
           // Handle ClinicRoom that uniquely references this doctor
-          const clinicRoom = await tx.clinicRoom.findUnique({
-            where: { doctorId: doctorId },
+          const clinicRoom = await tx.clinicRoom.findFirst({
+            where: { appointments: { some: { doctorId: doctorId } } },
           });
 
           if (clinicRoom) {
@@ -377,8 +377,8 @@ export class AdminController {
             where: { doctorId: doctorId },
           });
 
-          // Delete schedules for this doctor
-          await tx.schedule.deleteMany({
+          // Delete work sessions for this doctor
+          await tx.workSession.deleteMany({
             where: { doctorId: doctorId },
           });
 

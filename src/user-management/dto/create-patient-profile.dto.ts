@@ -8,7 +8,7 @@ import {
 } from 'class-validator';
 
 export class CreatePatientProfileDto {
-  @IsUUID()
+  // @IsUUID()
   // @IsNotEmpty()
   patientId: string;
 

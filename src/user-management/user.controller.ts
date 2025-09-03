@@ -69,19 +69,6 @@ export class UserController {
             rating: true,
             workHistory: true,
             description: true,
-            // clinicRooms: {
-            //   select: {
-            //     id: true,
-            //     roomCode: true,
-            //     roomName: true,
-            //     specialty: {
-            //       select: {
-            //         id: true,
-            //         name: true,
-            //       },
-            //     },
-            //   },
-            // },
           },
         },
       },
@@ -169,19 +156,6 @@ export class UserController {
             degrees: true,
             yearsExperience: true,
             rating: true,
-            // clinicRooms: {
-            //   select: {
-            //     id: true,
-            //     roomCode: true,
-            //     roomName: true,
-            //     specialty: {
-            //       select: {
-            //         id: true,
-            //         name: true,
-            //       },
-            //     },
-            //   },
-            // },
           },
         },
         patient: {
@@ -420,19 +394,6 @@ export class UserController {
             rating: true,
             workHistory: true,
             description: true,
-            clinicRooms: {
-              select: {
-                id: true,
-                roomCode: true,
-                roomName: true,
-                specialty: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
           },
         },
         // Include receptionist information if user is a receptionist
