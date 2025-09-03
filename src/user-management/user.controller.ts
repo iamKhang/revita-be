@@ -7,6 +7,7 @@ import {
   Query,
   UseGuards,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -348,6 +349,117 @@ export class UserController {
         name: 'asc',
       },
     });
+  }
+
+  // Tìm kiếm user theo tên, số điện thoại, id, email (Public - không cần authentication)
+  @Get('search')
+  async searchUsers(
+    @Query('query') query: string,
+    @Query('role') role?: string,
+  ) {
+    if (!query || query.trim().length === 0) {
+      throw new BadRequestException('Query parameter is required');
+    }
+
+    const where: Record<string, any> = {
+      OR: [
+        { id: { equals: query, mode: 'insensitive' } },
+        { name: { contains: query, mode: 'insensitive' } },
+        { phone: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+      ],
+    };
+
+    // Filter theo role nếu có
+    if (role) {
+      where.role = role as Role;
+    }
+
+    const users = await this.prisma.auth.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        avatar: true,
+        role: true,
+        dateOfBirth: true,
+        gender: true,
+        address: true,
+        citizenId: true,
+        // Include patient information if user is a patient
+        patient: {
+          select: {
+            id: true,
+            patientCode: true,
+            loyaltyPoints: true,
+            patientProfiles: {
+              select: {
+                id: true,
+                profileCode: true,
+                name: true,
+                dateOfBirth: true,
+                gender: true,
+                address: true,
+                occupation: true,
+                healthInsurance: true,
+                relationship: true,
+                isActive: true,
+              },
+            },
+          },
+        },
+        // Include doctor information if user is a doctor
+        doctor: {
+          select: {
+            id: true,
+            doctorCode: true,
+            degrees: true,
+            yearsExperience: true,
+            rating: true,
+            workHistory: true,
+            description: true,
+            clinicRooms: {
+              select: {
+                id: true,
+                roomCode: true,
+                roomName: true,
+                specialty: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        // Include receptionist information if user is a receptionist
+        receptionist: {
+          select: {
+            id: true,
+          },
+        },
+        // Include admin information if user is an admin
+        admin: {
+          select: {
+            id: true,
+            adminCode: true,
+          },
+        },
+      },
+      orderBy: {
+        name: 'asc',
+      },
+      take: 20, // Giới hạn kết quả trả về
+    });
+
+    return {
+      query,
+      total: users.length,
+      users,
+    };
   }
 
   // Lấy tất cả patients (cho ADMIN, RECEPTIONIST, DOCTOR)

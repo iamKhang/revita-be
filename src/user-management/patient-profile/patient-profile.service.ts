@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePatientProfileDto } from '../dto/create-patient-profile.dto';
+import { UpdatePatientProfileDto } from '../dto/update-patient-profile.dto';
 import { JwtUserPayload } from '../../medical-record/dto/jwt-user-payload.dto';
 import { Role } from '../../rbac/roles.enum';
 
@@ -215,5 +216,53 @@ export class PatientProfileService {
         },
       },
     });
+  }
+
+  async update(
+    id: string,
+    dto: UpdatePatientProfileDto,
+    user: JwtUserPayload,
+  ): Promise<unknown> {
+    const existing = await this.prisma.patientProfile.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Không tìm thấy hồ sơ bệnh nhân');
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+    if (user.role === Role.PATIENT) {
+      if (!user.patient?.id || user.patient.id !== existing.patientId) {
+        throw new ForbiddenException('Bạn không có quyền cập nhật hồ sơ này');
+      }
+    }
+
+    const data: Record<string, unknown> = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.dateOfBirth !== undefined)
+      data.dateOfBirth = new Date(dto.dateOfBirth);
+    if (dto.gender !== undefined) data.gender = dto.gender;
+    if (dto.address !== undefined) data.address = dto.address;
+    if (dto.occupation !== undefined) data.occupation = dto.occupation;
+    if (dto.emergencyContact !== undefined)
+      data.emergencyContact = dto.emergencyContact;
+    if (dto.healthInsurance !== undefined)
+      data.healthInsurance = dto.healthInsurance;
+    if (dto.relationship !== undefined) data.relationship = dto.relationship;
+
+    const updated = await this.prisma.patientProfile.update({
+      where: { id },
+      data,
+      include: {
+        patient: {
+          include: {
+            auth: true,
+          },
+        },
+      },
+    });
+
+    return updated;
   }
 }

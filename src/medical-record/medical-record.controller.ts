@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import { MedicalRecordService } from './medical-record.service';
 import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
@@ -33,18 +34,26 @@ export class MedicalRecordController {
   }
 
   @Get()
-  async findAll(@Request() req: { user: JwtUserPayload }) {
-    return await this.medicalRecordService.findAll(req.user);
+  async findAll(
+    @Request() req: { user: JwtUserPayload },
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    return await this.medicalRecordService.findAll(req.user, page, limit);
   }
 
   @Get('patient-profile/:patientProfileId')
   async findByPatientProfile(
     @Param('patientProfileId') patientProfileId: string,
     @Request() req: { user: JwtUserPayload },
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
   ) {
     return await this.medicalRecordService.findByPatientProfile(
       patientProfileId,
       req.user,
+      page,
+      limit,
     );
   }
 

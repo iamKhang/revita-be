@@ -79,7 +79,13 @@ export class MedicalRecordService {
     return created;
   }
 
-  async findAll(user: JwtUserPayload) {
+  async findAll(user: JwtUserPayload, page: string = '1', limit: string = '10') {
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
     const include = {
       histories: {
         select: {
@@ -116,29 +122,56 @@ export class MedicalRecordService {
       });
       
       const patientProfileIds = patientProfiles.map(profile => profile.id);
-      
-      return await this.prisma.medicalRecord.findMany({
-        where: { patientProfileId: { in: patientProfileIds } },
-        include,
-      });
+      const [total, data] = await this.prisma.$transaction([
+        this.prisma.medicalRecord.count({ where: { patientProfileId: { in: patientProfileIds } } }),
+        this.prisma.medicalRecord.findMany({
+          where: { patientProfileId: { in: patientProfileIds } },
+          include,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limitNum,
+        })
+      ]);
+      return { data, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
     }
 
     if (user.role === Role.DOCTOR) {
       if (!user.doctor?.id) {
         throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
       }
-      
-      return await this.prisma.medicalRecord.findMany({
-        where: { doctorId: user.doctor.id },
-        include,
-      });
+      const [total, data] = await this.prisma.$transaction([
+        this.prisma.medicalRecord.count({ where: { doctorId: user.doctor.id } }),
+        this.prisma.medicalRecord.findMany({
+          where: { doctorId: user.doctor.id },
+          include,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limitNum,
+        })
+      ]);
+      return { data, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
     }
 
     // Cho admin - có thể xem tất cả
-    return await this.prisma.medicalRecord.findMany({ include });
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.medicalRecord.count(),
+      this.prisma.medicalRecord.findMany({
+        include,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum,
+      })
+    ]);
+    return { data, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
   }
 
-  async findByPatientProfile(patientProfileId: string, user: JwtUserPayload) {
+  async findByPatientProfile(patientProfileId: string, user: JwtUserPayload, page: string = '1', limit: string = '10') {
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
     const include = {
       histories: {
         select: {
@@ -191,20 +224,31 @@ export class MedicalRecordService {
       }
       
       // Doctor can view records they created for this patient profile
-      return await this.prisma.medicalRecord.findMany({
-        where: { 
-          patientProfileId,
-          doctorId: user.doctor.id 
-        },
-        include,
-      });
+      const [total, data] = await this.prisma.$transaction([
+        this.prisma.medicalRecord.count({ where: { patientProfileId, doctorId: user.doctor.id } }),
+        this.prisma.medicalRecord.findMany({
+          where: { patientProfileId, doctorId: user.doctor.id },
+          include,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limitNum,
+        })
+      ]);
+      return { data, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
     }
 
     // Admin can view all records for any patient profile
-    return await this.prisma.medicalRecord.findMany({
-      where: { patientProfileId },
-      include,
-    });
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.medicalRecord.count({ where: { patientProfileId } }),
+      this.prisma.medicalRecord.findMany({
+        where: { patientProfileId },
+        include,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum,
+      })
+    ]);
+    return { data, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
   }
 
 
@@ -334,16 +378,26 @@ export class MedicalRecordService {
         throw new ForbiddenException('Chỉ bác sĩ tạo hồ sơ hoặc admin được xoá');
       }
     }
-    // Lưu lịch sử trước khi xóa
-    await this.prisma.medicalRecordHistory.create({
-      data: {
-        medicalRecordId: id,
-        changedBy: user.id,
-        changes: { action: 'DELETE', data: record },
-      },
-    });
-    return await this.prisma.medicalRecord.delete({
-      where: { id },
+    // Xóa an toàn: tạo lịch sử, xóa histories phụ thuộc, sau đó xóa record trong transaction
+    return await this.prisma.$transaction(async (tx) => {
+      // Lưu lịch sử xóa vào bảng history khác record hiện tại
+      await tx.medicalRecordHistory.create({
+        data: {
+          medicalRecordId: id,
+          changedBy: user.id,
+          changes: { action: 'DELETE', data: record },
+        },
+      });
+
+      // Xóa tất cả history liên quan để tránh lỗi khóa ngoại
+      await tx.medicalRecordHistory.deleteMany({
+        where: { medicalRecordId: id },
+      });
+
+      // Cuối cùng xóa hồ sơ chính
+      return await tx.medicalRecord.delete({
+        where: { id },
+      });
     });
   }
 

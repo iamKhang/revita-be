@@ -28,17 +28,44 @@ export class AdminController {
   // Quản lý tất cả users
   @Get('users')
   @Roles(Role.ADMIN)
-  async findAllUsers(@Query('role') role?: string) {
+  async findAllUsers(
+    @Query('role') role?: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
     const where = role ? { role: role as Role } : {};
-    return this.prisma.auth.findMany({
-      where,
-      include: {
-        doctor: true,
-        patient: true,
-        receptionist: true,
-        admin: true,
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.auth.count({ where }),
+      this.prisma.auth.findMany({
+        where,
+        include: {
+          doctor: true,
+          patient: true,
+          receptionist: true,
+          admin: true,
+        },
+        orderBy: { name: 'asc' },
+        skip,
+        take: limitNum,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
       },
-    });
+    };
   }
 
   @Get('users/:userId')
@@ -290,27 +317,262 @@ export class AdminController {
 
     // Delete role-specific records first
     switch (user.role) {
-      case Role.DOCTOR:
-        await this.prisma.doctor.deleteMany({
-          where: { authId: userId },
+      case Role.DOCTOR: {
+        // Use a transaction to clean up all dependencies referencing the doctor
+        await this.prisma.$transaction(async (tx) => {
+          const doctor = await tx.doctor.findUnique({
+            where: { authId: userId },
+          });
+
+          if (!doctor) {
+            return;
+          }
+
+          const doctorId = doctor.id;
+
+          // Handle ClinicRoom that uniquely references this doctor
+          const clinicRoom = await tx.clinicRoom.findUnique({
+            where: { doctorId: doctorId },
+          });
+
+          if (clinicRoom) {
+            // Remove many-to-many services for this clinic room
+            await tx.clinicRoomService.deleteMany({
+              where: { clinicRoomId: clinicRoom.id },
+            });
+
+            // Detach appointments from the clinic room (clinicRoomId is nullable)
+            await tx.appointment.updateMany({
+              where: { clinicRoomId: clinicRoom.id },
+              data: { clinicRoomId: null },
+            });
+
+            // Delete the clinic room itself
+            await tx.clinicRoom.delete({
+              where: { id: clinicRoom.id },
+            });
+          }
+
+          // Collect appointment ids for this doctor to cleanup queue/assignments and MR linked to appointments
+          const appointments = await tx.appointment.findMany({
+            where: { doctorId: doctorId },
+            select: { id: true },
+          });
+          const appointmentIds = appointments.map((a) => a.id);
+
+          if (appointmentIds.length > 0) {
+            await tx.counterQueueItem.deleteMany({
+              where: { appointmentId: { in: appointmentIds } },
+            });
+            await tx.counterAssignment.deleteMany({
+              where: { appointmentId: { in: appointmentIds } },
+            });
+            await tx.medicalRecord.deleteMany({
+              where: { appointmentId: { in: appointmentIds } },
+            });
+          }
+
+          // Delete appointments for this doctor
+          await tx.appointment.deleteMany({
+            where: { doctorId: doctorId },
+          });
+
+          // Delete schedules for this doctor
+          await tx.schedule.deleteMany({
+            where: { doctorId: doctorId },
+          });
+
+          // Delete medical records authored by this doctor (not already removed via appointment cleanup)
+          await tx.medicalRecord.deleteMany({
+            where: { doctorId: doctorId },
+          });
+
+          // Detach prescriptions from this doctor (doctorId is nullable)
+          await tx.prescription.updateMany({
+            where: { doctorId: doctorId },
+            data: { doctorId: null },
+          });
+
+          // Finally, delete the doctor row
+          await tx.doctor.deleteMany({
+            where: { authId: userId },
+          });
         });
         break;
-      case Role.PATIENT:
-        await this.prisma.patient.deleteMany({
-          where: { authId: userId },
+      }
+      case Role.PATIENT: {
+        await this.prisma.$transaction(async (tx) => {
+          const patient = await tx.patient.findUnique({
+            where: { authId: userId },
+          });
+
+          if (!patient) return;
+
+          const patientId = patient.id;
+
+          // Get all patient profiles for this patient
+          const profiles = await tx.patientProfile.findMany({
+            where: { patientId },
+            select: { id: true },
+          });
+          const profileIds = profiles.map((p) => p.id);
+
+          if (profileIds.length > 0) {
+            // Appointments for these profiles
+            const appointments = await tx.appointment.findMany({
+              where: { patientProfileId: { in: profileIds } },
+              select: { id: true },
+            });
+            const appointmentIds = appointments.map((a) => a.id);
+
+            if (appointmentIds.length > 0) {
+              await tx.counterQueueItem.deleteMany({
+                where: { appointmentId: { in: appointmentIds } },
+              });
+              await tx.counterAssignment.deleteMany({
+                where: { appointmentId: { in: appointmentIds } },
+              });
+              await tx.medicalRecord.deleteMany({
+                where: { appointmentId: { in: appointmentIds } },
+              });
+              await tx.appointment.deleteMany({
+                where: { id: { in: appointmentIds } },
+              });
+            }
+
+            // Medical records tied directly to patient profiles
+            await tx.medicalRecord.deleteMany({
+              where: { patientProfileId: { in: profileIds } },
+            });
+
+            // Prescriptions for these profiles
+            const prescriptions = await tx.prescription.findMany({
+              where: { patientProfileId: { in: profileIds } },
+              select: { id: true },
+            });
+            const prescriptionIds = prescriptions.map((p) => p.id);
+
+            if (prescriptionIds.length > 0) {
+              // InvoiceDetails may reference prescriptions
+              await tx.invoiceDetail.updateMany({
+                where: { prescriptionId: { in: prescriptionIds } },
+                data: { prescriptionId: null },
+              });
+
+              await tx.prescriptionService.deleteMany({
+                where: { prescriptionId: { in: prescriptionIds } },
+              });
+
+              await tx.prescription.deleteMany({
+                where: { id: { in: prescriptionIds } },
+              });
+            }
+
+            // Invoices for these profiles
+            const invoices = await tx.invoice.findMany({
+              where: { patientProfileId: { in: profileIds } },
+              select: { id: true },
+            });
+            const invoiceIds = invoices.map((i) => i.id);
+
+            if (invoiceIds.length > 0) {
+              await tx.invoiceDetail.deleteMany({
+                where: { invoiceId: { in: invoiceIds } },
+              });
+              await tx.invoice.deleteMany({
+                where: { id: { in: invoiceIds } },
+              });
+            }
+
+            // Finally remove patient profiles
+            await tx.patientProfile.deleteMany({
+              where: { id: { in: profileIds } },
+            });
+          }
+
+          // Remove the patient row itself
+          await tx.patient.deleteMany({
+            where: { authId: userId },
+          });
         });
         break;
-      case Role.RECEPTIONIST:
-        await this.prisma.receptionist.deleteMany({
-          where: { authId: userId },
+      }
+      case Role.RECEPTIONIST: {
+        await this.prisma.$transaction(async (tx) => {
+          const receptionist = await tx.receptionist.findUnique({
+            where: { authId: userId },
+          });
+
+          if (!receptionist) return;
+
+          const receptionistId = receptionist.id;
+
+          // Find counters assigned to this receptionist
+          const counters = await tx.counter.findMany({
+            where: { receptionistId },
+            select: { id: true },
+          });
+          const counterIds = counters.map((c) => c.id);
+
+          if (counterIds.length > 0) {
+            // For safety, ensure no active queue items are left
+            await tx.counterQueueItem.deleteMany({
+              where: { counterId: { in: counterIds } },
+            });
+            await tx.counterAssignment.deleteMany({
+              where: { counterId: { in: counterIds } },
+            });
+
+            // Detach receptionist from counters
+            await tx.counter.updateMany({
+              where: { id: { in: counterIds } },
+              data: { receptionistId: null },
+            });
+          }
+
+          await tx.receptionist.deleteMany({
+            where: { authId: userId },
+          });
         });
         break;
+      }
       case Role.ADMIN:
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await (this.prisma as any).admin.deleteMany({
           where: { authId: userId },
         });
         break;
+      case Role.CASHIER: {
+        await this.prisma.$transaction(async (tx) => {
+          const cashier = await tx.cashier.findUnique({
+            where: { authId: userId },
+          });
+          if (!cashier) return;
+
+          const cashierId = cashier.id;
+
+          // Find invoices created/owned by this cashier
+          const invoices = await tx.invoice.findMany({
+            where: { cashierId },
+            select: { id: true },
+          });
+          const invoiceIds = invoices.map((i) => i.id);
+
+          if (invoiceIds.length > 0) {
+            await tx.invoiceDetail.deleteMany({
+              where: { invoiceId: { in: invoiceIds } },
+            });
+            await tx.invoice.deleteMany({
+              where: { id: { in: invoiceIds } },
+            });
+          }
+
+          await tx.cashier.deleteMany({
+            where: { authId: userId },
+          });
+        });
+        break;
+      }
     }
 
     // Delete auth record
@@ -324,36 +586,108 @@ export class AdminController {
   // Quản lý specialties
   @Get('specialties')
   @Roles(Role.ADMIN)
-  async findAllSpecialties() {
-    return this.prisma.specialty.findMany({
-      include: {
-        clinicRooms: true,
-        templates: true,
+  async findAllSpecialties(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.specialty.count(),
+      this.prisma.specialty.findMany({
+        include: { clinicRooms: true, templates: true },
+        orderBy: { name: 'asc' },
+        skip,
+        take: limitNum,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
       },
-    });
+    };
   }
 
   // Quản lý templates
   @Get('templates')
   @Roles(Role.ADMIN)
-  async findAllTemplates(@Query('specialtyId') specialtyId?: string) {
+  async findAllTemplates(
+    @Query('specialtyId') specialtyId?: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
     const where = specialtyId ? { specialtyId } : {};
-    return this.prisma.template.findMany({
-      where,
-      include: {
-        specialty: true,
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.template.count({ where }),
+      this.prisma.template.findMany({
+        where,
+        include: { specialty: true },
+        orderBy: { name: 'asc' },
+        skip,
+        take: limitNum,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
       },
-    });
+    };
   }
 
   // Quản lý services
   @Get('services')
   @Roles(Role.ADMIN)
-  async findAllServices() {
-    const where = {} as const;
-    return this.prisma.service.findMany({
-      where,
-    });
+  async findAllServices(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.service.count(),
+      this.prisma.service.findMany({
+        orderBy: { name: 'asc' },
+        skip,
+        take: limitNum,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    };
   }
 
   // ==================== COUNTER MANAGEMENT ====================
@@ -361,49 +695,60 @@ export class AdminController {
   // Lấy tất cả counters
   @Get('counters')
   @Roles(Role.ADMIN)
-  async findAllCounters(@Query('isActive') isActive?: string) {
+  async findAllCounters(
+    @Query('isActive') isActive?: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
     const where: Record<string, any> = {};
     if (isActive !== undefined) {
       where.isActive = isActive === 'true';
     }
 
-    return this.prisma.counter.findMany({
-      where,
-      include: {
-        receptionist: {
-          include: {
-            auth: {
-              select: {
-                id: true,
-                name: true,
-                phone: true,
-                email: true,
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.counter.count({ where }),
+      this.prisma.counter.findMany({
+        where,
+        include: {
+          receptionist: {
+            include: {
+              auth: {
+                select: { id: true, name: true, phone: true, email: true },
               },
             },
           },
-        },
-        queueItems: {
-          where: {
-            status: 'WAITING',
+          queueItems: {
+            where: { status: 'WAITING' },
+            orderBy: { priorityScore: 'desc' },
           },
-          orderBy: {
-            priorityScore: 'desc',
-          },
-        },
-        _count: {
-          select: {
-            queueItems: {
-              where: {
-                status: 'WAITING',
-              },
+          _count: {
+            select: {
+              queueItems: { where: { status: 'WAITING' } },
             },
           },
         },
+        orderBy: { counterCode: 'asc' },
+        skip,
+        take: limitNum,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
       },
-      orderBy: {
-        counterCode: 'asc',
-      },
-    });
+    };
   }
 
   // Lấy counter theo ID
