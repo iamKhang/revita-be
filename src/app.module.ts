@@ -9,6 +9,7 @@ import { JwtStrategy } from './login/jwt.strategy';
 import { MedicalRecordModule } from './medical-record/medical-record.module';
 import { RoutingModule } from './routing/routing.module';
 import { PrescriptionModule } from './prescription/prescription.module';
+import { ServiceModule } from './service/service.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { PrescriptionModule } from './prescription/prescription.module';
     MedicalRecordModule,
     RoutingModule,
     PrescriptionModule,
+    ServiceModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
