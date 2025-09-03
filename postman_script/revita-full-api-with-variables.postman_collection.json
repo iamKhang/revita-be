@@ -284,8 +284,17 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/admin/users", "host": ["{{baseUrl}}"], "path": ["admin", "users"] },
-            "description": "Lấy danh sách user. Query: role (optional)"
+            "url": {
+              "raw": "{{baseUrl}}/admin/users?role=&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users"],
+              "query": [
+                { "key": "role", "value": "" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Lấy danh sách user với phân trang. Query: role (optional), page, limit"
           }
         },
         {
@@ -349,8 +358,16 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/admin/specialties", "host": ["{{baseUrl}}"], "path": ["admin", "specialties"] },
-            "description": "Lấy danh sách tất cả chuyên khoa."
+            "url": {
+              "raw": "{{baseUrl}}/admin/specialties?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "specialties"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Lấy danh sách tất cả chuyên khoa có phân trang (page, limit)."
           }
         },
         {
@@ -360,8 +377,17 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/admin/templates", "host": ["{{baseUrl}}"], "path": ["admin", "templates"] },
-            "description": "Lấy danh sách tất cả template. Query: specialtyId (optional)"
+            "url": {
+              "raw": "{{baseUrl}}/admin/templates?specialtyId=&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "templates"],
+              "query": [
+                { "key": "specialtyId", "value": "" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Lấy danh sách tất cả template có phân trang. Query: specialtyId (optional), page, limit"
           }
         },
         {
@@ -371,8 +397,16 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/admin/services", "host": ["{{baseUrl}}"], "path": ["admin", "services"] },
-            "description": "Lấy danh sách tất cả dịch vụ. Query: specialtyId (optional)"
+            "url": {
+              "raw": "{{baseUrl}}/admin/services?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "services"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Lấy danh sách tất cả dịch vụ có phân trang (page, limit)."
           }
         }
       ]
@@ -569,8 +603,16 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/receptionists/patients", "host": ["{{baseUrl}}"], "path": ["receptionists", "patients"] },
-            "description": "Lấy danh sách tất cả bệnh nhân."
+            "url": {
+              "raw": "{{baseUrl}}/receptionists/patients?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["receptionists", "patients"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Lấy danh sách tất cả bệnh nhân có phân trang (page, limit)."
           }
         },
         {
@@ -580,8 +622,36 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/receptionists/appointments", "host": ["{{baseUrl}}"], "path": ["receptionists", "appointments"] },
-            "description": "Lấy danh sách tất cả lịch hẹn."
+            "url": {
+              "raw": "{{baseUrl}}/receptionists/appointments?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["receptionists", "appointments"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Lấy danh sách tất cả lịch hẹn có phân trang (page, limit)."
+          }
+        },
+        {
+          "name": "List Users (Receptionist)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionists/users?role=&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["receptionists", "users"],
+              "query": [
+                { "key": "role", "value": "" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Receptionist xem danh sách users với phân trang. Query: role (optional), page, limit"
           }
         }
       ]
@@ -612,8 +682,16 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/medical-records", "host": ["{{baseUrl}}"], "path": ["medical-records"] },
-            "description": "Lấy tất cả hồ sơ bệnh án (theo quyền)."
+            "url": {
+              "raw": "{{baseUrl}}/medical-records?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["medical-records"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Lấy tất cả hồ sơ bệnh án (theo quyền) có phân trang."
           }
         },
         {
@@ -623,8 +701,16 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "url": { "raw": "{{baseUrl}}/medical-records/patient-profile/{{patientProfileId}}", "host": ["{{baseUrl}}"], "path": ["medical-records", "patient-profile", "{{patientProfileId}}"] },
-            "description": "Lấy tất cả hồ sơ bệnh án của một patient profile cụ thể (theo quyền)."
+            "url": {
+              "raw": "{{baseUrl}}/medical-records/patient-profile/{{patientProfileId}}?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["medical-records", "patient-profile", "{{patientProfileId}}"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Lấy hồ sơ bệnh án theo patient profile có phân trang."
           }
         },
         {

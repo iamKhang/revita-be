@@ -8,6 +8,7 @@ import {
   UseGuards,
   BadRequestException,
   NotFoundException,
+  Query,
 } from '@nestjs/common';
 import { Roles } from '../../rbac/roles.decorator';
 import { Role } from '../../rbac/roles.enum';
@@ -22,6 +23,49 @@ import { JwtAuthGuard } from 'src/login/jwt-auth.guard';
 @Controller('receptionists')
 export class ReceptionistController {
   private prisma = new PrismaClient();
+
+  @Get('users')
+  @Roles(Role.RECEPTIONIST)
+  async findAllUsers(
+    @Query('role') role?: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    const where = role ? { role: role as Role } : {};
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.auth.count({ where }),
+      this.prisma.auth.findMany({
+        where,
+        include: {
+          doctor: true,
+          patient: true,
+          receptionist: true,
+          admin: true,
+          cashier: true,
+        },
+        orderBy: { name: 'asc' },
+        skip,
+        take: limitNum,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    };
+  }
 
   @Post('patients')
   @Roles(Role.RECEPTIONIST)
@@ -73,11 +117,36 @@ export class ReceptionistController {
 
   @Get('patients')
   @Roles(Role.RECEPTIONIST)
-  async listPatients() {
-    // Lấy tất cả bệnh nhân
-    return this.prisma.patient.findMany({
-      include: { auth: true },
-    });
+  async listPatients(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.patient.count(),
+      this.prisma.patient.findMany({
+        include: { auth: true },
+        orderBy: { patientCode: 'asc' },
+        skip,
+        take: limitNum,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    };
   }
 
   @Put('patients/:patientId')
@@ -146,14 +215,40 @@ export class ReceptionistController {
 
   @Get('appointments')
   @Roles(Role.RECEPTIONIST)
-  async listAppointments() {
-    return this.prisma.appointment.findMany({
-      include: {
-        patientProfile: { include: { patient: { include: { auth: true } } } },
-        doctor: { include: { auth: true } },
-        service: true,
-        specialty: true,
+  async listAppointments(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.appointment.count(),
+      this.prisma.appointment.findMany({
+        include: {
+          patientProfile: { include: { patient: { include: { auth: true } } } },
+          doctor: { include: { auth: true } },
+          service: true,
+          specialty: true,
+        },
+        orderBy: { date: 'desc' },
+        skip,
+        take: limitNum,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
       },
-    });
+    };
   }
 }
