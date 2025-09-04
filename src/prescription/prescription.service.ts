@@ -81,11 +81,10 @@ export class PrescriptionService {
         doctorId: doctorId ?? null,
         medicalRecordId: medicalRecordId ?? null,
         note: note ?? null,
-        status: PrescriptionStatus.PENDING,
         services: {
           create: services.map((s, index) => ({
             serviceId: s.serviceId ?? codeToId.get(s.serviceCode as string)!,
-            status: (s.status as any) || PrescriptionStatus.PENDING,
+            status: (s.status as any) || PrescriptionStatus.NOT_STARTED,
             order: s.order ?? index + 1,
             note: s.note ?? null,
           })),
@@ -169,12 +168,11 @@ export class PrescriptionService {
           services: {
             create: dto.services.map((s, index) => ({
               serviceId: s.serviceId ?? codeToId.get(s.serviceCode as string)!,
-              status: (s.status as any) || PrescriptionStatus.PENDING,
+              status: (s.status as any) || PrescriptionStatus.NOT_STARTED,
               order: s.order ?? index + 1,
               note: s.note ?? null,
             })),
           },
-          status: PrescriptionStatus.PENDING,
         },
       });
     } else {
@@ -214,18 +212,23 @@ export class PrescriptionService {
 
   async markServicePaid(prescriptionId: string, serviceId: string) {
     // Called after payment success for a given service
-    // First service in sequence that is paid becomes WAITING if no other service is active
+    // Mark the paid service as PENDING, then check if we should start the first available service
     const psList = await this.prisma.prescriptionService.findMany({
       where: { prescriptionId },
       orderBy: { order: 'asc' },
     });
     if (psList.length === 0) throw new NotFoundException('No services found');
 
-    // Mark this particular service as PENDING if it was not yet set
     const current = psList.find((s) => s.serviceId === serviceId);
     if (!current) throw new NotFoundException('Service not in prescription');
 
-    // If any service is in WAITING, SERVING, or WAITING_RESULT, do not start another
+    // Mark this particular service as PENDING (paid but not yet started)
+    await this.prisma.prescriptionService.update({
+      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+      data: { status: PrescriptionStatus.PENDING },
+    });
+
+    // Check if any service is currently active (WAITING, SERVING, WAITING_RESULT)
     const activeStatuses = [
       PrescriptionStatus.WAITING,
       PrescriptionStatus.SERVING,
@@ -233,14 +236,25 @@ export class PrescriptionService {
     ];
     const activeExists = psList.some((s) => activeStatuses.includes(s.status as any));
 
-    await this.prisma.prescriptionService.update({
-      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-      data: {
-        status: activeExists
-          ? PrescriptionStatus.PENDING
-          : PrescriptionStatus.WAITING,
-      },
-    });
+    // If no active service, start the first PENDING service in order
+    if (!activeExists) {
+      // Find the service with lowest order that is PENDING (paid)
+      const firstPendingService = psList
+        .filter((s) => s.status === PrescriptionStatus.PENDING)
+        .sort((a, b) => a.order - b.order)[0];
+
+      if (firstPendingService) {
+        await this.prisma.prescriptionService.update({
+          where: {
+            prescriptionId_serviceId: {
+              prescriptionId,
+              serviceId: firstPendingService.serviceId,
+            },
+          },
+          data: { status: PrescriptionStatus.WAITING },
+        });
+      }
+    }
 
     // Ensure prescription is at least PENDING
     await this.prisma.prescription.update({
@@ -259,10 +273,9 @@ export class PrescriptionService {
 
   async markServiceWaitingResult(prescriptionId: string, serviceId: string) {
     // Service done, waiting result, then unlock next pending service to WAITING
-    const waitingResult = 'WAITING_RESULT' as unknown as PrescriptionStatus;
     await this.prisma.prescriptionService.update({
       where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-      data: { status: waitingResult },
+      data: { status: PrescriptionStatus.WAITING_RESULT },
     });
 
     await this.unlockNextPendingService(prescriptionId);
@@ -317,13 +330,12 @@ export class PrescriptionService {
       orderBy: { order: 'asc' },
     });
 
-    const waitingResult = 'WAITING_RESULT' as unknown as PrescriptionStatus;
     const activeExists = services.some((s) =>
       [
         PrescriptionStatus.WAITING,
         PrescriptionStatus.SERVING,
-        waitingResult,
-      ].includes(s.status as PrescriptionStatus),
+        PrescriptionStatus.WAITING_RESULT,
+      ].includes(s.status as any),
     );
     if (activeExists) return;
 
