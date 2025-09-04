@@ -159,16 +159,55 @@ export class ReceptionistController {
       where: { id: patientId },
     });
     if (!patient) throw new NotFoundException('Patient not found');
-    await this.prisma.auth.update({
-      where: { id: patient.authId! },
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      data: body as any,
+    // Build explicit updates for auth and patient
+    const {
+      name,
+      dateOfBirth,
+      gender,
+      address,
+      citizenId,
+      avatar,
+      phone,
+      email,
+      loyaltyPoints,
+    } = body;
+
+    const authUpdate: Record<string, any> = {};
+    if (name !== undefined) authUpdate.name = name;
+    if (dateOfBirth !== undefined)
+      authUpdate.dateOfBirth = new Date(dateOfBirth);
+    if (gender !== undefined) authUpdate.gender = gender;
+    if (address !== undefined) authUpdate.address = address;
+    if (citizenId !== undefined) authUpdate.citizenId = citizenId;
+    if (avatar !== undefined) authUpdate.avatar = avatar;
+    if (phone !== undefined) authUpdate.phone = phone;
+    if (email !== undefined) authUpdate.email = email;
+
+    const patientUpdate: Record<string, any> = {};
+    if (loyaltyPoints !== undefined)
+      patientUpdate.loyaltyPoints = loyaltyPoints;
+
+    // Execute updates in a transaction for consistency
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (Object.keys(authUpdate).length > 0) {
+        await tx.auth.update({
+          where: { id: patient.authId! },
+          data: authUpdate,
+        });
+      }
+      if (Object.keys(patientUpdate).length > 0) {
+        await tx.patient.update({
+          where: { id: patientId },
+          data: patientUpdate,
+        });
+      }
+      return tx.patient.findUnique({
+        where: { id: patientId },
+        include: { auth: true },
+      });
     });
-    return this.prisma.patient.update({
-      where: { id: patientId },
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      data: body as any,
-    });
+
+    return updated;
   }
 
   @Post('appointments')

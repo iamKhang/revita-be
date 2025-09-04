@@ -145,7 +145,7 @@
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
             "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] },
-            "description": "Lấy thông tin người dùng hiện tại."
+            "description": "Lấy thông tin người dùng hiện tại, bao gồm dữ liệu bảng role tương ứng (patient/doctor/receptionist/admin)."
           }
         },
         {

@@ -301,6 +301,36 @@ export class LoginService {
           address: true,
           citizenId: true,
           role: true,
+          // Role-specific data
+          patient: {
+            select: {
+              id: true,
+              patientCode: true,
+              loyaltyPoints: true,
+            },
+          },
+          doctor: {
+            select: {
+              id: true,
+              doctorCode: true,
+              degrees: true,
+              yearsExperience: true,
+              rating: true,
+              workHistory: true,
+              description: true,
+            },
+          },
+          receptionist: {
+            select: {
+              id: true,
+            },
+          },
+          admin: {
+            select: {
+              id: true,
+              adminCode: true,
+            },
+          },
         },
       });
       if (!auth) throw new UnauthorizedException('User not found');

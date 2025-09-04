@@ -15,6 +15,7 @@ import { Roles } from '../rbac/roles.decorator';
 import { Role } from '../rbac/roles.enum';
 import { PrismaClient } from '@prisma/client';
 import { UpdateUserDto } from './dto/admin.dto';
+import * as bcrypt from 'bcryptjs';
 
 @Controller('users')
 export class UserController {
@@ -95,12 +96,100 @@ export class UserController {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const userId = req.user?.id;
     if (!userId) throw new NotFoundException('User not found');
-    return this.prisma.auth.update({
+    const currentUser = await this.prisma.auth.findUnique({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       where: { id: userId },
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      data: body as any,
     });
+    if (!currentUser) throw new NotFoundException('User not found');
+
+    // Build auth update data explicitly
+    const {
+      name,
+      dateOfBirth,
+      gender,
+      address,
+      citizenId,
+      avatar,
+      email,
+      phone,
+      password,
+      // role-specific below
+      degrees,
+      yearsExperience,
+      workHistory,
+      description,
+      loyaltyPoints,
+      adminCode,
+    } = body;
+
+    const authUpdateData: Record<string, any> = {};
+    if (name !== undefined) authUpdateData.name = name;
+    if (dateOfBirth !== undefined)
+      authUpdateData.dateOfBirth = new Date(dateOfBirth);
+    if (gender !== undefined) authUpdateData.gender = gender;
+    if (address !== undefined) authUpdateData.address = address;
+    if (citizenId !== undefined) authUpdateData.citizenId = citizenId;
+    if (avatar !== undefined) authUpdateData.avatar = avatar;
+    if (email !== undefined) authUpdateData.email = email;
+    if (phone !== undefined) authUpdateData.phone = phone;
+    if (password !== undefined)
+      authUpdateData.password = await bcrypt.hash(password, 10);
+
+    const updatedAuth = await this.prisma.auth.update({
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      where: { id: userId },
+      data: authUpdateData,
+    });
+
+    let roleRecord: any = null;
+    switch (currentUser.role) {
+      case Role.DOCTOR: {
+        const doctorUpdateData: Record<string, any> = {};
+        if (degrees !== undefined) doctorUpdateData.degrees = degrees;
+        if (yearsExperience !== undefined)
+          doctorUpdateData.yearsExperience = yearsExperience;
+        if (workHistory !== undefined)
+          doctorUpdateData.workHistory = workHistory;
+        if (description !== undefined)
+          doctorUpdateData.description = description;
+        if (Object.keys(doctorUpdateData).length > 0) {
+          roleRecord = await this.prisma.doctor.update({
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            where: { authId: userId },
+            data: doctorUpdateData,
+          });
+        }
+        break;
+      }
+      case Role.PATIENT: {
+        if (loyaltyPoints !== undefined) {
+          roleRecord = await this.prisma.patient.update({
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            where: { authId: userId },
+            data: { loyaltyPoints },
+          });
+        }
+        break;
+      }
+      case Role.ADMIN: {
+        if (adminCode !== undefined) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          roleRecord = await (this.prisma as any).admin.update({
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            where: { authId: userId },
+            data: { adminCode },
+          });
+        }
+        break;
+      }
+      case Role.RECEPTIONIST: {
+        // No extra updatable fields for receptionist currently
+        break;
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return
+    return { auth: updatedAuth, roleRecord } as any;
   }
 
   // ==================== ROLE-BASED ENDPOINTS ====================
