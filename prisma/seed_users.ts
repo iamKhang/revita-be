@@ -96,6 +96,14 @@ function mapAdmin(a: any) {
   } as any;
 }
 
+function mapTechnician(t: any, index: number) {
+  return {
+    id: t.id,
+    technicianCode: `TECH-${String(index + 1).padStart(3, '0')}`,
+    authId: t.authId,
+  };
+}
+
 function mapPatientProfile(pf: any) {
   return {
     id: pf.id,
@@ -124,6 +132,7 @@ async function main() {
   const receptionists = readJson<any[]>("receptionists.json");     // :contentReference[oaicite:12]{index=12}
   const cashiers = readJson<any[]>("cashiers.json");               // :contentReference[oaicite:13]{index=13}
   const admins = readJson<any[]>("admins.json");                   // :contentReference[oaicite:14]{index=14}
+  const technicians = readJson<any[]>("technicians.json");         // :contentReference[oaicite:15]{index=15}
 
   // Không bắt buộc, dùng để cảnh báo nhẹ nếu doctors.json có specialtyCode không thuộc danh mục
   let specialtyCodes: Set<string> | null = null;
@@ -154,6 +163,17 @@ async function main() {
     }
     const data = mapDoctor(raw);
     await prisma.doctor.upsert({
+      where: { id: data.id },
+      update: {},
+      create: data,
+    });
+  }
+
+  // === Seed Technicians
+  console.log("⏳ Seeding Technicians...");
+  for (const [index, raw] of technicians.entries()) {
+    const data = mapTechnician(raw, index);
+    await prisma.technician.upsert({
       where: { id: data.id },
       update: {},
       create: data,

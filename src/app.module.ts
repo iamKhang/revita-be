@@ -11,6 +11,7 @@ import { RoutingModule } from './routing/routing.module';
 import { PrescriptionModule } from './prescription/prescription.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { ServiceModule } from './service/service.module';
+import { FileStorageModule } from './file-storage/file-storage.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ServiceModule } from './service/service.module';
     PrescriptionModule,
     InvoiceModule,
     ServiceModule,
+    FileStorageModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],

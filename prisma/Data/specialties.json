@@ -14,6 +14,7 @@
     { "specialtyCode": "BONG", "name": "Bỏng" },
     { "specialtyCode": "HUYETHOCTRUYENMAU", "name": "Huyết học/truyền máu" },
     { "specialtyCode": "TAMTHAN", "name": "Tâm thần" },
-    { "specialtyCode": "NGOAITRUCHUNG", "name": "Ngoại trú chung" }
+    { "specialtyCode": "NGOAITRUCHUNG", "name": "Ngoại trú chung" },
+    { "specialtyCode": "CHUANDOANHINHANH", "name": "Chuẩn đoán hình ảnh" }
 ]
   

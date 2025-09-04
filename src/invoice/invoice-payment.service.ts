@@ -357,6 +357,9 @@ export class InvoicePaymentService {
       doctorId: assignment.doctorId,
       doctorCode: assignment.doctorCode,
       doctorName: assignment.doctorName,
+      technicianId: assignment.technicianId,
+      technicianCode: assignment.technicianCode,
+      technicianName: assignment.technicianName,
       nextAvailableAt: assignment.nextAvailableAt,
     }));
 

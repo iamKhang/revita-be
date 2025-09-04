@@ -46,6 +46,11 @@ export class RoutingController {
     return this.routingService.updateStatusForPatientInRoom(body, 'SERVING');
   }
 
+  @Post('status/waiting-result')
+  async markWaitingResult(@Body() body: UpdateStatusRequest) {
+    return this.routingService.updateStatusForPatientInRoom(body, 'WAITING_RESULT');
+  }
+
   @Post('status/completed')
   async markCompleted(@Body() body: UpdateStatusRequest) {
     return this.routingService.updateStatusForPatientInRoom(body, 'COMPLETED');

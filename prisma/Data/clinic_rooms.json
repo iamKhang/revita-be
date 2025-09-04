@@ -68,6 +68,8 @@
     { "roomCode": "HUY-1402", "roomName": "Phòng Truyền máu 1402", "specialtyCode": "HUYETHOCTRUYENMAU", "description": "Truyền máu - theo dõi", "address": "Tầng 14 - Khu B" },
     { "roomCode": "HUY-1403", "roomName": "Phòng Huyết học 1403", "specialtyCode": "HUYETHOCTRUYENMAU", "description": "Xét nghiệm huyết học (tiếp nhận)", "address": "Tầng 14 - Khu B" },
     { "roomCode": "HUY-1404", "roomName": "Phòng Tư vấn 1404", "specialtyCode": "HUYETHOCTRUYENMAU", "description": "Tư vấn truyền máu", "address": "Tầng 14 - Khu B" },
+    { "roomCode": "HUY-1405", "roomName": "Phòng Xét nghiệm máu 1405", "specialtyCode": "HUYETHOCTRUYENMAU", "description": "Xét nghiệm máu", "address": "Tầng 14 - Khu B" },
+
   
     { "roomCode": "TAM-1501", "roomName": "Phòng Tâm thần 1501", "specialtyCode": "TAMTHAN", "description": "Khám tâm thần", "address": "Tầng 15 - Khu A" },
     { "roomCode": "TAM-1502", "roomName": "Phòng Tâm lý 1502", "specialtyCode": "TAMTHAN", "description": "Tư vấn tâm lý", "address": "Tầng 15 - Khu A" },
@@ -77,6 +79,13 @@
     { "roomCode": "NTC-1601", "roomName": "Phòng Ngoại trú 1601", "specialtyCode": "NGOAITRUCHUNG", "description": "Khám ngoại trú chung", "address": "Tầng 16 - Khu B" },
     { "roomCode": "NTC-1602", "roomName": "Phòng Ngoại trú 1602", "specialtyCode": "NGOAITRUCHUNG", "description": "Theo dõi điều trị", "address": "Tầng 16 - Khu B" },
     { "roomCode": "NTC-1603", "roomName": "Phòng Ngoại trú 1603", "specialtyCode": "NGOAITRUCHUNG", "description": "Thủ thuật nhẹ", "address": "Tầng 16 - Khu B" },
-    { "roomCode": "NTC-1604", "roomName": "Phòng Ngoại trú 1604", "specialtyCode": "NGOAITRUCHUNG", "description": "Tư vấn - sàng lọc", "address": "Tầng 16 - Khu B" }
+    { "roomCode": "NTC-1604", "roomName": "Phòng Ngoại trú 1604", "specialtyCode": "NGOAITRUCHUNG", "description": "Tư vấn - sàng lọc", "address": "Tầng 16 - Khu B" },
+
+    { "roomCode": "CHU-1801", "roomName": "Phòng Chụp X-quang 1801", "specialtyCode": "CHUANDOANHINHANH", "description": "Chụp X-quang", "address": "Tầng 18 - Khu B" },
+    { "roomCode": "CHU-1802", "roomName": "Phòng Chụp X-quang 1802", "specialtyCode": "CHUANDOANHINHANH", "description": "Xét nghiệm X-quang", "address": "Tầng 18 - Khu B" },
+    { "roomCode": "CHU-1803", "roomName": "Phòng Chụp X-quang 1803", "specialtyCode": "CHUANDOANHINHANH", "description": "Tư vấn chụp X-quang", "address": "Tầng 18 - Khu B" },
+    { "roomCode": "CHU-1804", "roomName": "Phòng Chụp X-quang 1804", "specialtyCode": "CHUANDOANHINHANH", "description": "Điều trị X-quang", "address": "Tầng 18 - Khu B" },
+
+    { "roomCode": "CT-1901", "roomName": "Phòng CT 1901", "specialtyCode": "CHUANDOANHINHANH", "description": "CT", "address": "Tầng 19 - Khu A" }
   ]
   

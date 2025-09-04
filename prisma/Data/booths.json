@@ -253,6 +253,26 @@
   
     { "roomCode": "NTC-1604", "boothCode": "NTC-1604-B1", "name": "Buồng 1", "isActive": true },
     { "roomCode": "NTC-1604", "boothCode": "NTC-1604-B2", "name": "Buồng 2", "isActive": true },
-    { "roomCode": "NTC-1604", "boothCode": "NTC-1604-B3", "name": "Buồng 3", "isActive": true }
+    { "roomCode": "NTC-1604", "boothCode": "NTC-1604-B3", "name": "Buồng 3", "isActive": true },
+
+    { "roomCode": "CHU-1801", "boothCode": "CHU-1801-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "CHU-1801", "boothCode": "CHU-1801-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "CHU-1801", "boothCode": "CHU-1801-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "CHU-1802", "boothCode": "CHU-1802-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "CHU-1802", "boothCode": "CHU-1802-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "CHU-1802", "boothCode": "CHU-1802-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "CHU-1803", "boothCode": "CHU-1803-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "CHU-1803", "boothCode": "CHU-1803-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "CHU-1803", "boothCode": "CHU-1803-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "CHU-1804", "boothCode": "CHU-1804-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "CHU-1804", "boothCode": "CHU-1804-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "CHU-1804", "boothCode": "CHU-1804-B3", "name": "Buồng 3", "isActive": true },
+  
+    { "roomCode": "CT-1901", "boothCode": "CT-1901-B1", "name": "Buồng 1", "isActive": true },
+    { "roomCode": "CT-1901", "boothCode": "CT-1901-B2", "name": "Buồng 2", "isActive": true },
+    { "roomCode": "CT-1901", "boothCode": "CT-1901-B3", "name": "Buồng 3", "isActive": true }
   ]
   

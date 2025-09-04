@@ -1203,5 +1203,109 @@
         "timePerPatient": 30,
         "description": "Khám tổng quát, đo huyết áp, BMI, xét nghiệm cơ bản cho bệnh nhân ngoại trú.",
         "rooms": ["NTC-1601", "NTC-1604"]
+      },
+      {
+        "serviceCode": "LAB_BLOOD_BASIC",
+        "name": "Xét nghiệm máu cơ bản",
+        "price": 120000.0,
+        "timePerPatient": 15,
+        "description": "Kiểm tra công thức máu toàn phần (CBC), hồng cầu, bạch cầu, tiểu cầu.",
+        "rooms": ["HUY-1405"]
+      },
+      {
+        "serviceCode": "LAB_BLOOD_BIO",
+        "name": "Xét nghiệm sinh hóa máu",
+        "price": 180000.0,
+        "timePerPatient": 20,
+        "description": "Đo các chỉ số sinh hóa: đường huyết, mỡ máu, chức năng gan, thận.",
+        "rooms": ["HUY-1405"]
+      },
+      {
+        "serviceCode": "LAB_BLOOD_IMMUNE",
+        "name": "Xét nghiệm miễn dịch",
+        "price": 220000.0,
+        "timePerPatient": 25,
+        "description": "Xét nghiệm các chỉ số miễn dịch, viêm nhiễm, bệnh lý tự miễn.",
+        "rooms": ["HUY-1405"]
+      },
+      {
+        "serviceCode": "XRAY_CHEST",
+        "name": "Chụp X-quang phổi",
+        "price": 200000.0,
+        "timePerPatient": 20,
+        "description": "Chụp X-quang lồng ngực để phát hiện viêm phổi, lao phổi, tổn thương.",
+        "rooms": ["CHU-1801", "CHU-1802"]
+      },
+      {
+        "serviceCode": "XRAY_BONE",
+        "name": "Chụp X-quang xương khớp",
+        "price": 220000.0,
+        "timePerPatient": 20,
+        "description": "Chẩn đoán gãy xương, thoái hóa khớp, chấn thương cơ xương.",
+        "rooms": ["CHU-1801", "CHU-1802"]
+      },
+      {
+        "serviceCode": "XRAY_CONTRAST",
+        "name": "X-quang có cản quang",
+        "price": 350000.0,
+        "timePerPatient": 35,
+        "description": "Chụp X-quang với thuốc cản quang để quan sát rõ hệ tiêu hóa, tiết niệu.",
+        "rooms": ["CHU-1802"]
+      },
+      {
+        "serviceCode": "CT_HEAD",
+        "name": "Chụp CT sọ não",
+        "price": 600000.0,
+        "timePerPatient": 40,
+        "description": "Đánh giá chấn thương sọ não, xuất huyết não, khối u não.",
+        "rooms": ["CT-1901"]
+      },
+      {
+        "serviceCode": "CT_CHEST",
+        "name": "Chụp CT ngực",
+        "price": 700000.0,
+        "timePerPatient": 45,
+        "description": "Chẩn đoán ung thư phổi, bệnh phổi kẽ, tổn thương lồng ngực.",
+        "rooms": ["CT-1901"]
+      },
+      {
+        "serviceCode": "CT_ABDOMEN",
+        "name": "Chụp CT ổ bụng",
+        "price": 750000.0,
+        "timePerPatient": 50,
+        "description": "Phát hiện khối u, viêm nhiễm, bệnh lý gan, mật, tụy.",
+        "rooms": ["CT-1901"]
+      },
+      {
+        "serviceCode": "MRI_BRAIN",
+        "name": "Chụp MRI não",
+        "price": 1200000.0,
+        "timePerPatient": 60,
+        "description": "Đánh giá chi tiết não bộ, mạch máu não, u não, bệnh lý thần kinh.",
+        "rooms": ["CT-1901"]
+      },
+      {
+        "serviceCode": "MRI_SPINE",
+        "name": "Chụp MRI cột sống",
+        "price": 1300000.0,
+        "timePerPatient": 60,
+        "description": "Phát hiện thoát vị đĩa đệm, thoái hóa cột sống, hẹp ống sống.",
+        "rooms": ["CT-1901"]
+      },
+      {
+        "serviceCode": "US_ABDOMEN",
+        "name": "Siêu âm ổ bụng",
+        "price": 300000.0,
+        "timePerPatient": 25,
+        "description": "Siêu âm gan, mật, thận, tụy, lách để phát hiện bất thường.",
+        "rooms": ["CHU-1803"]
+      },
+      {
+        "serviceCode": "US_OBGYN",
+        "name": "Siêu âm sản phụ khoa",
+        "price": 350000.0,
+        "timePerPatient": 30,
+        "description": "Siêu âm thai kỳ, tử cung, buồng trứng để theo dõi sức khỏe sinh sản.",
+        "rooms": ["CHU-1803"]
       }
 ]

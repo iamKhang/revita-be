@@ -22,6 +22,7 @@ enum Role {
   RECEPTIONIST
   ADMIN
   CASHIER
+  TECHNICIAN
 }
 
 // Bảng Auth cho thông tin đăng nhập và thông tin cơ bản
@@ -48,8 +49,20 @@ model Auth {
   receptionist Receptionist?
   admin        Admin?
   cashier      Cashier?
-
+  technician   Technician?
   @@map("auths")
+}
+
+// Bảng Technician cho kỹ thuật viên
+model Technician {
+  id       String      @id @default(uuid())
+  technicianCode String @unique @map("technician_code")
+  authId   String      @unique @map("auth_id")
+  auth     Auth        @relation(fields: [authId], references: [id])
+  workSessions WorkSession[]
+  prescriptionServices PrescriptionService[]
+
+  @@map("technicians")
 }
 
 // Bảng Doctor cho thông tin bác sĩ
@@ -67,6 +80,7 @@ model Doctor {
   medicalRecords  MedicalRecord[]
   prescriptions   Prescription[]
   workSessions WorkSession[]
+  prescriptionServices PrescriptionService[]
 
   @@map("doctors")
 }
@@ -383,10 +397,16 @@ model PrescriptionService {
   serviceId String
   prescription Prescription @relation(fields: [prescriptionId], references: [id])
   service Service @relation(fields: [serviceId], references: [id])
+  doctorId String?
+  doctor Doctor? @relation(fields: [doctorId], references: [id])
+  technicianId String?
+  technician Technician? @relation(fields: [technicianId], references: [id])
   status PrescriptionStatus @default(NOT_STARTED)
   results String[] @map("results")
   order Int @default(1)
   note String?
+  startedAt DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
 
   @@unique([prescriptionId, serviceId])
   @@map("prescription_services")
@@ -421,8 +441,10 @@ model WorkSession {
   id String @id @default(uuid())
   boothId String?
   booth Booth? @relation(fields: [boothId], references: [id])
-  doctorId String
-  doctor Doctor @relation(fields: [doctorId], references: [id])
+  doctorId String?
+  doctor Doctor? @relation(fields: [doctorId], references: [id])
+  technicianId String?
+  technician Technician? @relation(fields: [technicianId], references: [id])
   startTime DateTime @map("start_time")
   endTime DateTime @map("end_time")
   nextAvailableAt DateTime? @map("next_available_at")
