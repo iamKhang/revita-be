@@ -296,6 +296,8 @@ export class LoginService {
           id: true,
           name: true,
           dateOfBirth: true,
+          email: true,
+          phone: true,
           gender: true,
           avatar: true,
           address: true,
