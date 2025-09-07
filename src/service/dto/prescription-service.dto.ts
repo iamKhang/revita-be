@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsArray, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsEnum, IsNumber, Min } from 'class-validator';
 import { PrescriptionStatus } from '@prisma/client';
+import { Type } from 'class-transformer';
 
 // DTO cho scan prescription code
 export class ScanPrescriptionDto {
@@ -142,6 +143,30 @@ export class GetServicesDto {
   @IsOptional()
   @IsString()
   workSessionId?: string;
+
+  @ApiProperty({
+    description: 'Số lượng items per page',
+    example: 50,
+    required: false,
+    default: 50,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  limit?: number;
+
+  @ApiProperty({
+    description: 'Số lượng items để skip',
+    example: 0,
+    required: false,
+    default: 0,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  offset?: number;
 }
 
 

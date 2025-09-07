@@ -21,6 +21,8 @@ export interface UpdateResultsResponse {
 export interface GetServicesQuery {
   status?: PrescriptionStatus;
   workSessionId?: string;
+  limit?: number;
+  offset?: number;
 }
 
 @Injectable()
@@ -77,10 +79,34 @@ export class PrescriptionServiceManagementService {
         orderBy: { order: 'asc' },
       });
 
+      // Debug: Log tất cả prescription services
+      this.logger.log(`Found ${prescriptionServices.length} prescription services for prescription ${prescription.id}`);
+      prescriptionServices.forEach((ps, index) => {
+        this.logger.log(`Service ${index + 1}: ${ps.service.name} - Status: ${ps.status} - DoctorId: ${ps.doctorId} - TechnicianId: ${ps.technicianId}`);
+      });
+
       // Tìm service đang ở trạng thái WAITING
       const waitingService = prescriptionServices.find(
         (ps) => ps.status === PrescriptionStatus.WAITING,
       );
+
+      this.logger.log(`Waiting service found: ${waitingService ? waitingService.service.name : 'None'}`);
+
+      // Resolve auth ID to doctor/technician ID for checking permissions
+      let resolvedUserId: string | null = null;
+      if (userRole === 'DOCTOR') {
+        const doctor = await this.prisma.doctor.findFirst({
+          where: { authId: userId },
+        });
+        resolvedUserId = doctor?.id || null;
+      } else if (userRole === 'TECHNICIAN') {
+        const technician = await this.prisma.technician.findFirst({
+          where: { authId: userId },
+        });
+        resolvedUserId = technician?.id || null;
+      }
+
+      this.logger.log(`Resolved ${userRole} ID: ${resolvedUserId}`);
 
       // Nếu có service WAITING, cập nhật thành SERVING và gán user
       let currentService: any = null;
@@ -90,11 +116,21 @@ export class PrescriptionServiceManagementService {
           startedAt: new Date(),
         };
 
-        // Gán doctor hoặc technician tùy theo role
+        // Resolve auth ID to doctor/technician ID and assign
         if (userRole === 'DOCTOR') {
-          updateData.doctorId = userId;
+          const doctor = await this.prisma.doctor.findFirst({
+            where: { authId: userId },
+          });
+          if (doctor) {
+            updateData.doctorId = doctor.id;
+          }
         } else if (userRole === 'TECHNICIAN') {
-          updateData.technicianId = userId;
+          const technician = await this.prisma.technician.findFirst({
+            where: { authId: userId },
+          });
+          if (technician) {
+            updateData.technicianId = technician.id;
+          }
         }
 
         currentService = await this.prisma.prescriptionService.update({
@@ -113,6 +149,31 @@ export class PrescriptionServiceManagementService {
         });
 
         this.logger.log(`Service ${waitingService.serviceId} updated to SERVING for ${userRole} ${userId}`);
+      } else {
+        // Nếu không có service WAITING, kiểm tra xem có service nào đã được assign cho user hiện tại không
+        const assignedService = prescriptionServices.find((ps) => {
+          if (userRole === 'DOCTOR' && ps.doctorId === resolvedUserId) {
+            return ps.status === PrescriptionStatus.SERVING || ps.status === PrescriptionStatus.WAITING_RESULT;
+          } else if (userRole === 'TECHNICIAN' && ps.technicianId === resolvedUserId) {
+            return ps.status === PrescriptionStatus.SERVING || ps.status === PrescriptionStatus.WAITING_RESULT;
+          }
+          return false;
+        });
+
+        if (assignedService) {
+          this.logger.log(`Found assigned service: ${assignedService.service.name} - Status: ${assignedService.status}`);
+          currentService = assignedService;
+        } else {
+          this.logger.log(`No service found for ${userRole} ${resolvedUserId}`);
+          // Kiểm tra xem có service nào đang ở trạng thái SERVING hoặc WAITING_RESULT không
+          const activeService = prescriptionServices.find((ps) => 
+            ps.status === PrescriptionStatus.SERVING || ps.status === PrescriptionStatus.WAITING_RESULT
+          );
+          
+          if (activeService) {
+            this.logger.log(`Found active service: ${activeService.service.name} - Status: ${activeService.status} - Assigned to Doctor: ${activeService.doctorId} - Technician: ${activeService.technicianId}`);
+          }
+        }
       }
 
       return {
@@ -141,14 +202,32 @@ export class PrescriptionServiceManagementService {
       // Parse composite key
       const [prescriptionId, serviceId] = prescriptionServiceId.split('-');
 
+      // Resolve auth ID to doctor/technician ID
+      let resolvedUserId: string | null = null;
+      if (userRole === 'DOCTOR') {
+        const doctor = await this.prisma.doctor.findFirst({
+          where: { authId: userId },
+        });
+        resolvedUserId = doctor?.id || null;
+      } else if (userRole === 'TECHNICIAN') {
+        const technician = await this.prisma.technician.findFirst({
+          where: { authId: userId },
+        });
+        resolvedUserId = technician?.id || null;
+      }
+
+      if (!resolvedUserId) {
+        throw new NotFoundException('Không tìm thấy thông tin user');
+      }
+
       // Tìm prescription service
       const prescriptionService = await this.prisma.prescriptionService.findFirst({
         where: {
           prescriptionId,
           serviceId,
           OR: [
-            { doctorId: userRole === 'DOCTOR' ? userId : undefined },
-            { technicianId: userRole === 'TECHNICIAN' ? userId : undefined },
+            { doctorId: userRole === 'DOCTOR' ? resolvedUserId : undefined },
+            { technicianId: userRole === 'TECHNICIAN' ? resolvedUserId : undefined },
           ].filter(Boolean),
         },
         include: {
@@ -241,14 +320,32 @@ export class PrescriptionServiceManagementService {
 
       const [prescriptionId, serviceId] = prescriptionServiceId.split('-');
 
+      // Resolve auth ID to doctor/technician ID
+      let resolvedUserId: string | null = null;
+      if (userRole === 'DOCTOR') {
+        const doctor = await this.prisma.doctor.findFirst({
+          where: { authId: userId },
+        });
+        resolvedUserId = doctor?.id || null;
+      } else if (userRole === 'TECHNICIAN') {
+        const technician = await this.prisma.technician.findFirst({
+          where: { authId: userId },
+        });
+        resolvedUserId = technician?.id || null;
+      }
+
+      if (!resolvedUserId) {
+        throw new NotFoundException('Không tìm thấy thông tin user');
+      }
+
       // Tìm prescription service
       const prescriptionService = await this.prisma.prescriptionService.findFirst({
         where: {
           prescriptionId,
           serviceId,
           OR: [
-            { doctorId: userRole === 'DOCTOR' ? userId : undefined },
-            { technicianId: userRole === 'TECHNICIAN' ? userId : undefined },
+            { doctorId: userRole === 'DOCTOR' ? resolvedUserId : undefined },
+            { technicianId: userRole === 'TECHNICIAN' ? resolvedUserId : undefined },
           ].filter(Boolean),
         },
         include: { service: true },
@@ -300,11 +397,23 @@ export class PrescriptionServiceManagementService {
     try {
       const whereCondition: any = {};
 
-      // Filter by assigned user
+      // Resolve auth ID to doctor/technician ID
       if (userRole === 'DOCTOR') {
-        whereCondition.doctorId = userId;
+        const doctor = await this.prisma.doctor.findFirst({
+          where: { authId: userId },
+        });
+        if (!doctor) {
+          return { services: [], total: 0 };
+        }
+        whereCondition.doctorId = doctor.id;
       } else if (userRole === 'TECHNICIAN') {
-        whereCondition.technicianId = userId;
+        const technician = await this.prisma.technician.findFirst({
+          where: { authId: userId },
+        });
+        if (!technician) {
+          return { services: [], total: 0 };
+        }
+        whereCondition.technicianId = technician.id;
       }
 
       if (query.status) {
@@ -329,20 +438,30 @@ export class PrescriptionServiceManagementService {
           service: {
             select: {
               id: true,
+              serviceCode: true,
               name: true,
               price: true,
               description: true,
+              timePerPatient: true,
             },
           },
         },
         orderBy: [
           { startedAt: 'desc' },
         ],
+        take: query.limit || 50,
+        skip: query.offset || 0,
+      });
+
+      const total = await this.prisma.prescriptionService.count({
+        where: whereCondition,
       });
 
       return {
         services,
-        total: services.length,
+        total,
+        limit: query.limit || 50,
+        offset: query.offset || 0,
       };
     } catch (error) {
       this.logger.error(`Get user services error: ${error.message}`);
@@ -356,9 +475,18 @@ export class PrescriptionServiceManagementService {
 
       let workSession;
       if (userRole === 'DOCTOR') {
+        // First find the doctor record for this auth ID
+        const doctor = await this.prisma.doctor.findFirst({
+          where: { authId: userId },
+        });
+        
+        if (!doctor) {
+          return null;
+        }
+
         workSession = await this.prisma.workSession.findFirst({
           where: {
-            doctorId: userId,
+            doctorId: doctor.id,
             startTime: { lte: now },
             endTime: { gte: now },
           },
@@ -372,12 +500,26 @@ export class PrescriptionServiceManagementService {
                 },
               },
             },
+            doctor: {
+              include: {
+                auth: true,
+              },
+            },
           },
         });
       } else if (userRole === 'TECHNICIAN') {
+        // First find the technician record for this auth ID
+        const technician = await this.prisma.technician.findFirst({
+          where: { authId: userId },
+        });
+        
+        if (!technician) {
+          return null;
+        }
+
         workSession = await this.prisma.workSession.findFirst({
           where: {
-            technicianId: userId,
+            technicianId: technician.id,
             startTime: { lte: now },
             endTime: { gte: now },
           },
@@ -389,6 +531,11 @@ export class PrescriptionServiceManagementService {
                     specialty: true,
                   },
                 },
+              },
+            },
+            technician: {
+              include: {
+                auth: true,
               },
             },
           },

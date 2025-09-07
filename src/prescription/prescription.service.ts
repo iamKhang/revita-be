@@ -244,6 +244,82 @@ export class PrescriptionService {
         .sort((a, b) => a.order - b.order)[0];
 
       if (firstPendingService) {
+        // Try to assign the service to a technician/doctor based on routing
+        let assignedDoctorId: string | null = null;
+        let assignedTechnicianId: string | null = null;
+        
+        try {
+          // Get the service details to find which room it should go to
+          const service = await this.prisma.service.findUnique({
+            where: { id: firstPendingService.serviceId },
+            include: {
+              clinicRoomServices: {
+                include: {
+                  clinicRoom: {
+                    include: {
+                      booth: {
+                        include: {
+                          workSessions: {
+                            where: {
+                              startTime: { lte: new Date() },
+                              endTime: { gte: new Date() },
+                            },
+                            include: {
+                              doctor: true,
+                              technician: true,
+                            },
+                            orderBy: { startTime: 'desc' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          });
+          
+          if (service && service.clinicRoomServices.length > 0) {
+            // Find the first available booth with active work session
+            for (const crs of service.clinicRoomServices) {
+              for (const booth of crs.clinicRoom.booth) {
+                if (booth.workSessions.length > 0) {
+                  const workSession = booth.workSessions[0];
+                  assignedDoctorId = workSession.doctorId;
+                  assignedTechnicianId = workSession.technicianId;
+                  break;
+                }
+              }
+              if (assignedDoctorId || assignedTechnicianId) break;
+            }
+            
+            // If no active work session, try to find any work session for fallback
+            if (!assignedDoctorId && !assignedTechnicianId) {
+              for (const crs of service.clinicRoomServices) {
+                for (const booth of crs.clinicRoom.booth) {
+                  const anyWorkSession = await this.prisma.workSession.findFirst({
+                    where: { boothId: booth.id },
+                    include: {
+                      doctor: true,
+                      technician: true,
+                    },
+                    orderBy: { startTime: 'desc' },
+                  });
+                  
+                  if (anyWorkSession) {
+                    assignedDoctorId = anyWorkSession.doctorId;
+                    assignedTechnicianId = anyWorkSession.technicianId;
+                    break;
+                  }
+                }
+                if (assignedDoctorId || assignedTechnicianId) break;
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to assign service to technician/doctor:', error);
+        }
+        
         await this.prisma.prescriptionService.update({
           where: {
             prescriptionId_serviceId: {
@@ -251,7 +327,11 @@ export class PrescriptionService {
               serviceId: firstPendingService.serviceId,
             },
           },
-          data: { status: PrescriptionStatus.WAITING },
+          data: { 
+            status: PrescriptionStatus.WAITING,
+            doctorId: assignedDoctorId,
+            technicianId: assignedTechnicianId,
+          },
         });
       }
     }

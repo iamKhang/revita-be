@@ -41,11 +41,14 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // Chỉ cho phép các property được định nghĩa trong DTO
-      forbidNonWhitelisted: true, // Throw error nếu có property không được định nghĩa
+      forbidNonWhitelisted: false, // Tạm thời cho phép property không được định nghĩa
       transform: true, // Tự động transform data types
       transformOptions: {
         enableImplicitConversion: true,
       },
+      disableErrorMessages: false, // Giữ error messages
+      skipMissingProperties: true, // Bỏ qua validation cho missing properties
+      validateCustomDecorators: false, // Tắt validation cho custom decorators
     }),
   );
 

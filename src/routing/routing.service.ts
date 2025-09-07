@@ -148,6 +148,7 @@ export class RoutingService {
 
     // Get current time or use requested time
     const currentTime = request.requestedTime || new Date();
+    console.log(`Current time for routing: ${currentTime.toISOString()}`);
 
     // Get services with their duration
     const services = await this.prisma.service.findMany({
@@ -215,8 +216,14 @@ export class RoutingService {
         const roomCode = rs.clinicRoom.roomCode;
         const roomName = rs.clinicRoom.roomName;
 
+        console.log(`Checking room ${roomCode} for service ${svc.name}`);
+        console.log(`Found ${rs.clinicRoom.booth.length} booths in this room`);
+
         for (const booth of rs.clinicRoom.booth) {
+          console.log(`Booth ${booth.boothCode} has ${booth.workSessions.length} active work sessions`);
+          
           for (const workSession of booth.workSessions) {
+            console.log(`Work session: ${workSession.startTime.toISOString()} - ${workSession.endTime.toISOString()}, Doctor: ${workSession.doctorId}, Technician: ${workSession.technicianId}`);
             const sessionEndTime = new Date(workSession.endTime);
             const availableTime = sessionEndTime.getTime() - currentTime.getTime();
             if (availableTime >= requiredTimeMs) {

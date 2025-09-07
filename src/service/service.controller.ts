@@ -6,7 +6,6 @@ import {
   Query,
   Param,
   Body,
-  ParseUUIDPipe,
   HttpStatus,
   HttpException,
   UseGuards,
@@ -100,7 +99,7 @@ export class ServiceController {
   }
 
   @Get(':id')
-  async getServiceById(@Param('id', ParseUUIDPipe) id: string) {
+  async getServiceById(@Param('id') id: string) {
     try {
       const service = await this.serviceService.getServiceById(id);
       if (!service) {
@@ -343,7 +342,51 @@ export class ServiceController {
         throw new HttpException('Không tìm thấy work session hiện tại', HttpStatus.NOT_FOUND);
       }
 
-      return workSession;
+      // Get user information based on role
+      let userInfo;
+      if (userRole === 'DOCTOR') {
+        userInfo = {
+          id: workSession.doctor?.id,
+          role: 'DOCTOR',
+          doctorCode: workSession.doctor?.doctorCode,
+          name: workSession.doctor?.auth?.name,
+        };
+      } else if (userRole === 'TECHNICIAN') {
+        userInfo = {
+          id: workSession.technician?.id,
+          role: 'TECHNICIAN',
+          technicianCode: workSession.technician?.technicianCode,
+          name: workSession.technician?.auth?.name,
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Lấy work session thành công',
+        data: {
+          workSession: {
+            id: workSession.id,
+            booth: {
+              id: workSession.booth?.id,
+              boothCode: workSession.booth?.boothCode,
+              name: workSession.booth?.name,
+              room: {
+                id: workSession.booth?.room?.id,
+                roomCode: workSession.booth?.room?.roomCode,
+                roomName: workSession.booth?.room?.roomName,
+                specialty: {
+                  id: workSession.booth?.room?.specialty?.id,
+                  name: workSession.booth?.room?.specialty?.name,
+                },
+              },
+            },
+            startTime: workSession.startTime,
+            endTime: workSession.endTime,
+            nextAvailableAt: workSession.nextAvailableAt,
+          },
+          user: userInfo,
+        },
+      };
     } catch (error) {
       this.logger.error(`Get work session error: ${error.message}`);
       if (error instanceof HttpException) {
