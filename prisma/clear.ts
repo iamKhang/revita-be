@@ -20,6 +20,7 @@ async function main() {
   await prisma.admin.deleteMany();
   await prisma.doctor.deleteMany();
   await prisma.patient.deleteMany();
+  await prisma.technician.deleteMany();
   await prisma.auth.deleteMany();
   console.log('All data cleared!');
 }

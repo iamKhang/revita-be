@@ -16,11 +16,13 @@ import { PrismaClient } from '@prisma/client';
 import { CreateMedicalRecordDto } from '../../medical-record/dto/create-medical-record.dto';
 import { UpdateMedicalRecordDto } from '../../medical-record/dto/update-medical-record.dto';
 import { JwtAuthGuard } from '../../login/jwt-auth.guard';
+import { CodeGeneratorService } from '../patient-profile/code-generator.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('doctors/:doctorId')
 export class DoctorController {
   private prisma = new PrismaClient();
+  private codeGenerator = new CodeGeneratorService();
 
   @Get('appointments')
   @Roles(Role.DOCTOR)
@@ -64,9 +66,23 @@ export class DoctorController {
       );
     }
 
+    // Get doctor and patient names for code generation
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id: doctorId },
+      include: { auth: true },
+    });
+    const patientProfile = await this.prisma.patientProfile.findUnique({
+      where: { id: body.patientProfileId },
+    });
+
+    const medicalRecordCode = this.codeGenerator.generateMedicalRecordCode(
+      doctor?.auth?.name || 'Unknown',
+      patientProfile?.name || 'Unknown',
+    );
+
     return this.prisma.medicalRecord.create({
       data: {
-        medicalRecordCode: `MR${Date.now()}`,
+        medicalRecordCode,
         doctorId,
         patientProfileId: body.patientProfileId,
         templateId: body.templateId,

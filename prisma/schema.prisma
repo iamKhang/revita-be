@@ -92,17 +92,18 @@ model Patient {
   authId            String?     @unique @map("auth_id")
   auth              Auth?       @relation(fields: [authId], references: [id])
   loyaltyPoints     Int         @default(0) @map("loyalty_points") // Điểm thưởng
-  patientProfiles   PatientProfile[] // Quan hệ với các hồ sơ khám bệnh
+  patientProfiles   PatientProfile[] // Quan hệ với các hồ sơ khám bệnh (có thể null)
 
   @@map("patients")
 }
 
-// Bảng PatientProfile cho hồ sơ khám bệnh của từng người
+// Bảng PatientProfile cho hồ sơ khám bệnh của từng người (độc lập)
 model PatientProfile {
   id                String      @id @default(uuid())
   profileCode       String      @map("profile_code")
-  patientId         String      @map("patient_id")
+  patientId         String?     @map("patient_id") // Có thể null - không bắt buộc phải có Patient
   name              String      // Tên người khám
+  phone             String?     // Số điện thoại của người khám (có thể trùng)
   dateOfBirth       DateTime    @map("date_of_birth")
   gender            String
   address           String?
@@ -113,7 +114,7 @@ model PatientProfile {
   isActive          Boolean     @default(true) @map("is_active")
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
-  patient           Patient     @relation(fields: [patientId], references: [id])
+  patient           Patient?    @relation(fields: [patientId], references: [id]) // Quan hệ optional
   appointments      Appointment[]
   medicalRecords    MedicalRecord[]
   prescriptions   Prescription[]

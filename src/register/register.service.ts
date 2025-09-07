@@ -13,9 +13,12 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import { CodeGeneratorService } from '../user-management/patient-profile/code-generator.service';
 
 @Injectable()
 export class RegisterService {
+  private codeGenerator = new CodeGeneratorService();
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly redisService: RedisService,
@@ -208,10 +211,15 @@ export class RegisterService {
         });
 
         // Tạo Patient record
+        const patientCode = this.codeGenerator.generatePatientCode(
+          name,
+          new Date(dateOfBirth),
+          gender,
+        );
         await prisma.patient.create({
           data: {
             id: auth.id,
-            patientCode: `PAT${Date.now()}`, // Tạo mã bệnh nhân
+            patientCode, // Tạo mã bệnh nhân
             authId: auth.id,
             loyaltyPoints: 0,
           },

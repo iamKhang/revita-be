@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { PrismaClient, Role } from "@prisma/client";
 import * as fs from "fs";
 import * as path from "path";

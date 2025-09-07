@@ -28,7 +28,7 @@ async function main() {
   const specialtyMap: Record<string, { id: string; name: string }> = {};
   for (const name of specialtyNames) {
     const s = await prisma.specialty.create({
-      data: { 
+      data: {
         name,
         specialtyCode: name.toUpperCase().replace(/\s+/g, '_'),
       },

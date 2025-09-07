@@ -1,17 +1,42 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
 import { PrescriptionStatus } from '@prisma/client';
+import { CodeGeneratorService } from '../user-management/patient-profile/code-generator.service';
 
 @Injectable()
 export class PrescriptionService {
+  private codeGenerator = new CodeGeneratorService();
+
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreatePrescriptionDto) {
-    const { prescriptionCode, patientProfileId, doctorId, note, services, medicalRecordId } = dto as any;
-    console.log('Creating prescription with data:', { prescriptionCode, patientProfileId, doctorId, note, services, medicalRecordId });
-    const generatedCode = prescriptionCode || `PR-${Date.now()}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
+    const {
+      prescriptionCode,
+      patientProfileId,
+      doctorId,
+      note,
+      services,
+      medicalRecordId,
+    } = dto as any;
+    console.log('Creating prescription with data:', {
+      prescriptionCode,
+      patientProfileId,
+      doctorId,
+      note,
+      services,
+      medicalRecordId,
+    });
 
     if (!services || services.length === 0) {
       throw new BadRequestException('services must not be empty');
@@ -38,10 +63,16 @@ export class PrescriptionService {
     }
 
     // Accept serviceId or serviceCode; resolve to IDs
-    const requestedById = services.filter((s: any) => !!s.serviceId).map((s: any) => s.serviceId);
-    const requestedByCode = services.filter((s: any) => !!s.serviceCode).map((s: any) => s.serviceCode);
+    const requestedById = (services as any[])
+      .filter((s: any) => !!s.serviceId)
+      .map((s: any) => s.serviceId);
+    const requestedByCode = (services as any[])
+      .filter((s: any) => !!s.serviceCode)
+      .map((s: any) => s.serviceCode);
     if (requestedById.length + requestedByCode.length !== services.length) {
-      throw new BadRequestException('Each service must include serviceId or serviceCode');
+      throw new BadRequestException(
+        'Each service must include serviceId or serviceCode',
+      );
     }
     const servicesById = await this.prisma.service.findMany({
       where: { id: { in: requestedById } },
@@ -52,13 +83,17 @@ export class PrescriptionService {
       select: { id: true, serviceCode: true },
     });
     const idSet = new Set(servicesById.map((s) => s.id));
-    const codeToId = new Map(servicesByCode.map((s) => [s.serviceCode, s.id] as const));
+    const codeToId = new Map(
+      servicesByCode.map((s) => [s.serviceCode, s.id] as const),
+    );
     const missingIds = requestedById.filter((id) => !idSet.has(id));
     const missingCodes = requestedByCode.filter((code) => !codeToId.has(code));
     if (missingIds.length || missingCodes.length) {
       const parts = [] as string[];
-      if (missingIds.length) parts.push(`serviceId(s): ${missingIds.join(', ')}`);
-      if (missingCodes.length) parts.push(`serviceCode(s): ${missingCodes.join(', ')}`);
+      if (missingIds.length)
+        parts.push(`serviceId(s): ${missingIds.join(', ')}`);
+      if (missingCodes.length)
+        parts.push(`serviceCode(s): ${missingCodes.join(', ')}`);
       throw new BadRequestException(`Invalid ${parts.join(' and ')}`);
     }
 
@@ -70,13 +105,36 @@ export class PrescriptionService {
       });
       if (!mr) throw new NotFoundException('Medical record not found');
       if (mr.patientProfileId !== patientProfileId) {
-        throw new BadRequestException('medicalRecordId does not belong to the provided patientProfileId');
+        throw new BadRequestException(
+          'medicalRecordId does not belong to the provided patientProfileId',
+        );
       }
+    }
+
+    // Generate prescription code if not provided
+    let finalPrescriptionCode = prescriptionCode;
+    if (!finalPrescriptionCode) {
+      // Get doctor and patient names for code generation
+      const doctor = doctorId
+        ? await this.prisma.doctor.findUnique({
+            where: { id: doctorId },
+            include: { auth: true },
+          })
+        : null;
+
+      const patientProfile = await this.prisma.patientProfile.findUnique({
+        where: { id: patientProfileId },
+      });
+
+      finalPrescriptionCode = this.codeGenerator.generatePrescriptionCode(
+        doctor?.auth?.name || 'Unknown',
+        patientProfile?.name || 'Unknown',
+      );
     }
 
     const prescription = await this.prisma.prescription.create({
       data: {
-        prescriptionCode: generatedCode,
+        prescriptionCode: finalPrescriptionCode,
         patientProfileId,
         doctorId: doctorId ?? null,
         medicalRecordId: medicalRecordId ?? null,
@@ -84,7 +142,7 @@ export class PrescriptionService {
         services: {
           create: services.map((s, index) => ({
             serviceId: s.serviceId ?? codeToId.get(s.serviceCode as string)!,
-            status: (s.status as any) || PrescriptionStatus.NOT_STARTED,
+            status: s.status || PrescriptionStatus.NOT_STARTED,
             order: s.order ?? index + 1,
             note: s.note ?? null,
           })),
@@ -135,10 +193,20 @@ export class PrescriptionService {
 
     // If services provided, validate and then replace the list using provided objects
     if (dto.services && dto.services.length > 0) {
-      const requestedById = dto.services.filter((s: any) => !!s.serviceId).map((s: any) => s.serviceId);
-      const requestedByCode = dto.services.filter((s: any) => !!s.serviceCode).map((s: any) => s.serviceCode);
-      if (requestedById.length + requestedByCode.length !== dto.services.length) {
-        throw new BadRequestException('Each service must include serviceId or serviceCode');
+      const requestedById = dto.services
+
+        .filter((s: any) => !!s.serviceId)
+        .map((s: any) => s.serviceId);
+      const requestedByCode = dto.services
+        .filter((s: any) => !!s.serviceCode)
+        .map((s: any) => s.serviceCode);
+      if (
+        requestedById.length + requestedByCode.length !==
+        dto.services.length
+      ) {
+        throw new BadRequestException(
+          'Each service must include serviceId or serviceCode',
+        );
       }
       const servicesById = await this.prisma.service.findMany({
         where: { id: { in: requestedById } },
@@ -149,13 +217,19 @@ export class PrescriptionService {
         select: { id: true, serviceCode: true },
       });
       const idSet = new Set(servicesById.map((s) => s.id));
-      const codeToId = new Map(servicesByCode.map((s) => [s.serviceCode, s.id] as const));
+      const codeToId = new Map(
+        servicesByCode.map((s) => [s.serviceCode, s.id] as const),
+      );
       const missingIds = requestedById.filter((sid) => !idSet.has(sid));
-      const missingCodes = requestedByCode.filter((code) => !codeToId.has(code));
+      const missingCodes = requestedByCode.filter(
+        (code) => !codeToId.has(code),
+      );
       if (missingIds.length || missingCodes.length) {
         const parts = [] as string[];
-        if (missingIds.length) parts.push(`serviceId(s): ${missingIds.join(', ')}`);
-        if (missingCodes.length) parts.push(`serviceCode(s): ${missingCodes.join(', ')}`);
+        if (missingIds.length)
+          parts.push(`serviceId(s): ${missingIds.join(', ')}`);
+        if (missingCodes.length)
+          parts.push(`serviceCode(s): ${missingCodes.join(', ')}`);
         throw new BadRequestException(`Invalid ${parts.join(' and ')}`);
       }
       await this.prisma.prescriptionService.deleteMany({
@@ -190,7 +264,9 @@ export class PrescriptionService {
   }
 
   async cancel(id: string) {
-    const existing = await this.prisma.prescription.findUnique({ where: { id } });
+    const existing = await this.prisma.prescription.findUnique({
+      where: { id },
+    });
     if (!existing) throw new NotFoundException('Prescription not found');
 
     // Mark prescription and all services as CANCELLED
@@ -234,7 +310,9 @@ export class PrescriptionService {
       PrescriptionStatus.SERVING,
       PrescriptionStatus.WAITING_RESULT,
     ];
-    const activeExists = psList.some((s) => activeStatuses.includes(s.status as any));
+    const activeExists = psList.some((s) =>
+      activeStatuses.includes(s.status as any),
+    );
 
     // If no active service, start the first PENDING service in order
     if (!activeExists) {
@@ -247,7 +325,7 @@ export class PrescriptionService {
         // Try to assign the service to a technician/doctor based on routing
         let assignedDoctorId: string | null = null;
         let assignedTechnicianId: string | null = null;
-        
+
         try {
           // Get the service details to find which room it should go to
           const service = await this.prisma.service.findUnique({
@@ -278,7 +356,7 @@ export class PrescriptionService {
               },
             },
           });
-          
+
           if (service && service.clinicRoomServices.length > 0) {
             // Find the first available booth with active work session
             for (const crs of service.clinicRoomServices) {
@@ -292,20 +370,21 @@ export class PrescriptionService {
               }
               if (assignedDoctorId || assignedTechnicianId) break;
             }
-            
+
             // If no active work session, try to find any work session for fallback
             if (!assignedDoctorId && !assignedTechnicianId) {
               for (const crs of service.clinicRoomServices) {
                 for (const booth of crs.clinicRoom.booth) {
-                  const anyWorkSession = await this.prisma.workSession.findFirst({
-                    where: { boothId: booth.id },
-                    include: {
-                      doctor: true,
-                      technician: true,
-                    },
-                    orderBy: { startTime: 'desc' },
-                  });
-                  
+                  const anyWorkSession =
+                    await this.prisma.workSession.findFirst({
+                      where: { boothId: booth.id },
+                      include: {
+                        doctor: true,
+                        technician: true,
+                      },
+                      orderBy: { startTime: 'desc' },
+                    });
+
                   if (anyWorkSession) {
                     assignedDoctorId = anyWorkSession.doctorId;
                     assignedTechnicianId = anyWorkSession.technicianId;
@@ -319,7 +398,7 @@ export class PrescriptionService {
         } catch (error) {
           console.warn('Failed to assign service to technician/doctor:', error);
         }
-        
+
         await this.prisma.prescriptionService.update({
           where: {
             prescriptionId_serviceId: {
@@ -327,7 +406,7 @@ export class PrescriptionService {
               serviceId: firstPendingService.serviceId,
             },
           },
-          data: { 
+          data: {
             status: PrescriptionStatus.WAITING,
             doctorId: assignedDoctorId,
             technicianId: assignedTechnicianId,
@@ -382,8 +461,11 @@ export class PrescriptionService {
   }
 
   async getPrescriptionsByMedicalRecord(medicalRecordId: string) {
-    console.log('Searching for prescriptions with medicalRecordId:', medicalRecordId);
-    
+    console.log(
+      'Searching for prescriptions with medicalRecordId:',
+      medicalRecordId,
+    );
+
     const prescriptions = await this.prisma.prescription.findMany({
       where: { medicalRecordId },
       include: {
