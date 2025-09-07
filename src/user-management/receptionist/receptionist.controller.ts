@@ -18,11 +18,13 @@ import { CreatePatientDto } from '../dto/create-patient.dto';
 import { UpdatePatientDto } from '../dto/update-patient.dto';
 import { BookAppointmentDto } from '../dto/book-appointment.dto';
 import { JwtAuthGuard } from 'src/login/jwt-auth.guard';
+import { CodeGeneratorService } from '../patient-profile/code-generator.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('receptionists')
 export class ReceptionistController {
   private prisma = new PrismaClient();
+  private codeGenerator = new CodeGeneratorService();
 
   @Get('users')
   @Roles(Role.RECEPTIONIST)
@@ -108,7 +110,11 @@ export class ReceptionistController {
       data: {
         id: auth.id,
         authId: auth.id,
-        patientCode: `PAT${Date.now()}`,
+        patientCode: this.codeGenerator.generatePatientCode(
+          name,
+          new Date(dateOfBirth),
+          gender,
+        ),
         loyaltyPoints: 0,
       },
     });
@@ -236,9 +242,28 @@ export class ReceptionistController {
     ) {
       throw new BadRequestException('Missing required fields');
     }
+
+    // Fetch doctor and patient profile for code generation
+    const [doctor, patientProfile] = await Promise.all([
+      this.prisma.doctor.findUnique({
+        where: { id: doctorId },
+        include: { auth: true },
+      }),
+      this.prisma.patientProfile.findUnique({
+        where: { id: patientProfileId },
+      }),
+    ]);
+
+    if (!doctor || !patientProfile) {
+      throw new BadRequestException('Doctor or patient profile not found');
+    }
+
     return this.prisma.appointment.create({
       data: {
-        appointmentCode: `APPT${Date.now()}`,
+        appointmentCode: this.codeGenerator.generateAppointmentCode(
+          doctor.auth.name,
+          patientProfile.name,
+        ),
         bookerId,
         patientProfileId,
         specialtyId,

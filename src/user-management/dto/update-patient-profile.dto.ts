@@ -18,6 +18,10 @@ export class UpdatePatientProfileDto {
   name?: string;
 
   @IsOptional()
+  @IsString()
+  phone?: string; // Thêm phone number
+
+  @IsOptional()
   @IsDateString()
   dateOfBirth?: string;
 

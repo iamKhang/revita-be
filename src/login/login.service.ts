@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { CodeGeneratorService } from '../user-management/patient-profile/code-generator.service';
 
 interface JwtPayload {
   sub: string;
@@ -26,6 +27,8 @@ interface GoogleUser {
 
 @Injectable()
 export class LoginService {
+  private codeGenerator = new CodeGeneratorService();
+
   constructor(
     private readonly jwtService: JwtService,
     @Inject('PRISMA') private readonly prisma: PrismaClient,
@@ -147,7 +150,11 @@ export class LoginService {
       await this.prisma.patient.create({
         data: {
           id: auth.id,
-          patientCode: `PAT${Date.now()}`,
+          patientCode: this.codeGenerator.generatePatientCode(
+            googleUser.firstName + ' ' + googleUser.lastName,
+            new Date('1990-01-01'), // Default date for Google users
+            'Nam', // Default gender
+          ),
           authId: auth.id,
           loyaltyPoints: 0,
         },

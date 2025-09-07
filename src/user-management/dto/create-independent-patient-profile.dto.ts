@@ -7,18 +7,14 @@ import {
   IsObject,
 } from 'class-validator';
 
-export class CreatePatientProfileDto {
-  @IsUUID()
-  @IsOptional()
-  patientId?: string; // Optional - có thể tạo PatientProfile độc lập
-
+export class CreateIndependentPatientProfileDto {
   @IsString()
   @IsNotEmpty()
   name: string;
 
-  @IsString()
   @IsOptional()
-  phone?: string; // Thêm phone number
+  @IsString()
+  phone?: string;
 
   @IsDateString()
   @IsNotEmpty()
@@ -47,4 +43,8 @@ export class CreatePatientProfileDto {
   @IsString()
   @IsOptional()
   relationship?: string;
+
+  @IsUUID()
+  @IsOptional()
+  patientId?: string; // Optional - để liên kết với Patient nếu cần
 }

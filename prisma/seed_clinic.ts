@@ -1,6 +1,105 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
+// Simple code generator for seed data
+function generateProfileCode(
+  name: string,
+  dateOfBirth: Date,
+  gender: string,
+  isIndependent: boolean = false,
+): string {
+  const now = new Date();
+  const year = now.getFullYear().toString().slice(-2);
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const day = now.getDate().toString().padStart(2, '0');
+  const hour = now.getHours().toString().padStart(2, '0');
+  const minute = now.getMinutes().toString().padStart(2, '0');
+  const second = now.getSeconds().toString().padStart(2, '0');
+
+  const genderCode =
+    gender.toLowerCase().includes('nam') ||
+    gender.toLowerCase().includes('male')
+      ? 'M'
+      : 'F';
+  const lastNameInitial =
+    name.split(' ')[0].charAt(0).toUpperCase().charCodeAt(0) - 64;
+  const prefix = isIndependent ? 'PPI' : 'PP';
+
+  return `${prefix}${year}${month}${day}${hour}${minute}${second}${genderCode}${lastNameInitial}`;
+}
+
+function generatePatientCode(
+  name: string,
+  dateOfBirth: Date,
+  gender: string,
+): string {
+  const now = new Date();
+  const year = now.getFullYear().toString().slice(-2);
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const day = now.getDate().toString().padStart(2, '0');
+  const hour = now.getHours().toString().padStart(2, '0');
+  const minute = now.getMinutes().toString().padStart(2, '0');
+  const second = now.getSeconds().toString().padStart(2, '0');
+
+  const genderCode =
+    gender.toLowerCase().includes('nam') ||
+    gender.toLowerCase().includes('male')
+      ? 'M'
+      : 'F';
+  const lastNameInitial =
+    name.split(' ')[0].charAt(0).toUpperCase().charCodeAt(0) - 64;
+
+  return `PAT${year}${month}${day}${hour}${minute}${second}${genderCode}${lastNameInitial}`;
+}
+
+function generateDoctorCode(name: string, specialty?: string): string {
+  const now = new Date();
+  const year = now.getFullYear().toString().slice(-2);
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const day = now.getDate().toString().padStart(2, '0');
+  const hour = now.getHours().toString().padStart(2, '0');
+  const minute = now.getMinutes().toString().padStart(2, '0');
+  const second = now.getSeconds().toString().padStart(2, '0');
+
+  const specialtyCode = specialty ? getSpecialtyCode(specialty) : 'X';
+  const lastNameInitial =
+    name.split(' ')[0].charAt(0).toUpperCase().charCodeAt(0) - 64;
+
+  return `DOC${year}${month}${day}${hour}${minute}${second}${specialtyCode}${lastNameInitial}`;
+}
+
+function getSpecialtyCode(specialty: string): string {
+  const specialtyMap: Record<string, string> = {
+    'tim mạch': 'TM',
+    'thần kinh': 'TK',
+    'nội khoa': 'NK',
+    'ngoại khoa': 'NK',
+    'sản phụ khoa': 'SG',
+    'nhi khoa': 'NH',
+    mắt: 'MT',
+    'tai mũi họng': 'TMH',
+    'da liễu': 'DL',
+    'xương khớp': 'XK',
+    'tâm thần': 'TT',
+    'ung bướu': 'UB',
+    'hồi sức cấp cứu': 'HS',
+    'gây mê hồi sức': 'GM',
+    'chẩn đoán hình ảnh': 'CD',
+    'xét nghiệm': 'XN',
+    dược: 'DC',
+  };
+
+  const specialtyLower = specialty.toLowerCase();
+  for (const [key, code] of Object.entries(specialtyMap)) {
+    if (specialtyLower.includes(key)) {
+      return code;
+    }
+  }
+
+  // Fallback: lấy 2 chữ cái đầu
+  return specialty.substring(0, 2).toUpperCase();
+}
+
 const prisma = new PrismaClient();
 
 // Stable IDs to keep data consistent across runs
@@ -56,6 +155,10 @@ const IDS = {
     pp08: '66666666-6666-6666-6666-666666666608',
     pp09: '66666666-6666-6666-6666-666666666609',
     pp10: '66666666-6666-6666-6666-666666666610',
+    // PatientProfile độc lập (không liên kết với Patient)
+    pp11: '66666666-6666-6666-6666-666666666611',
+    pp12: '66666666-6666-6666-6666-666666666612',
+    pp13: '66666666-6666-6666-6666-666666666613',
   },
 };
 
@@ -112,10 +215,18 @@ async function ensureAuthAndDoctor(opts: {
   }
   let doctor = await prisma.doctor.findUnique({ where: { authId: auth.id } });
   if (!doctor) {
+    // Generate doctor code if not provided
+    const finalDoctorCode =
+      opts.doctor.doctorCode ||
+      generateDoctorCode(
+        auth.name,
+        'Nội khoa', // Default specialty
+      );
+
     doctor = await prisma.doctor.create({
       data: {
         id: auth.id,
-        doctorCode: opts.doctor.doctorCode,
+        doctorCode: finalDoctorCode,
         authId: auth.id,
         degrees: opts.doctor.degrees,
         yearsExperience: opts.doctor.yearsExperience,
@@ -181,11 +292,24 @@ async function ensureAuthWithId(opts: {
   return auth;
 }
 
-async function ensurePatientByAuthId(authId: string, patientCode: string) {
+async function ensurePatientByAuthId(authId: string, patientCode?: string) {
   let patient = await prisma.patient.findUnique({ where: { authId } });
   if (!patient) {
+    // Get auth info for code generation
+    const auth = await prisma.auth.findUnique({ where: { id: authId } });
+    const finalPatientCode =
+      patientCode ||
+      (auth
+        ? generatePatientCode(auth.name, auth.dateOfBirth, auth.gender)
+        : `PAT${Date.now()}`);
+
     patient = await prisma.patient.create({
-      data: { id: authId, patientCode, authId, loyaltyPoints: 0 },
+      data: {
+        id: authId,
+        patientCode: finalPatientCode,
+        authId,
+        loyaltyPoints: 0,
+      },
     });
   }
   return patient;
@@ -194,8 +318,9 @@ async function ensurePatientByAuthId(authId: string, patientCode: string) {
 async function ensurePatientProfileWithId(opts: {
   id: string;
   profileCode: string;
-  patientId: string;
+  patientId?: string | null; // Có thể null - PatientProfile độc lập
   name: string;
+  phone?: string | null;
   dateOfBirth: Date;
   gender: string;
   address?: string | null;
@@ -207,14 +332,25 @@ async function ensurePatientProfileWithId(opts: {
     const byCode = await prisma.patientProfile.findFirst({
       where: { profileCode: opts.profileCode },
     });
+    // Generate profile code if not provided
+    const finalProfileCode =
+      opts.profileCode ||
+      generateProfileCode(
+        opts.name,
+        opts.dateOfBirth,
+        opts.gender,
+        !opts.patientId, // isIndependent
+      );
+
     profile =
       byCode ??
       (await prisma.patientProfile.create({
         data: {
           id: opts.id,
-          profileCode: opts.profileCode,
-          patientId: opts.patientId,
+          profileCode: finalProfileCode,
+          patientId: opts.patientId ?? null, // Có thể null
           name: opts.name,
+          phone: opts.phone ?? null,
           dateOfBirth: opts.dateOfBirth,
           gender: opts.gender,
           address: opts.address ?? 'TP HCM',
@@ -495,6 +631,7 @@ async function main() {
       authId: IDS.auth.patient01,
       email: 'patient01@example.com',
       name: 'Nguyễn Văn A',
+      phone: '0901000001',
       profileId: IDS.profiles.pp01,
       profileCode: 'PP_U01',
       gender: 'male',
@@ -505,6 +642,7 @@ async function main() {
       authId: IDS.auth.patient02,
       email: 'patient02@example.com',
       name: 'Trần Thị B',
+      phone: '0901000002',
       profileId: IDS.profiles.pp02,
       profileCode: 'PP_U02',
       gender: 'female',
@@ -515,6 +653,7 @@ async function main() {
       authId: IDS.auth.patient03,
       email: 'patient03@example.com',
       name: 'Lê Văn C',
+      phone: '0901000003',
       profileId: IDS.profiles.pp03,
       profileCode: 'PP_U03',
       gender: 'male',
@@ -525,6 +664,7 @@ async function main() {
       authId: IDS.auth.patient04,
       email: 'patient04@example.com',
       name: 'Phạm Thị D',
+      phone: '0901000004',
       profileId: IDS.profiles.pp04,
       profileCode: 'PP_U04',
       gender: 'female',
@@ -535,6 +675,7 @@ async function main() {
       authId: IDS.auth.patient05,
       email: 'patient05@example.com',
       name: 'Huỳnh Văn E',
+      phone: '0901000005',
       profileId: IDS.profiles.pp05,
       profileCode: 'PP_U05',
       gender: 'male',
@@ -545,6 +686,7 @@ async function main() {
       authId: IDS.auth.patient06,
       email: 'patient06@example.com',
       name: 'Võ Thị F',
+      phone: '0901000006',
       profileId: IDS.profiles.pp06,
       profileCode: 'PP_U06',
       gender: 'female',
@@ -555,6 +697,7 @@ async function main() {
       authId: IDS.auth.patient07,
       email: 'patient07@example.com',
       name: 'Đặng Văn G',
+      phone: '0901000007',
       profileId: IDS.profiles.pp07,
       profileCode: 'PP_U07',
       gender: 'male',
@@ -565,6 +708,7 @@ async function main() {
       authId: IDS.auth.patient08,
       email: 'patient08@example.com',
       name: 'Bùi Thị H',
+      phone: '0901000008',
       profileId: IDS.profiles.pp08,
       profileCode: 'PP_U08',
       gender: 'female',
@@ -575,6 +719,7 @@ async function main() {
       authId: IDS.auth.patient09,
       email: 'patient09@example.com',
       name: 'Phan Văn I',
+      phone: '0901000009',
       profileId: IDS.profiles.pp09,
       profileCode: 'PP_U09',
       gender: 'male',
@@ -585,6 +730,7 @@ async function main() {
       authId: IDS.auth.patient10,
       email: 'patient10@example.com',
       name: 'Ngô Thị K',
+      phone: '0901000010',
       profileId: IDS.profiles.pp10,
       profileCode: 'PP_U10',
       gender: 'female',
@@ -603,16 +749,58 @@ async function main() {
     await ensurePatientProfileWithId({
       id: pd.profileId,
       profileCode: pd.profileCode,
-      patientId: patient.id,
+      patientId: patient.id, // Liên kết với Patient
       name: pd.name,
+      phone: pd.phone,
       dateOfBirth: pd.dob,
       gender: pd.gender,
       address: 'TP HCM',
     });
   }
 
+  // Tạo một số PatientProfile độc lập (không liên kết với Patient)
+  const independentProfiles = [
+    {
+      id: IDS.profiles.pp11,
+      profileCode: 'PP_IND_01',
+      name: 'Nguyễn Thị X',
+      phone: '0902000001', // Có thể trùng số điện thoại
+      dateOfBirth: new Date('1988-03-15'),
+      gender: 'female',
+    },
+    {
+      id: IDS.profiles.pp12,
+      profileCode: 'PP_IND_02',
+      name: 'Trần Văn Y',
+      phone: '0902000002',
+      dateOfBirth: new Date('1992-07-22'),
+      gender: 'male',
+    },
+    {
+      id: IDS.profiles.pp13,
+      profileCode: 'PP_IND_03',
+      name: 'Lê Thị Z',
+      phone: '0901000001', // Trùng số điện thoại với patient01
+      dateOfBirth: new Date('1995-11-08'),
+      gender: 'female',
+    },
+  ];
+
+  for (const profile of independentProfiles) {
+    await ensurePatientProfileWithId({
+      id: profile.id,
+      profileCode: profile.profileCode,
+      patientId: null, // Không liên kết với Patient
+      name: profile.name,
+      phone: profile.phone,
+      dateOfBirth: profile.dateOfBirth,
+      gender: profile.gender,
+      address: 'TP HCM',
+    });
+  }
+
   console.log(
-    'Seed clinic data completed (specialties, doctors, rooms, services, links, patients).',
+    'Seed clinic data completed (specialties, doctors, rooms, services, links, patients, independent profiles).',
   );
 }
 

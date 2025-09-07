@@ -6,9 +6,12 @@ import { UpdateMedicalRecordDto } from './dto/update-medical-record.dto';
 import { JwtUserPayload } from './dto/jwt-user-payload.dto';
 import { Role } from '../rbac/roles.enum';
 import { MedicalRecordStatus } from '@prisma/client';
+import { CodeGeneratorService } from '../user-management/patient-profile/code-generator.service';
 
 @Injectable()
 export class MedicalRecordService {
+  private codeGenerator = new CodeGeneratorService();
+
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateMedicalRecordDto, user: JwtUserPayload) {
@@ -57,11 +60,22 @@ export class MedicalRecordService {
       throw new NotFoundException('Không tìm thấy hồ sơ bệnh nhân');
     }
 
+    // Get doctor and patient names for code generation
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id: doctorId },
+      include: { auth: true },
+    });
+
+    const medicalRecordCode = this.codeGenerator.generateMedicalRecordCode(
+      doctor?.auth?.name || 'Unknown',
+      patientProfile?.name || 'Unknown',
+    );
+
     const data: any = {
       patientProfileId: dto.patientProfileId,
       templateId: dto.templateId,
       content: dto.content,
-      medicalRecordCode: `MR${Date.now()}`,
+      medicalRecordCode,
       status: MedicalRecordStatus.DRAFT,
       doctorId,
     };

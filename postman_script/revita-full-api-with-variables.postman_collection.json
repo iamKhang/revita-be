@@ -3,7 +3,7 @@
     "_postman_id": "revita-full-api-collection",
     "name": "Revita Full API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Full API collection for Revita medical system, including authentication, registration, user management, admin management, patient management, doctor management, receptionist management, patient profiles, medical records, counter management, counter assignment, and app endpoints."
+    "description": "Full API collection for Revita medical system, including authentication, registration, user management, admin management, patient management, doctor management, receptionist management, patient profiles (with independent profiles, search, and linking capabilities), medical records, counter management, counter assignment, and app endpoints. All entities now use unified code generation system."
   },
   "values": [
 		{
@@ -446,9 +446,9 @@
             "url": { "raw": "{{baseUrl}}/patient-profiles", "host": ["{{baseUrl}}"], "path": ["patient-profiles"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"name\": \"Tên người khám\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"occupation\": \"Kỹ sư\",\n  \"emergencyContact\": {\n    \"name\": \"Nguyễn Thị B\",\n    \"phone\": \"0123456789\",\n    \"relationship\": \"Vợ\"\n  },\n  \"healthInsurance\": \"1234567890123456\",\n  \"relationship\": \"Chính chủ\"\n}"
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"name\": \"Tên người khám\",\n  \"phone\": \"0901234567\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"occupation\": \"Kỹ sư\",\n  \"emergencyContact\": {\n    \"name\": \"Nguyễn Thị B\",\n    \"phone\": \"0123456789\",\n    \"relationship\": \"Vợ\"\n  },\n  \"healthInsurance\": \"1234567890123456\",\n  \"relationship\": \"Chính chủ\"\n}"
             },
-            "description": "Tạo hồ sơ bệnh nhân mới cho tất cả các role."
+            "description": "Tạo hồ sơ bệnh nhân mới cho tất cả các role. patientId có thể null để tạo hồ sơ độc lập."
           }
         },
         {
@@ -482,6 +482,122 @@
             ],
             "url": { "raw": "{{baseUrl}}/patient-profiles/patient/{{patientId}}", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "patient", "{{patientId}}"] },
             "description": "Lấy tất cả hồ sơ bệnh nhân của một patient."
+          }
+        },
+        {
+          "name": "Update Patient Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles/{{patientProfileId}}", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "{{patientProfileId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tên người khám (cập nhật)\",\n  \"phone\": \"0901234568\",\n  \"address\": \"456 Đường XYZ, Quận 2, TP.HCM\",\n  \"occupation\": \"Bác sĩ\"\n}"
+            },
+            "description": "Cập nhật thông tin hồ sơ bệnh nhân. Hỗ trợ cập nhật phone number."
+          }
+        },
+        {
+          "name": "Create Independent Patient Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles/independent", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "independent"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nguyễn Văn Độc Lập\",\n  \"phone\": \"0902000001\",\n  \"dateOfBirth\": \"1985-05-15\",\n  \"gender\": \"male\",\n  \"address\": \"789 Đường DEF, Quận 3, TP.HCM\",\n  \"occupation\": \"Kinh doanh\",\n  \"emergencyContact\": {\n    \"name\": \"Nguyễn Thị C\",\n    \"phone\": \"0902000002\",\n    \"relationship\": \"Chị gái\"\n  },\n  \"healthInsurance\": null,\n  \"relationship\": \"self\",\n  \"patientId\": null\n}"
+            },
+            "description": "Tạo hồ sơ bệnh nhân độc lập (chỉ cho staff: DOCTOR, ADMIN, RECEPTIONIST, CASHIER)."
+          }
+        },
+        {
+          "name": "Search Patient Profiles",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles/search?name=Nguyễn&phone=0902&code=PP", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "search"], "query": [
+              { "key": "name", "value": "Nguyễn", "description": "Tìm kiếm theo tên" },
+              { "key": "phone", "value": "0902", "description": "Tìm kiếm theo số điện thoại" },
+              { "key": "profileCode", "value": "", "description": "Tìm kiếm theo mã hồ sơ" },
+              { "key": "code", "value": "PP", "description": "Tìm kiếm theo mã hồ sơ (alias)" }
+            ]},
+            "description": "Tìm kiếm hồ sơ bệnh nhân theo tên, số điện thoại hoặc mã hồ sơ (chỉ cho staff)."
+          }
+        },
+        {
+          "name": "Get Independent Patient Profiles",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles/independent", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "independent"] },
+            "description": "Lấy tất cả hồ sơ bệnh nhân độc lập (không liên kết với Patient) - chỉ cho staff."
+          }
+        },
+        {
+          "name": "Link Patient Profile to Patient",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles/{{patientProfileId}}/link", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "{{patientProfileId}}", "link"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\"\n}"
+            },
+            "description": "Liên kết hồ sơ bệnh nhân với Patient (chỉ cho staff)."
+          }
+        },
+        {
+          "name": "Unlink Patient Profile from Patient",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles/{{patientProfileId}}/unlink", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "{{patientProfileId}}", "unlink"] },
+            "description": "Hủy liên kết hồ sơ bệnh nhân với Patient, làm cho nó trở thành độc lập (chỉ cho staff)."
+          }
+        },
+        {
+          "name": "Get Patient Profile By Code",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles/code/PP250107143052M1", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "code", "PP250107143052M1"] },
+            "description": "Tìm kiếm hồ sơ bệnh nhân theo mã code chính xác (chỉ cho staff). Code format: PP{YYMMDD}{HHMMSS}{GENDER}{LASTNAME_INITIAL}"
+          }
+        },
+        {
+          "name": "Advanced Search Patient Profiles",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/patient-profiles/advanced-search?name=Nguyễn&gender=male&ageMin=18&ageMax=65&isIndependent=true", "host": ["{{baseUrl}}"], "path": ["patient-profiles", "advanced-search"], "query": [
+              { "key": "name", "value": "Nguyễn", "description": "Tìm kiếm theo tên" },
+              { "key": "phone", "value": "", "description": "Tìm kiếm theo số điện thoại" },
+              { "key": "code", "value": "", "description": "Tìm kiếm theo mã hồ sơ" },
+              { "key": "gender", "value": "male", "description": "Lọc theo giới tính" },
+              { "key": "ageMin", "value": "18", "description": "Tuổi tối thiểu" },
+              { "key": "ageMax", "value": "65", "description": "Tuổi tối đa" },
+              { "key": "isIndependent", "value": "true", "description": "Lọc hồ sơ độc lập" }
+            ]},
+            "description": "Tìm kiếm nâng cao hồ sơ bệnh nhân với nhiều tiêu chí (chỉ cho staff). Hỗ trợ tìm kiếm theo code format mới."
           }
         }
       ]

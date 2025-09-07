@@ -219,6 +219,7 @@ export class UserController {
         { name: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
         { phone: { contains: search, mode: 'insensitive' } },
+        { patient: { patientCode: { contains: search, mode: 'insensitive' } } },
       ];
     }
 
@@ -448,6 +449,10 @@ export class UserController {
         { name: { contains: query, mode: 'insensitive' } },
         { phone: { contains: query, mode: 'insensitive' } },
         { email: { contains: query, mode: 'insensitive' } },
+        { patient: { patientCode: { contains: query, mode: 'insensitive' } } },
+        { doctor: { doctorCode: { contains: query, mode: 'insensitive' } } },
+        { receptionist: { id: { contains: query, mode: 'insensitive' } } },
+        { admin: { adminCode: { contains: query, mode: 'insensitive' } } },
       ],
     };
 

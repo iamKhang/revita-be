@@ -19,11 +19,13 @@ import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { CreateUserDto, UpdateUserDto } from '../dto/admin.dto';
 import { CreateCounterDto, UpdateCounterDto } from '../dto/counter.dto';
+import { CodeGeneratorService } from '../patient-profile/code-generator.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('admin')
 export class AdminController {
   private prisma = new PrismaClient();
+  private codeGenerator = new CodeGeneratorService();
 
   // Quản lý tất cả users
   @Get('users')
@@ -161,11 +163,12 @@ export class AdminController {
     let roleRecord: any = null;
 
     switch (role) {
-      case Role.DOCTOR:
+      case Role.DOCTOR: {
+        const doctorCode = this.codeGenerator.generateDoctorCode(name);
         roleRecord = await this.prisma.doctor.create({
           data: {
             id: auth.id,
-            doctorCode: `DOC${Date.now()}`,
+            doctorCode,
             authId: auth.id,
             degrees: degrees || [],
             yearsExperience: yearsExperience || 0,
@@ -175,17 +178,24 @@ export class AdminController {
           },
         });
         break;
+      }
 
-      case Role.PATIENT:
+      case Role.PATIENT: {
+        const patientCode = this.codeGenerator.generatePatientCode(
+          name,
+          new Date(dateOfBirth),
+          gender,
+        );
         roleRecord = await this.prisma.patient.create({
           data: {
             id: auth.id,
-            patientCode: `PAT${Date.now()}`,
+            patientCode,
             authId: auth.id,
             loyaltyPoints: loyaltyPoints || 0,
           },
         });
         break;
+      }
 
       case Role.RECEPTIONIST:
         roleRecord = await this.prisma.receptionist.create({
@@ -196,16 +206,19 @@ export class AdminController {
         });
         break;
 
-      case Role.ADMIN:
+      case Role.ADMIN: {
+        const finalAdminCode =
+          adminCode || this.codeGenerator.generateAdminCode(name);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         roleRecord = await (this.prisma as any).admin.create({
           data: {
             id: auth.id,
-            adminCode: adminCode || `ADM${Date.now()}`,
+            adminCode: finalAdminCode,
             authId: auth.id,
           },
         });
         break;
+      }
 
       default:
         throw new BadRequestException('Invalid role');
