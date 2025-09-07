@@ -1,0 +1,887 @@
+{
+  "info": {
+    "_postman_id": "work-session-api-collection",
+    "name": "Work Session Management API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "API collection for Work Session management - Doctor and Technician schedule management with conflict validation"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login as Doctor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('doctorToken', response.accessToken);",
+                  "    pm.environment.set('doctorId', response.user.doctor.id);",
+                  "    pm.environment.set('doctorAuthId', response.user.id);",
+                  "    console.log('✅ Doctor logged in:', response.user.name);",
+                  "    console.log('Doctor token saved:', response.accessToken);",
+                  "} else {",
+                  "    console.log('❌ Doctor login failed:', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{doctorIdentifier}}\",\n  \"password\": \"{{doctorPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["login"]
+            },
+            "description": "Login as doctor to get access token"
+          }
+        },
+        {
+          "name": "Login as Technician",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('technicianToken', response.accessToken);",
+                  "    pm.environment.set('technicianId', response.user.technician.id);",
+                  "    pm.environment.set('technicianAuthId', response.user.id);",
+                  "    console.log('✅ Technician logged in:', response.user.name);",
+                  "    console.log('Technician token saved:', response.accessToken);",
+                  "} else {",
+                  "    console.log('❌ Technician login failed:', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{technicianIdentifier}}\",\n  \"password\": \"{{technicianPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["login"]
+            },
+            "description": "Login as technician to get access token"
+          }
+        },
+        {
+          "name": "Login as Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('adminToken', response.accessToken);",
+                  "    pm.environment.set('adminId', response.user.admin.id);",
+                  "    pm.environment.set('adminAuthId', response.user.id);",
+                  "    console.log('✅ Admin logged in:', response.user.name);",
+                  "    console.log('Admin token saved:', response.accessToken);",
+                  "} else {",
+                  "    console.log('❌ Admin login failed:', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{adminIdentifier}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["login"]
+            },
+            "description": "Login as admin to get access token"
+          }
+        }
+      ],
+      "description": "Authentication endpoints for different user roles"
+    },
+    {
+      "name": "Work Session Management",
+      "item": [
+        {
+          "name": "Create Work Sessions (Doctor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.length > 0) {",
+                  "        pm.environment.set('workSessionId', response.data[0].id);",
+                  "        console.log('Work session created:', response.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{doctorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workSessions\": [\n    {\n      \"startTime\": \"2025-01-15T08:00:00.000Z\",\n      \"endTime\": \"2025-01-15T12:00:00.000Z\",\n      \"serviceIds\": [\"{{serviceId1}}\", \"{{serviceId2}}\"]\n    },\n    {\n      \"startTime\": \"2025-01-15T14:00:00.000Z\",\n      \"endTime\": \"2025-01-15T18:00:00.000Z\",\n      \"serviceIds\": [\"{{serviceId3}}\"]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions"]
+            },
+            "description": "Doctor creates multiple work sessions for themselves"
+          }
+        },
+        {
+          "name": "Create Work Sessions (Technician)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.length > 0) {",
+                  "        pm.environment.set('technicianWorkSessionId', response.data[0].id);",
+                  "        console.log('Technician work session created:', response.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{technicianToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workSessions\": [\n    {\n      \"startTime\": \"2025-01-15T09:00:00.000Z\",\n      \"endTime\": \"2025-01-15T13:00:00.000Z\",\n      \"serviceIds\": [\"{{serviceId4}}\", \"{{serviceId5}}\"]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions"]
+            },
+            "description": "Technician creates work sessions for themselves"
+          }
+        },
+        {
+          "name": "Create Work Sessions (Admin for Doctor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.length > 0) {",
+                  "        pm.environment.set('adminCreatedWorkSessionId', response.data[0].id);",
+                  "        console.log('Admin created work session:', response.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workSessions\": [\n    {\n      \"startTime\": \"2025-01-16T08:00:00.000Z\",\n      \"endTime\": \"2025-01-16T12:00:00.000Z\",\n      \"serviceIds\": [\"{{serviceId1}}\"]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions"]
+            },
+            "description": "Admin creates work sessions for a doctor"
+          }
+        },
+        {
+          "name": "Test Conflict Validation (Should Fail)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{doctorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workSessions\": [\n    {\n      \"startTime\": \"2025-01-15T09:00:00.000Z\",\n      \"endTime\": \"2025-01-15T13:00:00.000Z\",\n      \"serviceIds\": [\"{{serviceId1}}\"]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions"]
+            },
+            "description": "This should fail because it conflicts with existing session (9h-13h overlaps with 8h-12h)"
+          }
+        }
+      ],
+      "description": "Create work sessions with validation"
+    },
+    {
+      "name": "View Work Sessions",
+      "item": [
+        {
+          "name": "Get My Schedule (Doctor)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{doctorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/my-schedule?startDate=2025-01-15&endDate=2025-01-16",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "my-schedule"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2025-01-15"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-01-16"
+                }
+              ]
+            },
+            "description": "Doctor views their own work schedule"
+          }
+        },
+        {
+          "name": "Get My Schedule (Technician)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{technicianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/my-schedule?startDate=2025-01-15&endDate=2025-01-16",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "my-schedule"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2025-01-15"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-01-16"
+                }
+              ]
+            },
+            "description": "Technician views their own work schedule"
+          }
+        },
+        {
+          "name": "Get User Work Sessions (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/user/{{doctorId}}?userType=DOCTOR&startDate=2025-01-15&endDate=2025-01-16",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "user", "{{doctorId}}"],
+              "query": [
+                {
+                  "key": "userType",
+                  "value": "DOCTOR"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2025-01-15"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-01-16"
+                }
+              ]
+            },
+            "description": "Admin views work sessions of a specific doctor"
+          }
+        },
+        {
+          "name": "Get All Work Sessions (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions?startDate=2025-01-15&endDate=2025-01-16&status=PENDING",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2025-01-15"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-01-16"
+                },
+                {
+                  "key": "status",
+                  "value": "PENDING"
+                }
+              ]
+            },
+            "description": "Admin views all work sessions with filters"
+          }
+        },
+        {
+          "name": "Get Work Session by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{doctorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/{{workSessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "{{workSessionId}}"]
+            },
+            "description": "Get specific work session by ID"
+          }
+        },
+        {
+          "name": "Get Work Sessions by Booth",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/booth/{{boothId}}?startDate=2025-01-15&endDate=2025-01-16",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "booth", "{{boothId}}"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2025-01-15"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-01-16"
+                }
+              ]
+            },
+            "description": "Get work sessions for a specific booth"
+          }
+        },
+        {
+          "name": "Get Work Sessions by Date",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/date/2025-01-15?userType=DOCTOR",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "date", "2025-01-15"],
+              "query": [
+                {
+                  "key": "userType",
+                  "value": "DOCTOR"
+                }
+              ]
+            },
+            "description": "Get work sessions for a specific date"
+          }
+        }
+      ],
+      "description": "View and retrieve work sessions"
+    },
+    {
+      "name": "Update Work Sessions",
+      "item": [
+        {
+          "name": "Update Work Session (Doctor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log('Work session updated successfully');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{doctorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startTime\": \"2025-01-15T09:00:00.000Z\",\n  \"endTime\": \"2025-01-15T13:00:00.000Z\",\n  \"status\": \"APPROVED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/{{workSessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "{{workSessionId}}"]
+            },
+            "description": "Doctor updates their own work session"
+          }
+        },
+        {
+          "name": "Update Work Session (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log('Admin updated work session successfully');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPROVED\",\n  \"boothId\": \"{{boothId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/{{workSessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "{{workSessionId}}"]
+            },
+            "description": "Admin updates work session status and booth"
+          }
+        },
+        {
+          "name": "Test Update Conflict (Should Fail)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{doctorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startTime\": \"2025-01-15T10:00:00.000Z\",\n  \"endTime\": \"2025-01-15T14:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/{{workSessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "{{workSessionId}}"]
+            },
+            "description": "This should fail because it creates a conflict with existing session"
+          }
+        }
+      ],
+      "description": "Update work sessions with validation"
+    },
+    {
+      "name": "Delete Work Sessions",
+      "item": [
+        {
+          "name": "Delete Work Session (Doctor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log('Work session deleted successfully');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{doctorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/{{workSessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "{{workSessionId}}"]
+            },
+            "description": "Doctor deletes their own work session"
+          }
+        },
+        {
+          "name": "Delete Work Session (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log('Admin deleted work session successfully');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/{{adminCreatedWorkSessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "{{adminCreatedWorkSessionId}}"]
+            },
+            "description": "Admin deletes work session"
+          }
+        }
+      ],
+      "description": "Delete work sessions"
+    },
+    {
+      "name": "Permission Tests",
+      "item": [
+        {
+          "name": "Doctor creates work session (Should Succeed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    console.log('✅ Doctor can create work sessions for themselves');",
+                  "} else {",
+                  "    console.log('❌ Doctor failed to create work session:', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{doctorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workSessions\": [\n    {\n      \"startTime\": \"2025-01-17T08:00:00.000Z\",\n      \"endTime\": \"2025-01-17T12:00:00.000Z\",\n      \"serviceIds\": [\"{{serviceId1}}\"]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions"]
+            },
+            "description": "Doctor creates work session for themselves - should succeed"
+          }
+        },
+        {
+          "name": "Technician tries to view doctor's schedule (Should Fail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 403 || pm.response.code === 400) {",
+                  "    console.log('✅ Permission validation works - technician cannot view doctor schedule');",
+                  "} else {",
+                  "    console.log('❌ Permission validation failed - technician should not access doctor schedule');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{technicianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/user/{{doctorAuthId}}?userType=DOCTOR",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "user", "{{doctorAuthId}}"],
+              "query": [
+                {
+                  "key": "userType",
+                  "value": "DOCTOR"
+                }
+              ]
+            },
+            "description": "Technician tries to view doctor's schedule - should fail due to permission"
+          }
+        },
+        {
+          "name": "Doctor tries to update technician's session (Should Fail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 403 || pm.response.code === 400) {",
+                  "    console.log('✅ Permission validation works - doctor cannot update technician session');",
+                  "} else {",
+                  "    console.log('❌ Permission validation failed - doctor should not update technician session');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{doctorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPROVED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/work-sessions/{{technicianWorkSessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["work-sessions", "{{technicianWorkSessionId}}"]
+            },
+            "description": "Doctor tries to update technician's work session - should fail due to permission"
+          }
+        }
+      ],
+      "description": "Test permission restrictions"
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "doctorToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "technicianToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "doctorId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "technicianId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workSessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "technicianWorkSessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminCreatedWorkSessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "boothId",
+      "value": "booth-uuid-1",
+      "type": "string"
+    },
+    {
+      "key": "serviceId1",
+      "value": "service-uuid-1",
+      "type": "string"
+    },
+    {
+      "key": "serviceId2",
+      "value": "service-uuid-2",
+      "type": "string"
+    },
+    {
+      "key": "serviceId3",
+      "value": "service-uuid-3",
+      "type": "string"
+    },
+    {
+      "key": "serviceId4",
+      "value": "service-uuid-4",
+      "type": "string"
+    },
+    {
+      "key": "serviceId5",
+      "value": "service-uuid-5",
+      "type": "string"
+    }
+  ]
+}
+
