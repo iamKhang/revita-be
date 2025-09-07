@@ -7,9 +7,9 @@ import {
 } from 'class-validator';
 
 export enum GenderEnum {
-  MALE = 'MALE',
-  FEMALE = 'FEMALE',
-  OTHER = 'OTHER',
+  MALE = 'male',
+  FEMALE = 'female',
+  OTHER = 'other',
 }
 
 export class UpdatePatientProfileDto {

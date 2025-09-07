@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsNumber } from 'class-validator';
 
 export class UpdatePatientDto {
   @IsString()
@@ -32,4 +32,9 @@ export class UpdatePatientDto {
   @IsString()
   @IsOptional()
   email?: string;
+
+  // Patient-specific fields
+  @IsOptional()
+  @IsNumber()
+  loyaltyPoints?: number;
 }
