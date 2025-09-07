@@ -17,6 +17,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Gắn user vào request
     return {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      id: payload.sub, // expose id for downstream services
+      // keep sub for backward compatibility if any code uses it
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
       sub: payload.sub,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
       role: payload.role,

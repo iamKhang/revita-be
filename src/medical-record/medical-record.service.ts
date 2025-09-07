@@ -26,15 +26,27 @@ export class MedicalRecordService {
       throw new BadRequestException('Missing required field: patientProfileId');
     }
 
-    let doctorId: string | undefined = undefined;
+    let doctorId: string | undefined ;
     if (user.role === Role.DOCTOR) {
-      const doctor = await this.prisma.doctor.findUnique({
-        where: { authId: user.id },
-        select: { id: true }
-      });
-      doctorId = doctor?.id;
-      if (!doctorId) {
-        throw new NotFoundException('Không tìm thấy bác sĩ cho user này');
+      const providedDoctorId = (dto as any)['doctorId'] as string | undefined;
+      if (providedDoctorId) {
+        const doctor = await this.prisma.doctor.findUnique({
+          where: { id: providedDoctorId },
+          select: { id: true }
+        });
+        if (!doctor) {
+          throw new NotFoundException('Không tìm thấy bác sĩ');
+        }
+        doctorId = doctor.id;
+      } else {
+        const doctor = await this.prisma.doctor.findUnique({
+          where: { authId: user.id },
+          select: { id: true }
+        });
+        doctorId = doctor?.id;
+        if (!doctorId) {
+          throw new NotFoundException('Không tìm thấy bác sĩ cho user này');
+        }
       }
     } else if (
       user.role === Role.ADMIN 
