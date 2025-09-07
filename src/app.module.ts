@@ -12,6 +12,7 @@ import { PrescriptionModule } from './prescription/prescription.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { ServiceModule } from './service/service.module';
 import { FileStorageModule } from './file-storage/file-storage.module';
+import { WorkSessionModule } from './work-session/work-session.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { FileStorageModule } from './file-storage/file-storage.module';
     InvoiceModule,
     ServiceModule,
     FileStorageModule,
+    WorkSessionModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
