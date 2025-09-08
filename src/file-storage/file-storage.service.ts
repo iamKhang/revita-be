@@ -12,27 +12,37 @@ import { v4 as uuidv4 } from 'uuid';
 export class FileStorageService {
   private supabase: SupabaseClient;
   private readonly logger = new Logger(FileStorageService.name);
-  private readonly bucketName = 'results';
+  private readonly allowedBuckets = ['profiles', 'results'];
 
   constructor() {
-    this.supabase = createClient(
-      'https://djjeccafahozffgadysws.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqamVjYWZhaG96ZmZnYWR5aXdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NDUzNzI1MCwiZXhwIjoyMDcwMTEzMjUwfQ.A844p4XBXejlHzfHOveQlugBOp7Q81muYT6N-tGQeZA',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
+    const supabaseUrl = process.env.SUPABASE_URL ?? '';
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+    this.supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
-    );
+    });
+  }
+
+  private ensureBucketAllowed(bucket: string): void {
+    if (!this.allowedBuckets.includes(bucket)) {
+      throw new Error(
+        `Bucket không hợp lệ. Chỉ chấp nhận: ${this.allowedBuckets.join(', ')}`,
+      );
+    }
   }
 
   async uploadFile(
     file: Express.Multer.File,
+    bucket: string,
     folder: string = '',
   ): Promise<UploadFileResponseDto> {
     try {
-      this.logger.log(`Uploading file: ${file.originalname}`);
+      this.ensureBucketAllowed(bucket);
+      this.logger.log(`Uploading file: ${file.originalname} to bucket ${bucket}`);
 
       // Tạo tên file unique để tránh trùng lặp
       const fileExtension = file.originalname.split('.').pop();
@@ -42,7 +52,7 @@ export class FileStorageService {
       // Upload file lên Supabase Storage
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { data, error } = await this.supabase.storage
-        .from(this.bucketName)
+        .from(bucket)
         .upload(filePath, file.buffer, {
           contentType: file.mimetype,
           upsert: false,
@@ -55,7 +65,7 @@ export class FileStorageService {
 
       // Lấy public URL của file
       const { data: urlData } = this.supabase.storage
-        .from(this.bucketName)
+        .from(bucket)
         .getPublicUrl(filePath);
 
       const response: UploadFileResponseDto = {
@@ -77,14 +87,16 @@ export class FileStorageService {
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async getFileUrl(
+    bucket: string,
     fileName: string,
     folder?: string,
   ): Promise<GetFileUrlResponseDto> {
     try {
+      this.ensureBucketAllowed(bucket);
       const filePath = folder ? `${folder}/${fileName}` : fileName;
 
       const { data } = this.supabase.storage
-        .from(this.bucketName)
+        .from(bucket)
         .getPublicUrl(filePath);
 
       const response: GetFileUrlResponseDto = {
@@ -99,12 +111,17 @@ export class FileStorageService {
     }
   }
 
-  async deleteFile(fileName: string, folder?: string): Promise<boolean> {
+  async deleteFile(
+    bucket: string,
+    fileName: string,
+    folder?: string,
+  ): Promise<boolean> {
     try {
+      this.ensureBucketAllowed(bucket);
       const filePath = folder ? `${folder}/${fileName}` : fileName;
 
       const { error } = await this.supabase.storage
-        .from(this.bucketName)
+        .from(bucket)
         .remove([filePath]);
 
       if (error) {
@@ -120,10 +137,11 @@ export class FileStorageService {
     }
   }
 
-  async listFiles(folder?: string): Promise<string[]> {
+  async listFiles(bucket: string, folder?: string): Promise<string[]> {
     try {
+      this.ensureBucketAllowed(bucket);
       const { data, error } = await this.supabase.storage
-        .from(this.bucketName)
+        .from(bucket)
         .list(folder, {
           limit: 100,
           offset: 0,
@@ -140,5 +158,86 @@ export class FileStorageService {
       this.logger.error(`List files error: ${error.message}`);
       throw error;
     }
+  }
+
+  async uploadFiles(
+    files: Express.Multer.File[],
+    bucket: string,
+    folder: string = '',
+  ): Promise<UploadFileResponseDto[]> {
+    const results: UploadFileResponseDto[] = [];
+    for (const file of files) {
+      // Reuse single upload to keep logic unified
+      // eslint-disable-next-line no-await-in-loop
+      const uploaded = await this.uploadFile(file, bucket, folder);
+      results.push(uploaded);
+    }
+    return results;
+  }
+
+  async deleteFiles(
+    bucket: string,
+    fileNamesOrPaths: string[],
+  ): Promise<{ deleted: string[]; failed: string[] }> {
+    this.ensureBucketAllowed(bucket);
+    const deleted: string[] = [];
+    const failed: string[] = [];
+    for (const nameOrPath of fileNamesOrPaths) {
+      const filePath = nameOrPath;
+      // eslint-disable-next-line no-await-in-loop
+      const { error } = await this.supabase.storage.from(bucket).remove([filePath]);
+      if (error) {
+        failed.push(filePath);
+      } else {
+        deleted.push(filePath);
+      }
+    }
+    return { deleted, failed };
+  }
+
+  parseBucketAndPathFromUrl(url: string): { bucket: string; path: string } | null {
+    try {
+      // Expect URLs like: https://<project>.supabase.co/storage/v1/object/public/<bucket>/<path>
+      const marker = '/storage/v1/object/public/';
+      const idx = url.indexOf(marker);
+      if (idx === -1) return null;
+      const rest = url.substring(idx + marker.length);
+      const firstSlash = rest.indexOf('/');
+      if (firstSlash === -1) return null;
+      const bucket = rest.substring(0, firstSlash);
+      const path = rest.substring(firstSlash + 1);
+      return { bucket, path };
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteByUrls(urls: string[]): Promise<{ deleted: string[]; failed: string[] }> {
+    const deleted: string[] = [];
+    const failed: string[] = [];
+    for (const url of urls) {
+      const parsed = this.parseBucketAndPathFromUrl(url);
+      if (!parsed) {
+        failed.push(url);
+        // continue to next
+        // eslint-disable-next-line no-continue
+        continue;
+      }
+      if (!this.allowedBuckets.includes(parsed.bucket)) {
+        failed.push(url);
+        // eslint-disable-next-line no-continue
+        continue;
+      }
+      // eslint-disable-next-line no-await-in-loop
+      const { error } = await this.supabase.storage
+        .from(parsed.bucket)
+        .remove([parsed.path]);
+      if (error) {
+        failed.push(url);
+      } else {
+        deleted.push(url);
+      }
+    }
+    return { deleted, failed };
   }
 }

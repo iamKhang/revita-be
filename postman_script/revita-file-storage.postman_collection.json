@@ -1,0 +1,245 @@
+{
+	"info": {
+		"_postman_id": "30d177c1-45bb-4391-89eb-0b4357d7a2ec",
+		"name": "Revita - File Storage",
+		"description": "Endpoints to upload, list, get URL, and delete files with bucket validation (profiles, results).",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "34846743",
+		"_collection_link": "https://revita-3934.postman.co/workspace/Revita~6af241a5-73cd-4dbb-b724-ff97479ea73f/collection/34846743-30d177c1-45bb-4391-89eb-0b4357d7a2ec?action=share&source=collection_link&creator=34846743"
+	},
+	"item": [
+		{
+			"name": "Upload single",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "postman-cloud:///1efce924-c3ba-48a0-8cf2-63719e592b3f"
+						},
+						{
+							"key": "bucket",
+							"value": "profiles",
+							"type": "text"
+						},
+						{
+							"key": "folder",
+							"value": "avatars/khang",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{baseUrl}}/file-storage/upload",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"file-storage",
+						"upload"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Upload multiple",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "files",
+							"description": "Select multiple files",
+							"type": "file",
+							"src": [
+								"postman-cloud:///1efce924-c3ba-48a0-8cf2-63719e592b3f",
+								"postman-cloud:///1efce90b-9316-47d0-9cad-553fae245411"
+							]
+						},
+						{
+							"key": "bucket",
+							"value": "results",
+							"type": "text"
+						},
+						{
+							"key": "folder",
+							"value": "hoangkhang_lab",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{baseUrl}}/file-storage/upload-multiple",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"file-storage",
+						"upload-multiple"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get file URL",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/file-storage/url?bucket=profiles&fileName={{fileName}}&folder=avatars",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"file-storage",
+						"url"
+					],
+					"query": [
+						{
+							"key": "bucket",
+							"value": "profiles"
+						},
+						{
+							"key": "fileName",
+							"value": "{{fileName}}"
+						},
+						{
+							"key": "folder",
+							"value": "avatars"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "List files",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/file-storage/list?bucket=results&folder=hoangkhang_lab",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"file-storage",
+						"list"
+					],
+					"query": [
+						{
+							"key": "bucket",
+							"value": "results"
+						},
+						{
+							"key": "folder",
+							"value": "hoangkhang_lab"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Delete single by name",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/file-storage/{{fileName}}?bucket=results&folder=hoangkhang_lab",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"file-storage",
+						"{{fileName}}"
+					],
+					"query": [
+						{
+							"key": "bucket",
+							"value": "results"
+						},
+						{
+							"key": "folder",
+							"value": "hoangkhang_lab"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Delete many by names/paths",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"bucket\": \"results\",\n  \"items\": [\n    \"lab/a.pdf\",\n    \"lab/b.pdf\"\n  ]\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/file-storage/delete-many",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"file-storage",
+						"delete-many"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Delete by URLs",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"urls\": [\n    \"https://djjecafahozffgadyiws.supabase.co/storage/v1/object/public/profiles/avatars/khang/00b7a640-5024-4c2b-b393-5561b148b1b8.jpg\",\n    \"https://djjecafahozffgadyiws.supabase.co/storage/v1/object/public/results/hoangkhang_lab/3827cb58-c922-4a54-934b-4e7d80e17c0a.jpg\"\n  ]\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/file-storage/delete-by-urls",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"file-storage",
+						"delete-by-urls"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000"
+		},
+		{
+			"key": "fileName",
+			"value": "REPLACE_WITH_FILE_NAME"
+		}
+	]
+}

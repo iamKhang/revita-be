@@ -4,6 +4,7 @@ import {
   Get,
   Delete,
   UploadedFile,
+  UploadedFiles,
   Query,
   UseInterceptors,
   Body,
@@ -12,7 +13,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -49,6 +50,11 @@ export class FileStorageController {
           format: 'binary',
           description: 'File cần upload',
         },
+        bucket: {
+          type: 'string',
+          description: 'Bucket bắt buộc (profiles hoặc results)',
+          example: 'profiles',
+        },
         folder: {
           type: 'string',
           description: 'Thư mục trong bucket (tùy chọn)',
@@ -68,6 +74,7 @@ export class FileStorageController {
   })
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
+    @Body('bucket') bucket: string,
     @Body('folder') folder?: string,
   ): Promise<UploadFileResponseDto> {
     try {
@@ -76,6 +83,10 @@ export class FileStorageController {
           'Không có file được upload',
           HttpStatus.BAD_REQUEST,
         );
+      }
+
+      if (!bucket) {
+        throw new HttpException('Thiếu bucket', HttpStatus.BAD_REQUEST);
       }
 
       // Validate file size (max 10MB)
@@ -105,7 +116,11 @@ export class FileStorageController {
         );
       }
 
-      const result = await this.fileStorageService.uploadFile(file, folder);
+      const result = await this.fileStorageService.uploadFile(
+        file,
+        bucket,
+        folder,
+      );
       return result;
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -122,6 +137,11 @@ export class FileStorageController {
 
   @Get('url')
   @ApiOperation({ summary: 'Lấy URL công khai của file' })
+  @ApiQuery({
+    name: 'bucket',
+    description: 'Bucket bắt buộc (profiles hoặc results)',
+    example: 'profiles',
+  })
   @ApiQuery({
     name: 'fileName',
     description: 'Tên file trong storage',
@@ -143,15 +163,23 @@ export class FileStorageController {
     description: 'File không tìm thấy',
   })
   async getFileUrl(
+    @Query('bucket') bucket: string,
     @Query('fileName') fileName: string,
     @Query('folder') folder?: string,
   ): Promise<GetFileUrlResponseDto> {
     try {
+      if (!bucket) {
+        throw new HttpException('Thiếu bucket', HttpStatus.BAD_REQUEST);
+      }
       if (!fileName) {
         throw new HttpException('Thiếu tên file', HttpStatus.BAD_REQUEST);
       }
 
-      const result = await this.fileStorageService.getFileUrl(fileName, folder);
+      const result = await this.fileStorageService.getFileUrl(
+        bucket,
+        fileName,
+        folder,
+      );
       return result;
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -174,6 +202,11 @@ export class FileStorageController {
     example: 'uuid-medical-report.pdf',
   })
   @ApiQuery({
+    name: 'bucket',
+    description: 'Bucket bắt buộc (profiles hoặc results)',
+    example: 'profiles',
+  })
+  @ApiQuery({
     name: 'folder',
     description: 'Thư mục trong bucket (tùy chọn)',
     example: 'medical-reports/',
@@ -189,10 +222,14 @@ export class FileStorageController {
   })
   async deleteFile(
     @Param('fileName') fileName: string,
+    @Query('bucket') bucket: string,
     @Query('folder') folder?: string,
   ): Promise<{ message: string }> {
     try {
-      await this.fileStorageService.deleteFile(fileName, folder);
+      if (!bucket) {
+        throw new HttpException('Thiếu bucket', HttpStatus.BAD_REQUEST);
+      }
+      await this.fileStorageService.deleteFile(bucket, fileName, folder);
       return { message: 'File đã được xóa thành công' };
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -209,6 +246,11 @@ export class FileStorageController {
 
   @Get('list')
   @ApiOperation({ summary: 'Liệt kê các file trong thư mục' })
+  @ApiQuery({
+    name: 'bucket',
+    description: 'Bucket bắt buộc (profiles hoặc results)',
+    example: 'profiles',
+  })
   @ApiQuery({
     name: 'folder',
     description: 'Thư mục cần liệt kê (tùy chọn)',
@@ -230,10 +272,14 @@ export class FileStorageController {
     },
   })
   async listFiles(
+    @Query('bucket') bucket: string,
     @Query('folder') folder?: string,
   ): Promise<{ files: string[] }> {
     try {
-      const files = await this.fileStorageService.listFiles(folder);
+      if (!bucket) {
+        throw new HttpException('Thiếu bucket', HttpStatus.BAD_REQUEST);
+      }
+      const files = await this.fileStorageService.listFiles(bucket, folder);
       return { files };
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -245,6 +291,122 @@ export class FileStorageController {
         'Lỗi khi liệt kê file',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
+    }
+  }
+
+  @Post('upload-multiple')
+  @UseInterceptors(FilesInterceptor('files'))
+  @ApiOperation({ summary: 'Upload nhiều file lên Supabase Storage' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Các file cần upload',
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+          description: 'Danh sách file',
+        },
+        bucket: {
+          type: 'string',
+          description: 'Bucket bắt buộc (profiles hoặc results)',
+          example: 'results',
+        },
+        folder: {
+          type: 'string',
+          description: 'Thư mục trong bucket (tùy chọn)',
+          example: 'lab/',
+        },
+      },
+    },
+  })
+  async uploadMultiple(
+    @Body('bucket') bucket: string,
+    @Body('folder') folder: string,
+    @UploadedFiles() files: Express.Multer.File[],
+  ): Promise<UploadFileResponseDto[]> {
+    try {
+      if (!bucket) {
+        throw new HttpException('Thiếu bucket', HttpStatus.BAD_REQUEST);
+      }
+      if (!files || !Array.isArray(files) || files.length === 0) {
+        throw new HttpException('Không có file nào được upload', HttpStatus.BAD_REQUEST);
+      }
+
+      const result = await this.fileStorageService.uploadFiles(files, bucket, folder);
+      return result;
+    } catch (error) {
+      this.logger.error(`Upload multiple files error: ${error.message}`);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Lỗi khi upload nhiều file', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post('delete-many')
+  @ApiOperation({ summary: 'Xóa nhiều file bằng tên/đường dẫn trong bucket' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        bucket: { type: 'string', example: 'results' },
+        items: {
+          type: 'array',
+          description: 'Danh sách fileName hoặc path tương đối trong bucket',
+          items: { type: 'string' },
+          example: ['lab/a.pdf', 'avatars/b.jpg'],
+        },
+      },
+      required: ['bucket', 'items'],
+    },
+  })
+  async deleteMany(
+    @Body('bucket') bucket: string,
+    @Body('items') items: string[],
+  ): Promise<{ deleted: string[]; failed: string[] }> {
+    try {
+      if (!bucket) {
+        throw new HttpException('Thiếu bucket', HttpStatus.BAD_REQUEST);
+      }
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new HttpException('Thiếu danh sách files', HttpStatus.BAD_REQUEST);
+      }
+      return await this.fileStorageService.deleteFiles(bucket, items);
+    } catch (error) {
+      this.logger.error(`Delete many error: ${error.message}`);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Lỗi khi xóa nhiều file', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Post('delete-by-urls')
+  @ApiOperation({ summary: 'Xóa nhiều file bằng URL công khai' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        urls: {
+          type: 'array',
+          items: { type: 'string' },
+          example: [
+            'https://xxx.supabase.co/storage/v1/object/public/results/a.pdf',
+            'https://xxx.supabase.co/storage/v1/object/public/profiles/b.jpg',
+          ],
+        },
+      },
+      required: ['urls'],
+    },
+  })
+  async deleteByUrls(@Body('urls') urls: string[]): Promise<{ deleted: string[]; failed: string[] }> {
+    try {
+      if (!Array.isArray(urls) || urls.length === 0) {
+        throw new HttpException('Thiếu danh sách URLs', HttpStatus.BAD_REQUEST);
+      }
+      return await this.fileStorageService.deleteByUrls(urls);
+    } catch (error) {
+      this.logger.error(`Delete by URLs error: ${error.message}`);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Lỗi khi xóa theo URL', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }
