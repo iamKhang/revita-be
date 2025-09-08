@@ -25,7 +25,6 @@ import {
 import { FileStorageService } from './file-storage.service';
 import {
   UploadFileResponseDto,
-  GetFileUrlDto,
   GetFileUrlResponseDto,
 } from './dto/upload-file.dto';
 
@@ -73,7 +72,10 @@ export class FileStorageController {
   ): Promise<UploadFileResponseDto> {
     try {
       if (!file) {
-        throw new HttpException('Không có file được upload', HttpStatus.BAD_REQUEST);
+        throw new HttpException(
+          'Không có file được upload',
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       // Validate file size (max 10MB)
@@ -106,6 +108,7 @@ export class FileStorageController {
       const result = await this.fileStorageService.uploadFile(file, folder);
       return result;
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.error(`Upload file error: ${error.message}`);
       if (error instanceof HttpException) {
         throw error;
@@ -145,15 +148,13 @@ export class FileStorageController {
   ): Promise<GetFileUrlResponseDto> {
     try {
       if (!fileName) {
-        throw new HttpException(
-          'Thiếu tên file',
-          HttpStatus.BAD_REQUEST,
-        );
+        throw new HttpException('Thiếu tên file', HttpStatus.BAD_REQUEST);
       }
 
       const result = await this.fileStorageService.getFileUrl(fileName, folder);
       return result;
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.error(`Get file URL error: ${error.message}`);
       if (error instanceof HttpException) {
         throw error;
@@ -194,6 +195,7 @@ export class FileStorageController {
       await this.fileStorageService.deleteFile(fileName, folder);
       return { message: 'File đã được xóa thành công' };
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.error(`Delete file error: ${error.message}`);
       if (error instanceof HttpException) {
         throw error;
@@ -227,11 +229,14 @@ export class FileStorageController {
       },
     },
   })
-  async listFiles(@Query('folder') folder?: string): Promise<{ files: string[] }> {
+  async listFiles(
+    @Query('folder') folder?: string,
+  ): Promise<{ files: string[] }> {
     try {
       const files = await this.fileStorageService.listFiles(folder);
       return { files };
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.error(`List files error: ${error.message}`);
       if (error instanceof HttpException) {
         throw error;
@@ -243,5 +248,3 @@ export class FileStorageController {
     }
   }
 }
-
-

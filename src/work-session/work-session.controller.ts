@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Controller,
   Get,
@@ -33,7 +36,7 @@ export class WorkSessionController {
   @Roles(Role.DOCTOR, Role.TECHNICIAN, Role.ADMIN)
   async createWorkSessions(
     @Body() createWorkSessionsDto: CreateWorkSessionsDto,
-    @Req() req: any
+    @Req() req: any,
   ) {
     const userRole = req.user?.role;
     const userId = req.user?.sub;
@@ -44,8 +47,14 @@ export class WorkSessionController {
     console.log('🔍 Debug - userId:', userId);
 
     // Validate user role
-    if (userRole !== Role.DOCTOR && userRole !== Role.TECHNICIAN && userRole !== Role.ADMIN) {
-      throw new BadRequestException('Only DOCTOR, TECHNICIAN, and ADMIN can create work sessions');
+    if (
+      userRole !== Role.DOCTOR &&
+      userRole !== Role.TECHNICIAN &&
+      userRole !== Role.ADMIN
+    ) {
+      throw new BadRequestException(
+        'Only DOCTOR, TECHNICIAN, and ADMIN can create work sessions',
+      );
     }
 
     // Validate userId exists
@@ -53,7 +62,11 @@ export class WorkSessionController {
       throw new BadRequestException('User ID not found in token');
     }
 
-    return this.workSessionService.createWorkSessions(createWorkSessionsDto, userId, userRole);
+    return this.workSessionService.createWorkSessions(
+      createWorkSessionsDto,
+      userId,
+      userRole,
+    );
   }
 
   /**
@@ -64,14 +77,19 @@ export class WorkSessionController {
   async getMyWorkSessions(
     @Req() req: any,
     @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string
+    @Query('endDate') endDate?: string,
   ) {
     const authId = req.user?.sub;
     const userRole = req.user?.role;
-    
+
     const userType = userRole === Role.DOCTOR ? 'DOCTOR' : 'TECHNICIAN';
 
-    return this.workSessionService.getWorkSessionsByUser(authId, userType, startDate, endDate);
+    return this.workSessionService.getWorkSessionsByUser(
+      authId,
+      userType,
+      startDate,
+      endDate,
+    );
   }
 
   /**
@@ -83,9 +101,14 @@ export class WorkSessionController {
     @Param('userId') userId: string,
     @Query('userType') userType: string,
     @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string
+    @Query('endDate') endDate?: string,
   ) {
-    return this.workSessionService.getWorkSessionsByUser(userId, userType, startDate, endDate);
+    return this.workSessionService.getWorkSessionsByUser(
+      userId,
+      userType,
+      startDate,
+      endDate,
+    );
   }
 
   /**
@@ -98,14 +121,14 @@ export class WorkSessionController {
     @Query('userId') userId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('status') status?: WorkSessionStatus
+    @Query('status') status?: WorkSessionStatus,
   ) {
     return this.workSessionService.getAllWorkSessions(
       userType,
       userId,
       startDate,
       endDate,
-      status
+      status,
     );
   }
 
@@ -120,7 +143,7 @@ export class WorkSessionController {
 
     // Tìm work session
     const workSessions = await this.workSessionService.getAllWorkSessions();
-    const workSession = workSessions.find(ws => ws.id === id);
+    const workSession = workSessions.find((ws) => ws.id === id);
 
     if (!workSession) {
       throw new BadRequestException('Work session not found');
@@ -130,7 +153,9 @@ export class WorkSessionController {
     if (userRole !== Role.ADMIN) {
       const sessionUserId = workSession.doctorId || workSession.technicianId;
       if (sessionUserId !== userId) {
-        throw new BadRequestException('You can only view your own work sessions');
+        throw new BadRequestException(
+          'You can only view your own work sessions',
+        );
       }
     }
 
@@ -145,7 +170,7 @@ export class WorkSessionController {
   async updateWorkSession(
     @Param('id') id: string,
     @Body() updateWorkSessionDto: UpdateWorkSessionDto,
-    @Req() req: any
+    @Req() req: any,
   ) {
     const userRole = req.user?.role;
     const userId = req.user?.sub;
@@ -153,7 +178,7 @@ export class WorkSessionController {
     // Nếu không phải ADMIN, chỉ có thể cập nhật lịch của chính mình
     if (userRole !== Role.ADMIN) {
       const workSessions = await this.workSessionService.getAllWorkSessions();
-      const workSession = workSessions.find(ws => ws.id === id);
+      const workSession = workSessions.find((ws) => ws.id === id);
 
       if (!workSession) {
         throw new BadRequestException('Work session not found');
@@ -161,7 +186,9 @@ export class WorkSessionController {
 
       const sessionUserId = workSession.doctorId || workSession.technicianId;
       if (sessionUserId !== userId) {
-        throw new BadRequestException('You can only update your own work sessions');
+        throw new BadRequestException(
+          'You can only update your own work sessions',
+        );
       }
     }
 
@@ -180,7 +207,7 @@ export class WorkSessionController {
     // Nếu không phải ADMIN, chỉ có thể xóa lịch của chính mình
     if (userRole !== Role.ADMIN) {
       const workSessions = await this.workSessionService.getAllWorkSessions();
-      const workSession = workSessions.find(ws => ws.id === id);
+      const workSession = workSessions.find((ws) => ws.id === id);
 
       if (!workSession) {
         throw new BadRequestException('Work session not found');
@@ -188,7 +215,9 @@ export class WorkSessionController {
 
       const sessionUserId = workSession.doctorId || workSession.technicianId;
       if (sessionUserId !== userId) {
-        throw new BadRequestException('You can only delete your own work sessions');
+        throw new BadRequestException(
+          'You can only delete your own work sessions',
+        );
       }
     }
 
@@ -203,27 +232,24 @@ export class WorkSessionController {
   async getWorkSessionsByBooth(
     @Param('boothId') boothId: string,
     @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string
+    @Query('endDate') endDate?: string,
   ) {
     const whereClause: any = {
-      boothId
+      boothId,
     };
 
     if (startDate && endDate) {
       whereClause.startTime = {
         gte: new Date(startDate),
-        lte: new Date(endDate)
+        lte: new Date(endDate),
       };
     }
 
-    return this.workSessionService.getAllWorkSessions(
-      undefined,
-      undefined,
-      startDate,
-      endDate
-    ).then(sessions => 
-      sessions.filter(session => session.boothId === boothId)
-    );
+    return this.workSessionService
+      .getAllWorkSessions(undefined, undefined, startDate, endDate)
+      .then((sessions) =>
+        sessions.filter((session) => session.boothId === boothId),
+      );
   }
 
   /**
@@ -234,11 +260,11 @@ export class WorkSessionController {
   async getWorkSessionsByDate(
     @Param('date') date: string,
     @Query('userType') userType?: string,
-    @Query('userId') userId?: string
+    @Query('userId') userId?: string,
   ) {
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
-    
+
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
@@ -246,8 +272,7 @@ export class WorkSessionController {
       userType,
       userId,
       startOfDay.toISOString(),
-      endOfDay.toISOString()
+      endOfDay.toISOString(),
     );
   }
 }
-

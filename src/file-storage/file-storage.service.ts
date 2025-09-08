@@ -1,6 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, Logger } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { UploadFileResponseDto, GetFileUrlResponseDto } from './dto/upload-file.dto';
+import {
+  UploadFileResponseDto,
+  GetFileUrlResponseDto,
+} from './dto/upload-file.dto';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -35,6 +40,7 @@ export class FileStorageService {
       const filePath = folder ? `${folder}/${uniqueFileName}` : uniqueFileName;
 
       // Upload file lên Supabase Storage
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { data, error } = await this.supabase.storage
         .from(this.bucketName)
         .upload(filePath, file.buffer, {
@@ -69,7 +75,11 @@ export class FileStorageService {
     }
   }
 
-  async getFileUrl(fileName: string, folder?: string): Promise<GetFileUrlResponseDto> {
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async getFileUrl(
+    fileName: string,
+    folder?: string,
+  ): Promise<GetFileUrlResponseDto> {
     try {
       const filePath = folder ? `${folder}/${fileName}` : fileName;
 
@@ -132,5 +142,3 @@ export class FileStorageService {
     }
   }
 }
-
-

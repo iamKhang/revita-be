@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -25,7 +30,9 @@ async function main() {
   }
 
   if (technicians.length === 0) {
-    console.log('❌ No technicians found. Please run technician seeding first.');
+    console.log(
+      '❌ No technicians found. Please run technician seeding first.',
+    );
     return;
   }
 
@@ -46,22 +53,28 @@ async function main() {
     return;
   }
 
-  console.log(`📋 Found ${doctors.length} doctors, ${technicians.length} technicians and ${booths.length} booths`);
+  console.log(
+    `📋 Found ${doctors.length} doctors, ${technicians.length} technicians and ${booths.length} booths`,
+  );
 
   // Separate booths for doctors and technicians
-  const doctorBooths = booths.filter(booth =>
-    !booth.room.roomName.includes('Xét nghiệm') &&
-    !booth.room.roomName.includes('Chụp X-quang') &&
-    !booth.room.roomName.includes('CT')
+  const doctorBooths = booths.filter(
+    (booth) =>
+      !booth.room.roomName.includes('Xét nghiệm') &&
+      !booth.room.roomName.includes('Chụp X-quang') &&
+      !booth.room.roomName.includes('CT'),
   );
 
-  const technicianBooths = booths.filter(booth =>
-    booth.room.roomName.includes('Xét nghiệm') ||
-    booth.room.roomName.includes('Chụp X-quang') ||
-    booth.room.roomName.includes('CT')
+  const technicianBooths = booths.filter(
+    (booth) =>
+      booth.room.roomName.includes('Xét nghiệm') ||
+      booth.room.roomName.includes('Chụp X-quang') ||
+      booth.room.roomName.includes('CT'),
   );
 
-  console.log(`🏥 Doctor booths: ${doctorBooths.length}, Technician booths: ${technicianBooths.length}`);
+  console.log(
+    `🏥 Doctor booths: ${doctorBooths.length}, Technician booths: ${technicianBooths.length}`,
+  );
 
   // Create work sessions for the next 30 days starting from today
   const startDate = new Date();
@@ -88,10 +101,14 @@ async function main() {
     staffArray: any[],
     boothsForStaff: any[],
     staffType: 'doctor' | 'technician',
-    day: number
+    day: number,
   ) => {
     for (const shift of shifts) {
-      for (let boothIndex = 0; boothIndex < boothsForStaff.length; boothIndex++) {
+      for (
+        let boothIndex = 0;
+        boothIndex < boothsForStaff.length;
+        boothIndex++
+      ) {
         const booth = boothsForStaff[boothIndex];
         const staffIndex = (boothIndex + day) % staffArray.length;
         const staff = staffArray[staffIndex];
@@ -157,11 +174,17 @@ async function main() {
 
     // Create sessions for technicians
     if (technicianBooths.length > 0) {
-      createWorkSessionsForStaff(technicians, technicianBooths, 'technician', day);
+      createWorkSessionsForStaff(
+        technicians,
+        technicianBooths,
+        'technician',
+        day,
+      );
     }
 
     // Add some additional sessions for busy periods (more staff per booth)
-    if (day < 7) { // First week gets extra sessions
+    if (day < 7) {
+      // First week gets extra sessions
       // Additional sessions for doctors
       for (const booth of doctorBooths.slice(0, 10)) {
         const doctorIndex = Math.floor(Math.random() * doctors.length);
@@ -224,32 +247,39 @@ async function main() {
   const batchSize = 100;
   for (let i = 0; i < workSessions.length; i += batchSize) {
     const batch = workSessions.slice(i, i + batchSize);
-    
+
     try {
       await prisma.workSession.createMany({
         data: batch,
         skipDuplicates: true,
       });
-      
-      console.log(`✅ Inserted batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(workSessions.length / batchSize)}`);
+
+      console.log(
+        `✅ Inserted batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(workSessions.length / batchSize)}`,
+      );
     } catch (error) {
-      console.error(`❌ Error inserting batch ${Math.floor(i / batchSize) + 1}:`, error);
+      console.error(
+        `❌ Error inserting batch ${Math.floor(i / batchSize) + 1}:`,
+        error,
+      );
     }
   }
 
   // Create some special weekend sessions for emergency departments
   console.log('🏥 Creating weekend emergency sessions...');
 
-  const emergencyBooths = booths.filter(booth =>
-    booth.room.specialty.name.includes('Cấp cứu') ||
-    booth.room.specialty.name.includes('Nội') ||
-    booth.room.specialty.name.includes('Nhi')
+  const emergencyBooths = booths.filter(
+    (booth) =>
+      booth.room.specialty.name.includes('Cấp cứu') ||
+      booth.room.specialty.name.includes('Nội') ||
+      booth.room.specialty.name.includes('Nhi'),
   );
 
-  const emergencyTechnicianBooths = technicianBooths.filter(booth =>
-    booth.room.specialty.name.includes('Cấp cứu') ||
-    booth.room.specialty.name.includes('Nội') ||
-    booth.room.specialty.name.includes('Nhi')
+  const emergencyTechnicianBooths = technicianBooths.filter(
+    (booth) =>
+      booth.room.specialty.name.includes('Cấp cứu') ||
+      booth.room.specialty.name.includes('Nội') ||
+      booth.room.specialty.name.includes('Nhi'),
   );
 
   for (let day = 0; day < 30; day++) {
@@ -304,7 +334,9 @@ async function main() {
               technicianId: technician.id,
               startTime: techWeekendStart,
               endTime: techWeekendEnd,
-              nextAvailableAt: new Date(techWeekendEnd.getTime() + 30 * 60 * 1000),
+              nextAvailableAt: new Date(
+                techWeekendEnd.getTime() + 30 * 60 * 1000,
+              ),
             },
           });
         } catch (error) {
@@ -320,7 +352,8 @@ async function main() {
   const highDemandDoctorBooths = doctorBooths.slice(0, 12); // First 12 doctor booths get overlapping sessions
   const highDemandTechnicianBooths = technicianBooths.slice(0, 8); // First 8 technician booths get overlapping sessions
 
-  for (let day = 0; day < 14; day++) { // First 2 weeks
+  for (let day = 0; day < 14; day++) {
+    // First 2 weeks
     const currentDate = new Date(startDate);
     currentDate.setDate(startDate.getDate() + day);
 
@@ -371,8 +404,10 @@ async function main() {
 
     // Overlapping sessions for technicians
     for (const booth of highDemandTechnicianBooths) {
-      const technician1 = technicians[Math.floor(Math.random() * technicians.length)];
-      const technician2 = technicians[Math.floor(Math.random() * technicians.length)];
+      const technician1 =
+        technicians[Math.floor(Math.random() * technicians.length)];
+      const technician2 =
+        technicians[Math.floor(Math.random() * technicians.length)];
 
       // First technician: 8:00 - 16:00
       const techSession1Start = new Date(currentDate);
@@ -394,20 +429,27 @@ async function main() {
               technicianId: technician1.id,
               startTime: techSession1Start,
               endTime: techSession1End,
-              nextAvailableAt: new Date(techSession1End.getTime() + 30 * 60 * 1000),
+              nextAvailableAt: new Date(
+                techSession1End.getTime() + 30 * 60 * 1000,
+              ),
             },
             {
               boothId: booth.id,
               technicianId: technician2.id,
               startTime: techSession2Start,
               endTime: techSession2End,
-              nextAvailableAt: new Date(techSession2End.getTime() + 30 * 60 * 1000),
+              nextAvailableAt: new Date(
+                techSession2End.getTime() + 30 * 60 * 1000,
+              ),
             },
           ],
           skipDuplicates: true,
         });
       } catch (error) {
-        console.error('❌ Error creating overlapping technician sessions:', error);
+        console.error(
+          '❌ Error creating overlapping technician sessions:',
+          error,
+        );
       }
     }
   }
@@ -420,11 +462,11 @@ async function main() {
 
   // Count doctor and technician sessions
   const doctorSessions = await prisma.workSession.count({
-    where: { doctorId: { not: null } }
+    where: { doctorId: { not: null } },
   });
 
   const technicianSessions = await prisma.workSession.count({
-    where: { technicianId: { not: null } }
+    where: { technicianId: { not: null } },
   });
 
   console.log(`👨‍⚕️ Doctor work sessions: ${doctorSessions}`);
@@ -461,7 +503,9 @@ async function main() {
     },
   });
 
-  console.log(`📅 Today's breakdown - Doctors: ${todayDoctorSessions}, Technicians: ${todayTechnicianSessions}`);
+  console.log(
+    `📅 Today's breakdown - Doctors: ${todayDoctorSessions}, Technicians: ${todayTechnicianSessions}`,
+  );
 }
 
 main()
