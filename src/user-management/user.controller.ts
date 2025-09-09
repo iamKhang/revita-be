@@ -2,24 +2,41 @@ import {
   Controller,
   Get,
   Put,
+  Post,
   Body,
   Req,
   Query,
   UseGuards,
   NotFoundException,
   BadRequestException,
+  UseInterceptors,
+  UploadedFile,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
 import { Role } from '../rbac/roles.enum';
 import { PrismaClient } from '@prisma/client';
 import { UpdateUserDto } from './dto/admin.dto';
+import { FileStorageService } from '../file-storage/file-storage.service';
 import * as bcrypt from 'bcryptjs';
 
+@ApiTags('User Management')
 @Controller('users')
 export class UserController {
   private prisma = new PrismaClient();
+
+  constructor(private readonly fileStorageService: FileStorageService) {}
 
   // ==================== PUBLIC ENDPOINTS ====================
 
@@ -80,6 +97,94 @@ export class UserController {
   }
 
   // ==================== AUTHENTICATED ENDPOINTS ====================
+
+  @UseGuards(JwtAuthGuard)
+  @Post('me/avatar')
+  @UseInterceptors(FileInterceptor('avatar'))
+  @ApiOperation({ summary: 'Upload avatar cho user hiện tại' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'File avatar',
+    schema: {
+      type: 'object',
+      properties: {
+        avatar: {
+          type: 'string',
+          format: 'binary',
+          description: 'File ảnh avatar',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Avatar đã được upload thành công',
+  })
+  async uploadAvatar(
+    @Req() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const userId = req.user?.id;
+      if (!userId) throw new NotFoundException('User not found');
+
+      if (!file) {
+        throw new HttpException(
+          'Không có file được upload',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Validate file type - chỉ cho phép ảnh
+      const allowedImageTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+      ];
+
+      if (!allowedImageTypes.includes(file.mimetype)) {
+        throw new HttpException(
+          'Loại file không được hỗ trợ. Chỉ chấp nhận: JPEG, PNG, GIF, WEBP',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Upload file to profiles bucket with avatars folder
+      const uploadResult = await this.fileStorageService.uploadFile(
+        file,
+        'profiles',
+        'avatars',
+      );
+
+      // Update user avatar URL
+      const updatedUser = await this.prisma.auth.update({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        where: { id: userId },
+        data: { avatar: uploadResult.url },
+        select: {
+          id: true,
+          name: true,
+          avatar: true,
+        },
+      });
+
+      return {
+        message: 'Avatar đã được upload thành công',
+        user: updatedUser,
+        fileInfo: uploadResult,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Lỗi khi upload avatar',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 
   @UseGuards(JwtAuthGuard)
   @Put('me')

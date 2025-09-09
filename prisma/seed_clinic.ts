@@ -786,8 +786,50 @@ async function main() {
     });
   }
 
+  // === 7. CREATE BOOTHS ===
+  console.log('🏥 Creating booths for existing rooms...');
+
+  // Get existing rooms
+  const existingRooms = await prisma.clinicRoom.findMany({
+    select: { id: true, roomCode: true, roomName: true },
+  });
+  console.log('📋 Existing rooms in database:');
+  existingRooms.forEach((room) => {
+    console.log(`  - ${room.roomCode}: ${room.roomName}`);
+  });
+
+  let boothCount = 0;
+
+  // Create 3 booths for each existing room
+  for (const room of existingRooms) {
+    for (let boothNum = 1; boothNum <= 3; boothNum++) {
+      const boothCode = `${room.roomCode}-B${boothNum}`;
+      const boothName = `Buồng ${boothNum}`;
+
+      await prisma.booth.upsert({
+        where: { boothCode: boothCode },
+        update: {
+          name: boothName,
+          isActive: true,
+        },
+        create: {
+          boothCode: boothCode,
+          name: boothName,
+          isActive: true,
+          roomId: room.id,
+        },
+      });
+
+      boothCount++;
+    }
+  }
+
   console.log(
-    'Seed clinic data completed (specialties, doctors, rooms, services, links, patients, independent profiles).',
+    `✅ Created/updated ${boothCount} booths for ${existingRooms.length} rooms`,
+  );
+
+  console.log(
+    'Seed clinic data completed (specialties, doctors, rooms, services, links, patients, independent profiles, booths).',
   );
 }
 
