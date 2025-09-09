@@ -194,13 +194,14 @@ export class ServiceController {
       const userId = req.user.id;
       const userRole = req.user.role;
 
-      const result = await this.prescriptionServiceManagement.updateServiceStatus(
-        updateDto.prescriptionServiceId,
-        updateDto.status,
-        userId,
-        userRole,
-        updateDto.note,
-      );
+      const result =
+        await this.prescriptionServiceManagement.updateServiceStatus(
+          updateDto.prescriptionServiceId,
+          updateDto.status,
+          userId,
+          userRole,
+          updateDto.note,
+        );
       return result;
     } catch (error) {
       this.logger.error(`Update service status error: ${error.message}`);
@@ -240,13 +241,14 @@ export class ServiceController {
       const userId = req.user.id;
       const userRole = req.user.role;
 
-      const result = await this.prescriptionServiceManagement.updateServiceResults(
-        updateDto.prescriptionServiceId,
-        updateDto.results,
-        userId,
-        userRole,
-        updateDto.note,
-      );
+      const result =
+        await this.prescriptionServiceManagement.updateServiceResults(
+          updateDto.prescriptionServiceId,
+          updateDto.results,
+          userId,
+          userRole,
+          updateDto.note,
+        );
       return result;
     } catch (error) {
       this.logger.error(`Update service results error: ${error.message}`);
@@ -264,7 +266,9 @@ export class ServiceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.DOCTOR, Role.TECHNICIAN)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Lấy danh sách prescription services của user hiện tại' })
+  @ApiOperation({
+    summary: 'Lấy danh sách prescription services của user hiện tại',
+  })
   @ApiQuery({
     name: 'status',
     enum: PrescriptionStatus,
@@ -290,10 +294,7 @@ export class ServiceController {
       },
     },
   })
-  async getMyServices(
-    @Query() query: GetServicesDto,
-    @Request() req: any,
-  ) {
+  async getMyServices(@Query() query: GetServicesDto, @Request() req: any) {
     try {
       const userId = req.user.id;
       const userRole = req.user.role;
@@ -334,12 +335,16 @@ export class ServiceController {
       const userId = req.user.id;
       const userRole = req.user.role;
 
-      const workSession = await this.prescriptionServiceManagement.getUserWorkSession(
-        userId,
-        userRole,
-      );
+      const workSession =
+        await this.prescriptionServiceManagement.getUserWorkSession(
+          userId,
+          userRole,
+        );
       if (!workSession) {
-        throw new HttpException('Không tìm thấy work session hiện tại', HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          'Không tìm thấy work session hiện tại',
+          HttpStatus.NOT_FOUND,
+        );
       }
 
       // Get user information based on role
@@ -421,13 +426,14 @@ export class ServiceController {
       const userId = req.user.id;
       const userRole = req.user.role;
 
-      const result = await this.prescriptionServiceManagement.updateServiceStatus(
-        prescriptionServiceId,
-        PrescriptionStatus.SERVING,
-        userId,
-        userRole,
-        'Bắt đầu thực hiện dịch vụ',
-      );
+      const result =
+        await this.prescriptionServiceManagement.updateServiceStatus(
+          prescriptionServiceId,
+          PrescriptionStatus.SERVING,
+          userId,
+          userRole,
+          'Bắt đầu thực hiện dịch vụ',
+        );
       return result;
     } catch (error) {
       this.logger.error(`Start service error: ${error.message}`);
@@ -445,7 +451,9 @@ export class ServiceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.DOCTOR, Role.TECHNICIAN)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Hoàn thành prescription service và chuyển sang waiting result' })
+  @ApiOperation({
+    summary: 'Hoàn thành prescription service và chuyển sang waiting result',
+  })
   @ApiParam({
     name: 'prescriptionServiceId',
     description: 'ID của prescription service',
@@ -463,13 +471,14 @@ export class ServiceController {
       const userId = req.user.id;
       const userRole = req.user.role;
 
-      const result = await this.prescriptionServiceManagement.updateServiceStatus(
-        prescriptionServiceId,
-        PrescriptionStatus.WAITING_RESULT,
-        userId,
-        userRole,
-        'Hoàn thành thực hiện dịch vụ, chờ kết quả',
-      );
+      const result =
+        await this.prescriptionServiceManagement.updateServiceStatus(
+          prescriptionServiceId,
+          PrescriptionStatus.WAITING_RESULT,
+          userId,
+          userRole,
+          'Hoàn thành thực hiện dịch vụ, chờ kết quả',
+        );
       return result;
     } catch (error) {
       this.logger.error(`Complete service error: ${error.message}`);

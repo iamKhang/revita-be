@@ -13,6 +13,7 @@ import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
 import { PrescriptionStatus } from '@prisma/client';
 import { CodeGeneratorService } from '../user-management/patient-profile/code-generator.service';
+import { JwtUserPayload } from '../medical-record/dto/jwt-user-payload.dto';
 
 @Injectable()
 export class PrescriptionService {
@@ -20,15 +21,28 @@ export class PrescriptionService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreatePrescriptionDto) {
+  async create(dto: CreatePrescriptionDto, user: JwtUserPayload) {
     const {
       prescriptionCode,
       patientProfileId,
-      doctorId,
+      doctorId: dtoDoctorId,
       note,
       services,
       medicalRecordId,
     } = dto as any;
+
+    // Extract doctorId from JWT token if not provided in DTO
+    let doctorId = dtoDoctorId;
+    if (!doctorId && user.doctor?.id) {
+      doctorId = user.doctor.id;
+    }
+
+    if (!doctorId) {
+      throw new BadRequestException(
+        'Doctor ID is required (either from JWT token or DTO)',
+      );
+    }
+
     console.log('Creating prescription with data:', {
       prescriptionCode,
       patientProfileId,
@@ -36,6 +50,7 @@ export class PrescriptionService {
       note,
       services,
       medicalRecordId,
+      doctorFromToken: user.doctor?.id,
     });
 
     if (!services || services.length === 0) {
@@ -51,15 +66,13 @@ export class PrescriptionService {
       throw new NotFoundException('Patient profile not found');
     }
 
-    // Validate doctorId exists if provided
-    if (doctorId) {
-      const doctor = await this.prisma.doctor.findUnique({
-        where: { id: doctorId },
-        select: { id: true },
-      });
-      if (!doctor) {
-        throw new NotFoundException('Doctor not found');
-      }
+    // Validate doctorId exists (always validate since we set it from token or DTO)
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id: doctorId },
+      select: { id: true },
+    });
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
     }
 
     // Accept serviceId or serviceCode; resolve to IDs
@@ -178,12 +191,17 @@ export class PrescriptionService {
     return prescription;
   }
 
-  async update(id: string, dto: UpdatePrescriptionDto) {
+  async update(id: string, dto: UpdatePrescriptionDto, user: JwtUserPayload) {
     const existing = await this.prisma.prescription.findUnique({
       where: { id },
       include: { services: true },
     });
     if (!existing) throw new NotFoundException('Prescription not found');
+
+    // Check if user is the doctor who created this prescription
+    if (existing.doctorId !== user.doctor?.id) {
+      throw new BadRequestException('You can only update prescriptions you created');
+    }
 
     // Basic fields
     const data: any = {
@@ -263,11 +281,16 @@ export class PrescriptionService {
     });
   }
 
-  async cancel(id: string) {
+  async cancel(id: string, user: JwtUserPayload) {
     const existing = await this.prisma.prescription.findUnique({
       where: { id },
     });
     if (!existing) throw new NotFoundException('Prescription not found');
+
+    // Check if user is the doctor who created this prescription
+    if (existing.doctorId !== user.doctor?.id) {
+      throw new BadRequestException('You can only cancel prescriptions you created');
+    }
 
     // Mark prescription and all services as CANCELLED
     await this.prisma.$transaction([
@@ -287,6 +310,11 @@ export class PrescriptionService {
   // Below are internal methods for status transitions. Expose later when integrating.
 
   async markServicePaid(prescriptionId: string, serviceId: string) {
+    // This method is called by the system after payment success, so no user validation needed
+    await this._markServicePaidInternal(prescriptionId, serviceId);
+  }
+
+  private async _markServicePaidInternal(prescriptionId: string, serviceId: string) {
     // Called after payment success for a given service
     // Mark the paid service as PENDING, then check if we should start the first available service
     const psList = await this.prisma.prescriptionService.findMany({
@@ -302,6 +330,111 @@ export class PrescriptionService {
     await this.prisma.prescriptionService.update({
       where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
       data: { status: PrescriptionStatus.PENDING },
+    });
+
+    await this._startFirstPendingServiceIfNoActive(prescriptionId);
+
+    // Ensure prescription is at least PENDING
+    await this.prisma.prescription.update({
+      where: { id: prescriptionId },
+      data: { status: PrescriptionStatus.PENDING },
+    });
+  }
+
+  async markServiceServing(prescriptionId: string, serviceId: string, user: JwtUserPayload) {
+    // Check if user is the doctor who created this prescription
+    const prescription = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      select: { doctorId: true },
+    });
+    if (!prescription || prescription.doctorId !== user.doctor?.id) {
+      throw new BadRequestException('You can only modify services in prescriptions you created');
+    }
+
+    // Tech confirms to start service
+    await this.prisma.prescriptionService.update({
+      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+      data: { status: PrescriptionStatus.SERVING },
+    });
+  }
+
+  async markServiceWaitingResult(prescriptionId: string, serviceId: string, user: JwtUserPayload) {
+    // Check if user is the doctor who created this prescription
+    const prescription = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      select: { doctorId: true },
+    });
+    if (!prescription || prescription.doctorId !== user.doctor?.id) {
+      throw new BadRequestException('You can only modify services in prescriptions you created');
+    }
+
+    // Service done, waiting result, then unlock next pending service to WAITING
+    await this.prisma.prescriptionService.update({
+      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+      data: { status: PrescriptionStatus.WAITING_RESULT },
+    });
+
+    await this.unlockNextPendingService(prescriptionId);
+  }
+
+  async markServiceCompleted(prescriptionId: string, serviceId: string, user: JwtUserPayload) {
+    // Check if user is the doctor who created this prescription
+    const prescription = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      select: { doctorId: true },
+    });
+    if (!prescription || prescription.doctorId !== user.doctor?.id) {
+      throw new BadRequestException('You can only modify services in prescriptions you created');
+    }
+
+    await this.prisma.prescriptionService.update({
+      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+      data: { status: PrescriptionStatus.COMPLETED },
+    });
+
+    await this.unlockNextPendingService(prescriptionId);
+
+    // If all services completed, complete prescription
+    const remaining = await this.prisma.prescriptionService.count({
+      where: { prescriptionId, NOT: { status: PrescriptionStatus.COMPLETED } },
+    });
+    if (remaining === 0) {
+      await this.prisma.prescription.update({
+        where: { id: prescriptionId },
+        data: { status: PrescriptionStatus.COMPLETED },
+      });
+    }
+  }
+
+  async getPrescriptionsByMedicalRecord(medicalRecordId: string) {
+    console.log(
+      'Searching for prescriptions with medicalRecordId:',
+      medicalRecordId,
+    );
+
+    const prescriptions = await this.prisma.prescription.findMany({
+      where: { medicalRecordId },
+      include: {
+        services: {
+          include: { service: true },
+          orderBy: { order: 'asc' },
+        },
+        patientProfile: true,
+        doctor: true,
+      },
+      orderBy: { id: 'desc' }, // Sắp xếp theo ID (UUID mới nhất trước)
+    });
+
+    console.log('Found prescriptions:', prescriptions.length);
+    console.log('Prescriptions:', prescriptions);
+
+    return prescriptions;
+  }
+
+  private async _startFirstPendingServiceIfNoActive(prescriptionId: string) {
+    const psList = await this.prisma.prescriptionService.findMany({
+      where: { prescriptionId },
+      orderBy: { order: 'asc' },
     });
 
     // Check if any service is currently active (WAITING, SERVING, WAITING_RESULT)
@@ -414,104 +547,9 @@ export class PrescriptionService {
         });
       }
     }
-
-    // Ensure prescription is at least PENDING
-    await this.prisma.prescription.update({
-      where: { id: prescriptionId },
-      data: { status: PrescriptionStatus.PENDING },
-    });
-  }
-
-  async markServiceServing(prescriptionId: string, serviceId: string) {
-    // Tech confirms to start service
-    await this.prisma.prescriptionService.update({
-      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-      data: { status: PrescriptionStatus.SERVING },
-    });
-  }
-
-  async markServiceWaitingResult(prescriptionId: string, serviceId: string) {
-    // Service done, waiting result, then unlock next pending service to WAITING
-    await this.prisma.prescriptionService.update({
-      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-      data: { status: PrescriptionStatus.WAITING_RESULT },
-    });
-
-    await this.unlockNextPendingService(prescriptionId);
-  }
-
-  async markServiceCompleted(prescriptionId: string, serviceId: string) {
-    await this.prisma.prescriptionService.update({
-      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-      data: { status: PrescriptionStatus.COMPLETED },
-    });
-
-    await this.unlockNextPendingService(prescriptionId);
-
-    // If all services completed, complete prescription
-    const remaining = await this.prisma.prescriptionService.count({
-      where: { prescriptionId, NOT: { status: PrescriptionStatus.COMPLETED } },
-    });
-    if (remaining === 0) {
-      await this.prisma.prescription.update({
-        where: { id: prescriptionId },
-        data: { status: PrescriptionStatus.COMPLETED },
-      });
-    }
-  }
-
-  async getPrescriptionsByMedicalRecord(medicalRecordId: string) {
-    console.log(
-      'Searching for prescriptions with medicalRecordId:',
-      medicalRecordId,
-    );
-
-    const prescriptions = await this.prisma.prescription.findMany({
-      where: { medicalRecordId },
-      include: {
-        services: {
-          include: { service: true },
-          orderBy: { order: 'asc' },
-        },
-        patientProfile: true,
-        doctor: true,
-      },
-      orderBy: { id: 'desc' }, // Sắp xếp theo ID (UUID mới nhất trước)
-    });
-
-    console.log('Found prescriptions:', prescriptions.length);
-    console.log('Prescriptions:', prescriptions);
-
-    return prescriptions;
   }
 
   private async unlockNextPendingService(prescriptionId: string) {
-    // If no active service is WAITING/SERVING/WAITING_RESULT, set the lowest-order PENDING to WAITING
-    const services = await this.prisma.prescriptionService.findMany({
-      where: { prescriptionId },
-      orderBy: { order: 'asc' },
-    });
-
-    const activeExists = services.some((s) =>
-      [
-        PrescriptionStatus.WAITING,
-        PrescriptionStatus.SERVING,
-        PrescriptionStatus.WAITING_RESULT,
-      ].includes(s.status as any),
-    );
-    if (activeExists) return;
-
-    const next = services.find((s) => s.status === PrescriptionStatus.PENDING);
-    if (next) {
-      await this.prisma.prescriptionService.update({
-        where: {
-          prescriptionId_serviceId: {
-            prescriptionId,
-            serviceId: next.serviceId,
-          },
-        },
-        data: { status: PrescriptionStatus.WAITING },
-      });
-    }
+    await this._startFirstPendingServiceIfNoActive(prescriptionId);
   }
 }

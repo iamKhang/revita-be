@@ -1,4 +1,12 @@
-import { ArrayNotEmpty, IsArray, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreatePrescriptionServiceItemDto {
@@ -33,7 +41,7 @@ export class CreatePrescriptionDto {
 
   @IsOptional()
   @IsString()
-  doctorId?: string;
+  doctorId?: string; // Optional: will be extracted from JWT token if not provided
 
   @IsOptional()
   @IsString()

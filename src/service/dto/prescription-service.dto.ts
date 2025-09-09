@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsArray, IsEnum, IsNumber, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsEnum,
+  IsNumber,
+  Min,
+} from 'class-validator';
 import { PrescriptionStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 
@@ -16,7 +23,8 @@ export class ScanPrescriptionDto {
 // DTO cho update service status
 export class UpdateServiceStatusDto {
   @ApiProperty({
-    description: 'ID của prescription service (format: prescriptionId-serviceId)',
+    description:
+      'ID của prescription service (format: prescriptionId-serviceId)',
     example: 'uuid-prescription-id-uuid-service-id',
   })
   @IsString()
@@ -43,7 +51,8 @@ export class UpdateServiceStatusDto {
 // DTO cho update service results
 export class UpdateServiceResultsDto {
   @ApiProperty({
-    description: 'ID của prescription service (format: prescriptionId-serviceId)',
+    description:
+      'ID của prescription service (format: prescriptionId-serviceId)',
     example: 'uuid-prescription-id-uuid-service-id',
   })
   @IsString()
@@ -51,7 +60,10 @@ export class UpdateServiceResultsDto {
 
   @ApiProperty({
     description: 'Danh sách kết quả (thường là URLs từ Supabase)',
-    example: ['https://supabase-url.com/results/image1.jpg', 'https://supabase-url.com/results/report.pdf'],
+    example: [
+      'https://supabase-url.com/results/image1.jpg',
+      'https://supabase-url.com/results/report.pdf',
+    ],
     type: [String],
   })
   @IsArray()
@@ -168,5 +180,3 @@ export class GetServicesDto {
   @Min(0)
   offset?: number;
 }
-
-

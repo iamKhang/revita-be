@@ -1,9 +1,9 @@
-import { 
-  Body, 
-  Controller, 
-  Get, 
-  Param, 
-  Post, 
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
   Query,
   UseGuards,
   Request,
@@ -20,9 +20,7 @@ import { Role } from '../rbac/roles.enum';
 @Controller('invoice-payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class InvoicePaymentController {
-  constructor(
-    private readonly invoicePaymentService: InvoicePaymentService,
-  ) {}
+  constructor(private readonly invoicePaymentService: InvoicePaymentService) {}
 
   @Post('scan')
   @Roles(Role.CASHIER)
@@ -31,19 +29,17 @@ export class InvoicePaymentController {
   }
 
   @Post('preview')
-  @Roles(Role.CASHIER)
+  @Roles(Role.CASHIER, Role.RECEPTIONIST)
   async createPaymentPreview(@Body() dto: CreatePaymentDto) {
     return this.invoicePaymentService.createPaymentPreview(dto);
   }
 
   @Post('create')
   @Roles(Role.CASHIER)
-  async createPayment(
-    @Body() dto: CreatePaymentDto,
-    @Request() req: any,
-  ) {
+  async createPayment(@Body() dto: CreatePaymentDto, @Request() req: any) {
     // Prefer cashier id from JWT relation; fallback to body; final fallback for testing
-    const cashierId = req.user?.cashier?.id || dto.cashierId || req.user?.id || 'system';
+    const cashierId =
+      req.user?.cashier?.id || dto.cashierId || req.user?.id || 'system';
     return this.invoicePaymentService.createPayment({
       ...dto,
       cashierId,
@@ -52,12 +48,13 @@ export class InvoicePaymentController {
 
   @Post('confirm')
   @Roles(Role.CASHIER)
-  async confirmPayment(
-    @Body() dto: ConfirmPaymentDto,
-    @Request() req: any,
-  ) {
+  async confirmPayment(@Body() dto: ConfirmPaymentDto, @Request() req: any) {
     // Prefer cashier id from JWT relation; fallback to body; final fallback for testing
-    const cashierId = req.user?.cashier?.id || (dto as any).cashierId || req.user?.id || 'system';
+    const cashierId =
+      req.user?.cashier?.id ||
+      (dto as any).cashierId ||
+      req.user?.id ||
+      'system';
     return this.invoicePaymentService.confirmPayment({
       ...dto,
       cashierId,
@@ -72,7 +69,9 @@ export class InvoicePaymentController {
 
   @Get('status/:prescriptionCode')
   @Roles(Role.CASHIER, Role.PATIENT, Role.DOCTOR)
-  async getPrescriptionStatus(@Param('prescriptionCode') prescriptionCode: string) {
+  async getPrescriptionStatus(
+    @Param('prescriptionCode') prescriptionCode: string,
+  ) {
     return this.invoicePaymentService.getPrescriptionStatus(prescriptionCode);
   }
 

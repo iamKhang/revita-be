@@ -48,7 +48,10 @@ export class RoutingController {
 
   @Post('status/waiting-result')
   async markWaitingResult(@Body() body: UpdateStatusRequest) {
-    return this.routingService.updateStatusForPatientInRoom(body, 'WAITING_RESULT');
+    return this.routingService.updateStatusForPatientInRoom(
+      body,
+      'WAITING_RESULT',
+    );
   }
 
   @Post('status/completed')

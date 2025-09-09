@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrescriptionService } from '../prescription/prescription.service';
 import { RoutingService } from '../routing/routing.service';
@@ -103,15 +107,21 @@ export class InvoicePaymentService {
       throw new BadRequestException('Cashier identifier is required');
     }
     // Try direct cashier.id first
-    const byId = await this.prisma.cashier.findUnique({ where: { id: identifier } });
+    const byId = await this.prisma.cashier.findUnique({
+      where: { id: identifier },
+    });
     if (byId) return byId.id;
     // Then try by authId
-    const byAuth = await this.prisma.cashier.findFirst({ where: { authId: identifier } });
+    const byAuth = await this.prisma.cashier.findFirst({
+      where: { authId: identifier },
+    });
     if (byAuth) return byAuth.id;
     throw new BadRequestException('Invalid cashier identifier');
   }
 
-  async scanPrescription(dto: ScanPrescriptionDto): Promise<PrescriptionDetails> {
+  async scanPrescription(
+    dto: ScanPrescriptionDto,
+  ): Promise<PrescriptionDetails> {
     const prescription = await this.prisma.prescription.findFirst({
       where: { prescriptionCode: dto.prescriptionCode },
       include: {
@@ -144,20 +154,29 @@ export class InvoicePaymentService {
 
     // Determine selected services: if none provided, default to all
     let selectedIds: string[] = [];
-    const allIds = prescription.services.map(s => s.serviceId);
+    const allIds = prescription.services.map((s) => s.serviceId);
     const codeToId = new Map(
-      prescription.services.map(s => [s.service.serviceCode, s.serviceId] as const)
+      prescription.services.map(
+        (s) => [s.service.serviceCode, s.serviceId] as const,
+      ),
     );
 
-    if ((dto.selectedServiceIds && dto.selectedServiceIds.length > 0) || (dto.selectedServiceCodes && dto.selectedServiceCodes.length > 0)) {
+    if (
+      (dto.selectedServiceIds && dto.selectedServiceIds.length > 0) ||
+      (dto.selectedServiceCodes && dto.selectedServiceCodes.length > 0)
+    ) {
       const idsFromIds = dto.selectedServiceIds || [];
-      const idsFromCodes = (dto.selectedServiceCodes || []).map(code => codeToId.get(code)).filter(Boolean) as string[];
+      const idsFromCodes = (dto.selectedServiceCodes || [])
+        .map((code) => codeToId.get(code))
+        .filter(Boolean) as string[];
       selectedIds = Array.from(new Set([...idsFromIds, ...idsFromCodes]));
 
       // Validate selection in prescription
-      const invalidIds = selectedIds.filter(id => !allIds.includes(id));
+      const invalidIds = selectedIds.filter((id) => !allIds.includes(id));
       if (invalidIds.length > 0) {
-        throw new BadRequestException(`Services not found in prescription: ${invalidIds.join(', ')}`);
+        throw new BadRequestException(
+          `Services not found in prescription: ${invalidIds.join(', ')}`,
+        );
       }
     } else {
       selectedIds = allIds;
@@ -165,8 +184,8 @@ export class InvoicePaymentService {
 
     // Get selected services with their details
     const selectedServices = prescription.services
-      .filter(s => selectedIds.includes(s.serviceId))
-      .map(s => ({
+      .filter((s) => selectedIds.includes(s.serviceId))
+      .map((s) => ({
         serviceId: s.serviceId,
         serviceCode: s.service.serviceCode,
         name: s.service.name,
@@ -174,7 +193,10 @@ export class InvoicePaymentService {
         description: s.service.description,
       }));
 
-    const totalAmount = selectedServices.reduce((sum, service) => sum + service.price, 0);
+    const totalAmount = selectedServices.reduce(
+      (sum, service) => sum + service.price,
+      0,
+    );
 
     return {
       prescriptionDetails: prescription,
@@ -191,15 +213,17 @@ export class InvoicePaymentService {
 
     // Check if there are available work sessions for the requested services
     const currentTime = new Date();
-    const availableAssignments = await this.routingService.assignPatientToRooms({
-      patientProfileId: prescription.patientProfile.id,
-      serviceIds: preview.selectedServices.map(s => s.serviceId),
-      requestedTime: currentTime,
-    });
+    const availableAssignments = await this.routingService.assignPatientToRooms(
+      {
+        patientProfileId: prescription.patientProfile.id,
+        serviceIds: preview.selectedServices.map((s) => s.serviceId),
+        requestedTime: currentTime,
+      },
+    );
 
     if (availableAssignments.length === 0) {
       throw new BadRequestException(
-        'Hiện tại chưa có nhân sự để phục vụ cho các dịch vụ đã chọn. Vui lòng thử lại sau hoặc liên hệ quầy tiếp tân để được hỗ trợ.'
+        'Hiện tại chưa có nhân sự để phục vụ cho các dịch vụ đã chọn. Vui lòng thử lại sau hoặc liên hệ quầy tiếp tân để được hỗ trợ.',
       );
     }
 
@@ -217,7 +241,7 @@ export class InvoicePaymentService {
         patientProfileId: prescription.patientProfile.id,
         cashierId: effectiveCashierId,
         invoiceDetails: {
-          create: preview.selectedServices.map(service => ({
+          create: preview.selectedServices.map((service) => ({
             serviceId: service.serviceId,
             price: service.price,
             prescriptionId: prescription.id,
@@ -237,11 +261,13 @@ export class InvoicePaymentService {
       paymentStatus: invoice.paymentStatus,
       prescriptionId: prescription.id,
       patientProfileId: prescription.patientProfile.id,
-      selectedServiceIds: preview.selectedServices.map(s => s.serviceId),
+      selectedServiceIds: preview.selectedServices.map((s) => s.serviceId),
     };
   }
 
-  async confirmPayment(dto: ConfirmPaymentDto): Promise<PaymentResult & { routingAssignments: any[] }> {
+  async confirmPayment(
+    dto: ConfirmPaymentDto,
+  ): Promise<PaymentResult & { routingAssignments: any[] }> {
     // Find and update invoice
     const invoice = await this.prisma.invoice.findFirst({
       where: { invoiceCode: dto.invoiceCode },
@@ -262,7 +288,9 @@ export class InvoicePaymentService {
     }
 
     // Update invoice to paid
-    const effectiveCashierId = await this.resolveCashierId((dto as any).cashierId);
+    const effectiveCashierId = await this.resolveCashierId(
+      (dto as any).cashierId,
+    );
     await this.prisma.invoice.update({
       where: { id: invoice.id },
       data: {
@@ -275,7 +303,9 @@ export class InvoicePaymentService {
     // Get prescription details
     const prescriptionId = invoice.invoiceDetails[0]?.prescriptionId;
     if (!prescriptionId) {
-      throw new NotFoundException('Prescription ID not found in invoice details');
+      throw new NotFoundException(
+        'Prescription ID not found in invoice details',
+      );
     }
 
     const prescription = await this.prisma.prescription.findFirst({
@@ -296,39 +326,48 @@ export class InvoicePaymentService {
     }
 
     // Mark paid services in prescription
-    const selectedServiceIds = invoice.invoiceDetails.map(detail => detail.serviceId);
-    
+    const selectedServiceIds = invoice.invoiceDetails.map(
+      (detail) => detail.serviceId,
+    );
+
     // Get all service IDs from the prescription
-    const allPrescriptionServiceIds = prescription.services.map(s => s.serviceId);
-    
+    const allPrescriptionServiceIds = prescription.services.map(
+      (s) => s.serviceId,
+    );
+
     // Find services that were in the prescription but not selected for payment in THIS invoice
     const unselectedServiceIds = allPrescriptionServiceIds.filter(
-      id => !selectedServiceIds.includes(id)
+      (id) => !selectedServiceIds.includes(id),
     );
-    
+
     // Only cancel services that are still PENDING (not yet paid in previous invoices)
     const pendingUnselectedIds: string[] = [];
     for (const serviceId of unselectedServiceIds) {
-      const service = prescription.services.find(s => s.serviceId === serviceId);
+      const service = prescription.services.find(
+        (s) => s.serviceId === serviceId,
+      );
       if (service && service.status === 'PENDING') {
         pendingUnselectedIds.push(serviceId);
       }
     }
-    
+
     // Cancel only pending unselected services
     if (pendingUnselectedIds.length > 0) {
       await this.prisma.prescriptionService.updateMany({
-        where: { 
-          prescriptionId, 
-          serviceId: { in: pendingUnselectedIds } 
+        where: {
+          prescriptionId,
+          serviceId: { in: pendingUnselectedIds },
         },
         data: { status: 'CANCELLED' },
       });
     }
-    
+
     // Mark selected services as paid (which will set the first one to WAITING if no active service)
     for (const serviceId of selectedServiceIds) {
-      await this.prescriptionService.markServicePaid(prescription.id, serviceId);
+      await this.prescriptionService.markServicePaid(
+        prescription.id,
+        serviceId,
+      );
     }
 
     // Route patient to appropriate rooms
@@ -346,7 +385,7 @@ export class InvoicePaymentService {
     }
 
     // Get detailed routing information
-    const detailedRoutingAssignments = routingAssignments.map(assignment => ({
+    const detailedRoutingAssignments = routingAssignments.map((assignment) => ({
       roomId: assignment.roomId,
       roomCode: assignment.roomCode,
       roomName: assignment.roomName,
@@ -393,7 +432,10 @@ export class InvoicePaymentService {
         ]);
       }
     } catch (err) {
-      console.warn('[Kafka] Patient assignment publish failed:', (err as Error).message);
+      console.warn(
+        '[Kafka] Patient assignment publish failed:',
+        (err as Error).message,
+      );
     }
 
     // Log routing result for debugging
@@ -410,7 +452,7 @@ export class InvoicePaymentService {
       patientProfileId: invoice.patientProfileId,
       selectedServiceIds,
       routingAssignments: detailedRoutingAssignments,
-      invoiceDetails: invoice.invoiceDetails.map(detail => ({
+      invoiceDetails: invoice.invoiceDetails.map((detail) => ({
         serviceId: detail.serviceId,
         serviceCode: detail.service.serviceCode,
         serviceName: detail.service.name,
@@ -434,7 +476,7 @@ export class InvoicePaymentService {
       where: { patientProfileId },
       include: {
         invoiceDetails: {
-          include: { 
+          include: {
             service: true,
             prescription: {
               include: {
@@ -450,14 +492,14 @@ export class InvoicePaymentService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return invoices.map(invoice => ({
+    return invoices.map((invoice) => ({
       invoiceCode: invoice.invoiceCode,
       totalAmount: invoice.totalAmount,
       paymentStatus: invoice.paymentStatus,
       paymentMethod: invoice.paymentMethod,
       isPaid: invoice.isPaid,
       createdAt: invoice.createdAt,
-      services: invoice.invoiceDetails.map(detail => ({
+      services: invoice.invoiceDetails.map((detail) => ({
         serviceId: detail.serviceId,
         serviceCode: detail.service.serviceCode,
         name: detail.service.name,
@@ -491,7 +533,7 @@ export class InvoicePaymentService {
       status: prescription.status,
       patientName: prescription.patientProfile.name,
       doctorName: prescription.doctor?.auth.name,
-      services: prescription.services.map(service => ({
+      services: prescription.services.map((service) => ({
         serviceCode: service.service.serviceCode,
         name: service.service.name,
         status: service.status,

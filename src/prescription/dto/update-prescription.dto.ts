@@ -1,4 +1,12 @@
-import { IsArray, IsInt, IsOptional, IsString, ArrayNotEmpty, Min, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+  ArrayNotEmpty,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpdatePrescriptionServiceItemDto {

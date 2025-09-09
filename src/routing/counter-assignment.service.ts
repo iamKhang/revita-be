@@ -505,9 +505,9 @@ export class CounterAssignmentService {
 
     // Find appointment for this patient profile
     const appointmentForProfile = await this.prisma.appointment.findFirst({
-      where: { 
+      where: {
         patientProfileId: invoice.patientProfileId,
-        id: request.appointmentId 
+        id: request.appointmentId,
       },
       include: {
         patientProfile: true,
@@ -521,7 +521,9 @@ export class CounterAssignmentService {
 
     // Lấy thông tin bệnh nhân
     const patientName =
-      request.patientName || appointmentForProfile.patientProfile.name || 'Unknown';
+      request.patientName ||
+      appointmentForProfile.patientProfile.name ||
+      'Unknown';
 
     const patientAge =
       request.patientAge ||
@@ -601,7 +603,8 @@ export class CounterAssignmentService {
             patientName,
             patientAge,
             patientGender:
-              request.patientGender || appointmentForProfile.patientProfile.gender,
+              request.patientGender ||
+              appointmentForProfile.patientProfile.gender,
             priorityScore,
             assignedCounter,
             serviceName: appointmentForProfile.service.name,
@@ -729,7 +732,7 @@ export class CounterAssignmentService {
 
     // Find appointment for this patient profile
     const appointment = await this.prisma.appointment.findFirst({
-      where: { 
+      where: {
         patientProfileId: invoice.patientProfileId,
       },
       include: {
