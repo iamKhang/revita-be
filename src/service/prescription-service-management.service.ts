@@ -223,7 +223,8 @@ export class PrescriptionServiceManagementService {
   }
 
   async updateServiceStatus(
-    prescriptionServiceId: string,
+    prescriptionId: string,
+    serviceId: string,
     status: PrescriptionStatus,
     userId: string,
     userRole: string,
@@ -231,11 +232,8 @@ export class PrescriptionServiceManagementService {
   ): Promise<UpdateServiceStatusResponse> {
     try {
       this.logger.log(
-        `${userRole} ${userId} updating service ${prescriptionServiceId} to ${status}`,
+        `${userRole} ${userId} updating service ${prescriptionId}-${serviceId} to ${status}`,
       );
-
-      // Parse composite key
-      const [prescriptionId, serviceId] = prescriptionServiceId.split('-');
 
       // Resolve auth ID to doctor/technician ID
       let resolvedUserId: string | null = null;
@@ -353,7 +351,8 @@ export class PrescriptionServiceManagementService {
   }
 
   async updateServiceResults(
-    prescriptionServiceId: string,
+    prescriptionId: string,
+    serviceId: string,
     results: string[],
     userId: string,
     userRole: string,
@@ -361,10 +360,8 @@ export class PrescriptionServiceManagementService {
   ): Promise<UpdateResultsResponse> {
     try {
       this.logger.log(
-        `${userRole} ${userId} updating results for service ${prescriptionServiceId}`,
+        `${userRole} ${userId} updating results for service ${prescriptionId}-${serviceId}`,
       );
-
-      const [prescriptionId, serviceId] = prescriptionServiceId.split('-');
 
       // Resolve auth ID to doctor/technician ID
       let resolvedUserId: string | null = null;
@@ -450,18 +447,27 @@ export class PrescriptionServiceManagementService {
     userRole: string,
     query: GetServicesQuery,
   ) {
+    console.log('=== getUserServices called ===');
+    console.log('userId:', userId);
+    console.log('userRole:', userRole);
+    console.log('query:', query);
+
     try {
       const whereCondition: any = {};
 
       // Resolve auth ID to doctor/technician ID
       if (userRole === 'DOCTOR') {
+        console.log('Looking for doctor with authId:', userId);
         const doctor = await this.prisma.doctor.findFirst({
           where: { authId: userId },
         });
+        console.log('Doctor found:', doctor);
         if (!doctor) {
+          console.log('No doctor found, returning empty result');
           return { services: [], total: 0 };
         }
         whereCondition.doctorId = doctor.id;
+        console.log('whereCondition:', whereCondition);
       } else if (userRole === 'TECHNICIAN') {
         const technician = await this.prisma.technician.findFirst({
           where: { authId: userId },
@@ -476,6 +482,7 @@ export class PrescriptionServiceManagementService {
         whereCondition.status = query.status;
       }
 
+      console.log('Executing query with whereCondition:', whereCondition);
       const services = await this.prisma.prescriptionService.findMany({
         where: whereCondition,
         include: {
@@ -511,12 +518,18 @@ export class PrescriptionServiceManagementService {
         where: whereCondition,
       });
 
-      return {
+      console.log('Services found:', services.length);
+      console.log('Total count:', total);
+
+      const result = {
         services,
         total,
         limit: query.limit || 50,
         offset: query.offset || 0,
       };
+
+      console.log('Returning result:', result);
+      return result;
     } catch (error) {
       this.logger.error(`Get user services error: ${error.message}`);
       throw error;
