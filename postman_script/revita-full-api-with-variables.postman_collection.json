@@ -3,7 +3,7 @@
     "_postman_id": "revita-full-api-collection",
     "name": "Revita Full API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Full API collection for Revita medical system, including authentication, registration, user management, admin management, patient management, doctor management, receptionist management, patient profiles (with independent profiles, search, and linking capabilities), medical records, counter management, counter assignment, and app endpoints. All entities now use unified code generation system."
+    "description": "Full API collection for Revita medical system, including authentication, registration, user management (with avatar upload), admin management, patient management, doctor management, receptionist management, patient profiles (with independent profiles, search, and linking capabilities), medical records (with file attachments), file storage (upload/download/delete), counter management, counter assignment, and app endpoints. All entities now use unified code generation system with comprehensive file upload support."
   },
   "values": [
 		{
@@ -270,6 +270,135 @@
               "raw": "{\n  \"name\": \"Nguyễn Văn A\",\n  \"dateOfBirth\": \"1990-01-01\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"citizenId\": \"123456789012\",\n  \"avatar\": \"https://example.com/avatar.jpg\"\n}"
             },
             "description": "Cập nhật thông tin cá nhân user."
+          }
+        },
+        {
+          "name": "Upload Avatar",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/users/me/avatar", "host": ["{{baseUrl}}"], "path": ["users", "me", "avatar"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "avatar",
+                  "type": "file",
+                  "src": "",
+                  "description": "Avatar image file (JPEG, PNG, GIF, WEBP)"
+                }
+              ]
+            },
+            "description": "Upload avatar cho user hiện tại. Chỉ hỗ trợ file ảnh: JPEG, PNG, GIF, WEBP."
+          }
+        },
+        {
+          "name": "Get All Doctors (Public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/doctors?specialty=",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "doctors"],
+              "query": [
+                { "key": "specialty", "value": "", "description": "Filter by specialty (optional)" }
+              ]
+            },
+            "description": "Lấy danh sách tất cả bác sĩ (public endpoint, không cần authentication)."
+          }
+        },
+        {
+          "name": "Search Users (Public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/search?query=&role=",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "search"],
+              "query": [
+                { "key": "query", "value": "", "description": "Search term (required)" },
+                { "key": "role", "value": "", "description": "Filter by role (optional)" }
+              ]
+            },
+            "description": "Tìm kiếm user theo tên, số điện thoại, id, email (public endpoint)."
+          }
+        },
+        {
+          "name": "Get Users By Role",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/by-role?role=&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "by-role"],
+              "query": [
+                { "key": "role", "value": "", "description": "Filter by role (optional)" },
+                { "key": "search", "value": "", "description": "Search term (optional)" }
+              ]
+            },
+            "description": "Lấy users theo role (cho ADMIN, RECEPTIONIST, DOCTOR)."
+          }
+        },
+        {
+          "name": "Get All Doctors (Staff)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/doctors/all?specialty=&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "doctors", "all"],
+              "query": [
+                { "key": "specialty", "value": "", "description": "Filter by specialty (optional)" },
+                { "key": "search", "value": "", "description": "Search term (optional)" }
+              ]
+            },
+            "description": "Lấy tất cả doctors cho ADMIN, RECEPTIONIST với thông tin chi tiết."
+          }
+        },
+        {
+          "name": "Get All Receptionists",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/receptionists?search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "receptionists"],
+              "query": [
+                { "key": "search", "value": "", "description": "Search term (optional)" }
+              ]
+            },
+            "description": "Lấy tất cả receptionists (chỉ cho ADMIN)."
+          }
+        },
+        {
+          "name": "Get All Patients",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/patients?search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "patients"],
+              "query": [
+                { "key": "search", "value": "", "description": "Search term (optional)" }
+              ]
+            },
+            "description": "Lấy tất cả patients (cho ADMIN, RECEPTIONIST, DOCTOR)."
           }
         }
       ]
@@ -780,15 +909,73 @@
           "request": {
             "method": "POST",
             "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/medical-records", "host": ["{{baseUrl}}"], "path": ["medical-records"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": [],
+                  "description": "File đính kèm (tùy chọn)"
+                },
+                {
+                  "key": "patientProfileId",
+                  "value": "{{patientProfileId}}",
+                  "type": "text",
+                  "description": "ID của hồ sơ bệnh nhân"
+                },
+                {
+                  "key": "templateId",
+                  "value": "{{templateId}}",
+                  "type": "text",
+                  "description": "ID của template bệnh án"
+                },
+                {
+                  "key": "doctorId",
+                  "value": "{{doctorId}}",
+                  "type": "text",
+                  "description": "ID của bác sĩ (tùy chọn cho admin)"
+                },
+                {
+                  "key": "appointmentId",
+                  "value": "",
+                  "type": "text",
+                  "description": "ID của cuộc hẹn (tùy chọn)"
+                },
+                {
+                  "key": "status",
+                  "value": "DRAFT",
+                  "type": "text",
+                  "description": "Trạng thái hồ sơ bệnh án"
+                },
+                {
+                  "key": "content",
+                  "value": "{\"chief_complaint\":\"Đau đầu\",\"diagnosis\":\"Stress\",\"treatment_plan\":\"Nghỉ ngơi và uống thuốc giảm đau\"}",
+                  "type": "text",
+                  "description": "Nội dung bệnh án theo template (JSON string)"
+                }
+              ]
+            },
+            "description": "Tạo hồ sơ bệnh án mới với khả năng upload file đính kèm ngay trong lúc tạo."
+          }
+        },
+        {
+          "name": "Create Medical Record (JSON only)",
+          "request": {
+            "method": "POST",
+            "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "url": { "raw": "{{baseUrl}}/medical-records", "host": ["{{baseUrl}}"], "path": ["medical-records"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"templateId\": \"{{templateId}}\",\n  \"doctorId\": \"{{doctorId}}\",\n  \"status\": \"DRAFT\",\n  \"content\": {\n    \"field1\": \"value\"\n  }\n}"
+              "raw": "{\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"templateId\": \"{{templateId}}\",\n  \"doctorId\": \"{{doctorId}}\",\n  \"status\": \"DRAFT\",\n  \"content\": {\n    \"chief_complaint\": \"Đau đầu\",\n    \"diagnosis\": \"Stress\",\n    \"treatment_plan\": \"Nghỉ ngơi và uống thuốc giảm đau\"\n  }\n}"
             },
-            "description": "Tạo hồ sơ bệnh án mới (chỉ hỗ trợ patientProfileId)."
+            "description": "Tạo hồ sơ bệnh án mới không có file đính kèm (chỉ JSON)."
           }
         },
         {
@@ -845,15 +1032,55 @@
           "request": {
             "method": "PATCH",
             "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}", "host": ["{{baseUrl}}"], "path": ["medical-records", "{{medicalRecordId}}"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": [],
+                  "description": "File đính kèm mới (tùy chọn)"
+                },
+                {
+                  "key": "content",
+                  "value": "{\"chief_complaint\":\"Đau đầu cập nhật\",\"diagnosis\":\"Migraine\",\"treatment_plan\":\"Nghỉ ngơi và thuốc mạnh hơn\"}",
+                  "type": "text",
+                  "description": "Nội dung bệnh án cần cập nhật (JSON string)"
+                },
+                {
+                  "key": "status",
+                  "value": "IN_PROGRESS",
+                  "type": "text",
+                  "description": "Trạng thái hồ sơ bệnh án"
+                },
+                {
+                  "key": "appendFiles",
+                  "value": "true",
+                  "type": "text",
+                  "description": "true: thêm file vào danh sách hiện tại, false: thay thế hoàn toàn"
+                }
+              ]
+            },
+            "description": "Cập nhật hồ sơ bệnh án với khả năng upload file đính kèm (chỉ bác sĩ tạo hoặc admin)."
+          }
+        },
+        {
+          "name": "Update Medical Record (JSON only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
               { "key": "Authorization", "value": "Bearer {{token}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "url": { "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}", "host": ["{{baseUrl}}"], "path": ["medical-records", "{{medicalRecordId}}"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"content\": {\n    \"field1\": \"new value\"\n  },\n  \"status\": \"IN_PROGRESS\"\n}"
+              "raw": "{\n  \"content\": {\n    \"chief_complaint\": \"Đau đầu cập nhật\",\n    \"diagnosis\": \"Migraine\",\n    \"treatment_plan\": \"Nghỉ ngơi và thuốc mạnh hơn\"\n  },\n  \"status\": \"IN_PROGRESS\"\n}"
             },
-            "description": "Cập nhật hồ sơ bệnh án (chỉ bác sĩ tạo hoặc admin)."
+            "description": "Cập nhật hồ sơ bệnh án không có file đính kèm (chỉ JSON)."
           }
         },
         {
@@ -865,6 +1092,44 @@
             ],
             "url": { "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}", "host": ["{{baseUrl}}"], "path": ["medical-records", "{{medicalRecordId}}"] },
             "description": "Xóa hồ sơ bệnh án (chỉ bác sĩ tạo hoặc admin)."
+          }
+        },
+        {
+          "name": "Upload Medical Record Attachments",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}/attachments", "host": ["{{baseUrl}}"], "path": ["medical-records", "{{medicalRecordId}}", "attachments"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": [],
+                  "description": "Multiple files to upload as attachments"
+                }
+              ]
+            },
+            "description": "Upload file đính kèm cho hồ sơ bệnh án. Hỗ trợ nhiều file cùng lúc."
+          }
+        },
+        {
+          "name": "Remove Medical Record Attachments",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}/attachments", "host": ["{{baseUrl}}"], "path": ["medical-records", "{{medicalRecordId}}", "attachments"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"urls\": [\n    \"https://xxx.supabase.co/storage/v1/object/public/results/medical-records/uuid/file1.pdf\",\n    \"https://xxx.supabase.co/storage/v1/object/public/results/medical-records/uuid/file2.jpg\"\n  ]\n}"
+            },
+            "description": "Xóa file đính kèm khỏi hồ sơ bệnh án bằng URL của files."
           }
         },
         {
@@ -898,6 +1163,157 @@
             ],
             "url": { "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}/template", "host": ["{{baseUrl}}"], "path": ["medical-records", "{{medicalRecordId}}", "template"] },
             "description": "Lấy template của một hồ sơ bệnh án."
+          }
+        }
+      ]
+    },
+    {
+      "name": "File Storage",
+      "item": [
+        {
+          "name": "Upload Single File",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/file-storage/upload", "host": ["{{baseUrl}}"], "path": ["file-storage", "upload"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "File to upload"
+                },
+                {
+                  "key": "bucket",
+                  "value": "profiles",
+                  "description": "Bucket name (profiles or results)",
+                  "type": "text"
+                },
+                {
+                  "key": "folder",
+                  "value": "avatars/",
+                  "description": "Folder path (optional)",
+                  "type": "text"
+                }
+              ]
+            },
+            "description": "Upload file lên Supabase Storage. Hỗ trợ: JPEG, PNG, GIF, PDF, DOC, DOCX, TXT. Max 10MB."
+          }
+        },
+        {
+          "name": "Upload Multiple Files",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/file-storage/upload-multiple", "host": ["{{baseUrl}}"], "path": ["file-storage", "upload-multiple"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": [],
+                  "description": "Multiple files to upload"
+                },
+                {
+                  "key": "bucket",
+                  "value": "results",
+                  "description": "Bucket name (profiles or results)",
+                  "type": "text"
+                },
+                {
+                  "key": "folder",
+                  "value": "medical-reports/",
+                  "description": "Folder path (optional)",
+                  "type": "text"
+                }
+              ]
+            },
+            "description": "Upload nhiều file cùng lúc."
+          }
+        },
+        {
+          "name": "Get File URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/file-storage/url?bucket=profiles&fileName=uuid-file.jpg&folder=avatars/",
+              "host": ["{{baseUrl}}"],
+              "path": ["file-storage", "url"],
+              "query": [
+                { "key": "bucket", "value": "profiles", "description": "Bucket name" },
+                { "key": "fileName", "value": "uuid-file.jpg", "description": "File name" },
+                { "key": "folder", "value": "avatars/", "description": "Folder path (optional)" }
+              ]
+            },
+            "description": "Lấy URL công khai của file."
+          }
+        },
+        {
+          "name": "List Files",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/file-storage/list?bucket=profiles&folder=avatars/",
+              "host": ["{{baseUrl}}"],
+              "path": ["file-storage", "list"],
+              "query": [
+                { "key": "bucket", "value": "profiles", "description": "Bucket name" },
+                { "key": "folder", "value": "avatars/", "description": "Folder path (optional)" }
+              ]
+            },
+            "description": "Liệt kê các file trong thư mục."
+          }
+        },
+        {
+          "name": "Delete Single File",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/file-storage/uuid-file.jpg?bucket=profiles&folder=avatars/",
+              "host": ["{{baseUrl}}"],
+              "path": ["file-storage", "uuid-file.jpg"],
+              "query": [
+                { "key": "bucket", "value": "profiles", "description": "Bucket name" },
+                { "key": "folder", "value": "avatars/", "description": "Folder path (optional)" }
+              ]
+            },
+            "description": "Xóa file khỏi storage."
+          }
+        },
+        {
+          "name": "Delete Multiple Files",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/file-storage/delete-many", "host": ["{{baseUrl}}"], "path": ["file-storage", "delete-many"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bucket\": \"results\",\n  \"items\": [\n    \"lab/file1.pdf\",\n    \"medical-reports/file2.jpg\"\n  ]\n}"
+            },
+            "description": "Xóa nhiều file bằng tên/đường dẫn trong bucket."
+          }
+        },
+        {
+          "name": "Delete Files By URLs",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/file-storage/delete-by-urls", "host": ["{{baseUrl}}"], "path": ["file-storage", "delete-by-urls"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"urls\": [\n    \"https://xxx.supabase.co/storage/v1/object/public/results/file1.pdf\",\n    \"https://xxx.supabase.co/storage/v1/object/public/profiles/file2.jpg\"\n  ]\n}"
+            },
+            "description": "Xóa nhiều file bằng URL công khai."
           }
         }
       ]
