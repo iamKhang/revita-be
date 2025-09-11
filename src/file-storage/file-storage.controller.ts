@@ -331,15 +331,26 @@ export class FileStorageController {
         throw new HttpException('Thiếu bucket', HttpStatus.BAD_REQUEST);
       }
       if (!files || !Array.isArray(files) || files.length === 0) {
-        throw new HttpException('Không có file nào được upload', HttpStatus.BAD_REQUEST);
+        throw new HttpException(
+          'Không có file nào được upload',
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
-      const result = await this.fileStorageService.uploadFiles(files, bucket, folder);
+      const result = await this.fileStorageService.uploadFiles(
+        files,
+        bucket,
+        folder,
+      );
       return result;
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.error(`Upload multiple files error: ${error.message}`);
       if (error instanceof HttpException) throw error;
-      throw new HttpException('Lỗi khi upload nhiều file', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Lỗi khi upload nhiều file',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -369,13 +380,20 @@ export class FileStorageController {
         throw new HttpException('Thiếu bucket', HttpStatus.BAD_REQUEST);
       }
       if (!Array.isArray(items) || items.length === 0) {
-        throw new HttpException('Thiếu danh sách files', HttpStatus.BAD_REQUEST);
+        throw new HttpException(
+          'Thiếu danh sách files',
+          HttpStatus.BAD_REQUEST,
+        );
       }
       return await this.fileStorageService.deleteFiles(bucket, items);
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.error(`Delete many error: ${error.message}`);
       if (error instanceof HttpException) throw error;
-      throw new HttpException('Lỗi khi xóa nhiều file', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Lỗi khi xóa nhiều file',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -397,16 +415,22 @@ export class FileStorageController {
       required: ['urls'],
     },
   })
-  async deleteByUrls(@Body('urls') urls: string[]): Promise<{ deleted: string[]; failed: string[] }> {
+  async deleteByUrls(
+    @Body('urls') urls: string[],
+  ): Promise<{ deleted: string[]; failed: string[] }> {
     try {
       if (!Array.isArray(urls) || urls.length === 0) {
         throw new HttpException('Thiếu danh sách URLs', HttpStatus.BAD_REQUEST);
       }
       return await this.fileStorageService.deleteByUrls(urls);
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.error(`Delete by URLs error: ${error.message}`);
       if (error instanceof HttpException) throw error;
-      throw new HttpException('Lỗi khi xóa theo URL', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Lỗi khi xóa theo URL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 }
