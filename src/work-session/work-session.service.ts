@@ -657,12 +657,25 @@ export class WorkSessionService {
   async deleteWorkSession(id: string) {
     const existingSession = await this.prisma.workSession.findUnique({
       where: { id },
+      include: {
+        services: true,
+      },
     });
 
     if (!existingSession) {
       throw new NotFoundException(`Work session with ID ${id} not found`);
     }
 
+    // Xóa tất cả WorkSessionService liên quan trước
+    if (existingSession.services && existingSession.services.length > 0) {
+      await this.prisma.workSessionService.deleteMany({
+        where: {
+          workSessionId: id,
+        },
+      });
+    }
+
+    // Sau đó xóa WorkSession
     return this.prisma.workSession.delete({
       where: { id },
     });
