@@ -18,8 +18,13 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "seed:specialties": "ts-node -r tsconfig-paths/register prisma/seed_specialties.ts",
     "seed:clinic": "ts-node -r tsconfig-paths/register prisma/seed_clinic.ts",
+    "seed:clinic-rooms": "ts-node -r tsconfig-paths/register prisma/seed_clinic_rooms.ts",
     "seed:users": "ts-node prisma/seed_users.ts",
+    "seed:services": "ts-node -r tsconfig-paths/register prisma/seed_services.ts",
+    "seed:booths": "ts-node -r tsconfig-paths/register prisma/seed_booths.ts",
+    "seed:worksession": "ts-node -r tsconfig-paths/register prisma/seed_worksession.ts",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
     "db:clear": "ts-node -r tsconfig-paths/register prisma/clear.ts"
   },
