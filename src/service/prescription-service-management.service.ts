@@ -3,6 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrescriptionStatus } from '@prisma/client';
@@ -613,6 +615,524 @@ export class PrescriptionServiceManagementService {
     } catch (error) {
       this.logger.error(`Get user work session error: ${error.message}`);
       throw error;
+    }
+  }
+
+  async getRoomWaitingList(roomId: string): Promise<{
+    waitingList: Array<{
+      patientId: string;
+      patientName: string;
+      status: string;
+      boothName: string;
+    }>;
+    total: number;
+  }> {
+    try {
+      this.logger.log(`Getting waiting list for room: ${roomId}`);
+
+      // Bước 1: Tìm phòng theo ID
+      const room = await this.prisma.clinicRoom.findUnique({
+        where: { id: roomId },
+        include: {
+          booth: {
+            include: {
+              workSessions: {
+                where: {
+                  OR: [{ status: 'APPROVED' }, { status: 'IN_PROGRESS' }],
+                },
+                include: {
+                  doctor: {
+                    include: {
+                      prescriptionServices: {
+                        where: {
+                          status: {
+                            in: [
+                              PrescriptionStatus.WAITING,
+                              PrescriptionStatus.PREPARING,
+                              PrescriptionStatus.SERVING,
+                              PrescriptionStatus.SKIPPED,
+                              PrescriptionStatus.RECALL_BACK,
+                            ],
+                          },
+                        },
+                        include: {
+                          prescription: {
+                            include: {
+                              patientProfile: true,
+                            },
+                          },
+                          service: true,
+                        },
+                      },
+                    },
+                  },
+                  technician: {
+                    include: {
+                      prescriptionServices: {
+                        where: {
+                          status: {
+                            in: [
+                              PrescriptionStatus.WAITING,
+                              PrescriptionStatus.PREPARING,
+                              PrescriptionStatus.SERVING,
+                              PrescriptionStatus.SKIPPED,
+                              PrescriptionStatus.RECALL_BACK,
+                            ],
+                          },
+                        },
+                        include: {
+                          prescription: {
+                            include: {
+                              patientProfile: true,
+                            },
+                          },
+                          service: true,
+                        },
+                      },
+                    },
+                  },
+                  booth: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!room) {
+        throw new NotFoundException(
+          `Không tìm thấy phòng với ID: ${roomId}`,
+        );
+      }
+
+      // Bước 2: Thu thập tất cả prescription services từ các work sessions
+      const allPrescriptionServices: Array<{
+        prescription: { patientProfile: { id: string; name: string } };
+        status: PrescriptionStatus;
+        boothName: string;
+        updatedAt?: Date;
+        createdAt: Date;
+      }> = [];
+
+      for (const booth of room.booth) {
+        for (const workSession of booth.workSessions) {
+          // Thu thập từ doctor
+          if (workSession.doctor?.prescriptionServices) {
+            workSession.doctor.prescriptionServices.forEach((ps) => {
+              allPrescriptionServices.push({
+                prescription: ps.prescription,
+                status: ps.status,
+                boothName: workSession.booth?.name || 'Unknown',
+                updatedAt: ps.completedAt || ps.startedAt || undefined,
+                createdAt: ps.startedAt || new Date(),
+              });
+            });
+          }
+
+          // Thu thập từ technician
+          if (workSession.technician?.prescriptionServices) {
+            workSession.technician.prescriptionServices.forEach((ps) => {
+              allPrescriptionServices.push({
+                prescription: ps.prescription,
+                status: ps.status,
+                boothName: workSession.booth?.name || 'Unknown',
+                updatedAt: ps.completedAt || ps.startedAt || undefined,
+                createdAt: ps.startedAt || new Date(),
+              });
+            });
+          }
+        }
+      }
+
+      // Bước 3: Group theo patient và lấy thông tin mới nhất
+      const patientMap = new Map<
+        string,
+        {
+          patientId: string;
+          patientName: string;
+          status: string;
+          boothName: string;
+          lastUpdated: Date;
+        }
+      >();
+
+      for (const ps of allPrescriptionServices) {
+        const patientId = ps.prescription.patientProfile.id;
+        const patientName = ps.prescription.patientProfile.name;
+
+        if (!patientMap.has(patientId)) {
+          patientMap.set(patientId, {
+            patientId,
+            patientName,
+            status: this.getStatusDisplayName(ps.status),
+            boothName: ps.boothName,
+            lastUpdated: ps.updatedAt || ps.createdAt,
+          });
+        } else {
+          // Nếu đã có, kiểm tra xem có cần cập nhật không (lấy status có priority cao hơn)
+          const existing = patientMap.get(patientId)!;
+          const currentStatusPriority = this.getStatusPriority(ps.status);
+          const existingStatusPriority = this.getStatusPriority(
+            this.getStatusEnumFromDisplay(existing.status),
+          );
+
+          if (
+            currentStatusPriority > existingStatusPriority ||
+            (currentStatusPriority === existingStatusPriority &&
+              (ps.updatedAt || ps.createdAt) > existing.lastUpdated)
+          ) {
+            existing.status = this.getStatusDisplayName(ps.status);
+            existing.boothName = ps.boothName;
+            existing.lastUpdated = ps.updatedAt || ps.createdAt;
+          }
+        }
+      }
+
+      const waitingList = Array.from(patientMap.values());
+
+      return {
+        waitingList,
+        total: waitingList.length,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Get room waiting list error: ${(error as Error).message}`,
+      );
+      throw error;
+    }
+  }
+
+  private getStatusDisplayName(status: PrescriptionStatus): string {
+    switch (status) {
+      case PrescriptionStatus.WAITING:
+        return 'Đang chờ';
+      case PrescriptionStatus.PREPARING:
+        return 'Đang chuẩn bị';
+      case PrescriptionStatus.SERVING:
+        return 'Đang phục vụ';
+      case PrescriptionStatus.SKIPPED:
+        return 'Bỏ qua';
+      case PrescriptionStatus.RECALL_BACK:
+        return 'Gọi lại';
+      default:
+        return 'Không xác định';
+    }
+  }
+
+  private getStatusPriority(status: PrescriptionStatus): number {
+    switch (status) {
+      case PrescriptionStatus.SERVING:
+        return 5;
+      case PrescriptionStatus.PREPARING:
+        return 4;
+      case PrescriptionStatus.WAITING:
+        return 3;
+      case PrescriptionStatus.RECALL_BACK:
+        return 2;
+      case PrescriptionStatus.SKIPPED:
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
+  private getStatusEnumFromDisplay(displayName: string): PrescriptionStatus {
+    switch (displayName) {
+      case 'Đang phục vụ':
+        return PrescriptionStatus.SERVING;
+      case 'Đang chuẩn bị':
+        return PrescriptionStatus.PREPARING;
+      case 'Đang chờ':
+        return PrescriptionStatus.WAITING;
+      case 'Gọi lại':
+        return PrescriptionStatus.RECALL_BACK;
+      case 'Bỏ qua':
+        return PrescriptionStatus.SKIPPED;
+      default:
+        return PrescriptionStatus.WAITING;
+    }
+  }
+
+  /**
+   * Phân công prescription service cho doctor hoặc technician cụ thể
+   */
+  async assignServiceToStaff(
+    prescriptionId: string,
+    serviceId: string,
+    staffId: string,
+    staffRole: 'DOCTOR' | 'TECHNICIAN',
+  ): Promise<{
+    success: boolean;
+    message: string;
+    prescriptionService?: any;
+  }> {
+    try {
+      this.logger.log(
+        `Assigning service ${prescriptionId}-${serviceId} to ${staffRole} ${staffId}`,
+      );
+
+      // Kiểm tra prescription service tồn tại
+      const prescriptionService =
+        await this.prisma.prescriptionService.findFirst({
+          where: {
+            prescriptionId,
+            serviceId,
+          },
+          include: {
+            service: true,
+            prescription: {
+              include: {
+                patientProfile: true,
+              },
+            },
+          },
+        });
+
+      if (!prescriptionService) {
+        throw new NotFoundException(
+          'Không tìm thấy prescription service để phân công',
+        );
+      }
+
+      // Kiểm tra staff tồn tại
+      let staffRecord;
+      if (staffRole === 'DOCTOR') {
+        staffRecord = await this.prisma.doctor.findUnique({
+          where: { id: staffId },
+          include: { auth: true },
+        });
+      } else {
+        staffRecord = await this.prisma.technician.findUnique({
+          where: { id: staffId },
+          include: { auth: true },
+        });
+      }
+
+      if (!staffRecord) {
+        throw new NotFoundException(
+          `Không tìm thấy ${staffRole.toLowerCase()} với ID: ${staffId}`,
+        );
+      }
+
+      // Cập nhật doctorId hoặc technicianId
+      const updateData: any = {};
+      if (staffRole === 'DOCTOR') {
+        updateData.doctorId = staffId;
+        // Nếu đã có technician, giữ nguyên
+      } else {
+        updateData.technicianId = staffId;
+        // Nếu đã có doctor, giữ nguyên
+      }
+
+      // Nếu service đang ở trạng thái NOT_STARTED hoặc PENDING, chuyển sang WAITING
+      if (
+        prescriptionService.status === PrescriptionStatus.NOT_STARTED ||
+        prescriptionService.status === PrescriptionStatus.PENDING
+      ) {
+        updateData.status = PrescriptionStatus.WAITING;
+      }
+
+      const updatedService = await this.prisma.prescriptionService.update({
+        where: {
+          prescriptionId_serviceId: {
+            prescriptionId,
+            serviceId,
+          },
+        },
+        data: updateData,
+        include: {
+          service: true,
+          prescription: {
+            include: {
+              patientProfile: true,
+            },
+          },
+          doctor: { include: { auth: true } },
+          technician: { include: { auth: true } },
+        },
+      });
+
+      this.logger.log(
+        `Successfully assigned service ${prescriptionId}-${serviceId} to ${staffRole} ${staffRecord.auth.name}`,
+      );
+
+      return {
+        success: true,
+        message: `Đã phân công dịch vụ cho ${staffRecord.auth.name}`,
+        prescriptionService: updatedService,
+      };
+    } catch (error) {
+      this.logger.error(`Assign service error: ${(error as Error).message}`);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Lỗi khi phân công dịch vụ',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Phân công nhiều services cùng lúc dựa trên work session
+   */
+  async assignServicesFromWorkSession(
+    workSessionId: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    assignedServices: Array<{
+      prescriptionId: string;
+      serviceId: string;
+      staffRole: 'DOCTOR' | 'TECHNICIAN';
+      staffName: string;
+    }>;
+  }> {
+    try {
+      this.logger.log(`Assigning services from work session: ${workSessionId}`);
+
+      // Tìm work session
+      const workSession = await this.prisma.workSession.findUnique({
+        where: { id: workSessionId },
+        include: {
+          doctor: { include: { auth: true } },
+          technician: { include: { auth: true } },
+          booth: {
+            include: {
+              room: {
+                include: {
+                  services: {
+                    include: {
+                      service: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!workSession) {
+        throw new NotFoundException('Không tìm thấy work session');
+      }
+
+      // Lấy danh sách service mà phòng này cung cấp
+      if (!workSession.booth) {
+        throw new NotFoundException('Work session không có booth');
+      }
+      const roomServiceIds = workSession.booth.room.services.map(
+        (rs) => rs.serviceId,
+      );
+
+      if (roomServiceIds.length === 0) {
+        return {
+          success: true,
+          message: 'Phòng này không cung cấp dịch vụ nào',
+          assignedServices: [],
+        };
+      }
+
+      // Tìm prescription services đang chờ phân công cho các service này
+      const pendingServices = await this.prisma.prescriptionService.findMany({
+        where: {
+          serviceId: { in: roomServiceIds },
+          status: {
+            in: [PrescriptionStatus.NOT_STARTED, PrescriptionStatus.PENDING],
+          },
+          // Chưa được assign cho ai
+          AND: [
+            { doctorId: null },
+            { technicianId: null },
+          ],
+        },
+        include: {
+          service: true,
+          prescription: {
+            include: {
+              patientProfile: true,
+            },
+          },
+        },
+        orderBy: { order: 'asc' }, // Theo thứ tự trong prescription
+      });
+
+      const assignedServices: Array<{
+        prescriptionId: string;
+        serviceId: string;
+        staffRole: 'DOCTOR' | 'TECHNICIAN';
+        staffName: string;
+      }> = [];
+
+      // Phân công cho doctor nếu có
+      if (workSession.doctorId && workSession.doctor) {
+        for (const service of pendingServices) {
+          try {
+            await this.assignServiceToStaff(
+              service.prescriptionId,
+              service.serviceId,
+              workSession.doctorId,
+              'DOCTOR',
+            );
+
+            assignedServices.push({
+              prescriptionId: service.prescriptionId,
+              serviceId: service.serviceId,
+              staffRole: 'DOCTOR',
+              staffName: workSession.doctor.auth.name,
+            });
+          } catch (error) {
+            this.logger.warn(
+              `Failed to assign service ${service.prescriptionId}-${service.serviceId} to doctor: ${(error as Error).message}`,
+            );
+          }
+        }
+      }
+      // Hoặc phân công cho technician nếu có
+      else if (workSession.technicianId && workSession.technician) {
+        for (const service of pendingServices) {
+          try {
+            await this.assignServiceToStaff(
+              service.prescriptionId,
+              service.serviceId,
+              workSession.technicianId,
+              'TECHNICIAN',
+            );
+
+            assignedServices.push({
+              prescriptionId: service.prescriptionId,
+              serviceId: service.serviceId,
+              staffRole: 'TECHNICIAN',
+              staffName: workSession.technician.auth.name,
+            });
+          } catch (error) {
+            this.logger.warn(
+              `Failed to assign service ${service.prescriptionId}-${service.serviceId} to technician: ${(error as Error).message}`,
+            );
+          }
+        }
+      }
+
+      this.logger.log(
+        `Assigned ${assignedServices.length} services from work session ${workSessionId}`,
+      );
+
+      return {
+        success: true,
+        message: `Đã phân công ${assignedServices.length} dịch vụ`,
+        assignedServices,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Assign services from work session error: ${(error as Error).message}`,
+      );
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Lỗi khi phân công dịch vụ từ work session',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 }

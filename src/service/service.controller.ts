@@ -18,7 +18,6 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
-  ApiParam,
 } from '@nestjs/swagger';
 import { ServiceService } from './service.service';
 import { PrescriptionServiceManagementService } from './prescription-service-management.service';
@@ -32,6 +31,8 @@ import {
   UpdateServiceStatusResponseDto,
   UpdateResultsResponseDto,
   GetServicesDto,
+  GetRoomWaitingListDto,
+  GetRoomWaitingListResponseDto,
 } from './dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -490,6 +491,113 @@ export class ServiceController {
       }
       throw new HttpException(
         'Lỗi khi hoàn thành service',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('room-waiting-list')
+  @ApiOperation({ summary: 'Lấy danh sách bệnh nhân đang chờ trong phòng' })
+  @ApiQuery({
+    name: 'roomId',
+    description: 'ID của phòng khám',
+    example: 'uuid-room-id',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy danh sách chờ thành công',
+    type: GetRoomWaitingListResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy phòng',
+  })
+  async getRoomWaitingList(
+    @Query() query: GetRoomWaitingListDto,
+  ): Promise<GetRoomWaitingListResponseDto> {
+    try {
+      const result =
+        await this.prescriptionServiceManagement.getRoomWaitingList(
+          query.roomId,
+        );
+      return result;
+    } catch (error) {
+      this.logger.error(`Get room waiting list error: ${error.message}`);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Lỗi khi lấy danh sách chờ của phòng',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('prescription-service/assign')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Phân công prescription service cho staff' })
+  @ApiResponse({
+    status: 200,
+    description: 'Phân công thành công',
+  })
+  async assignServiceToStaff(
+    @Body()
+    body: {
+      prescriptionId: string;
+      serviceId: string;
+      staffId: string;
+      staffRole: 'DOCTOR' | 'TECHNICIAN';
+    },
+  ) {
+    try {
+      const result =
+        await this.prescriptionServiceManagement.assignServiceToStaff(
+          body.prescriptionId,
+          body.serviceId,
+          body.staffId,
+          body.staffRole,
+        );
+      return result;
+    } catch (error) {
+      this.logger.error(`Assign service error: ${error.message}`);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Lỗi khi phân công dịch vụ',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('prescription-service/assign-from-work-session')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Phân công tất cả services từ work session' })
+  @ApiResponse({
+    status: 200,
+    description: 'Phân công thành công',
+  })
+  async assignServicesFromWorkSession(
+    @Body() body: { workSessionId: string },
+  ) {
+    try {
+      const result =
+        await this.prescriptionServiceManagement.assignServicesFromWorkSession(
+          body.workSessionId,
+        );
+      return result;
+    } catch (error) {
+      this.logger.error(`Assign from work session error: ${error.message}`);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Lỗi khi phân công từ work session',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

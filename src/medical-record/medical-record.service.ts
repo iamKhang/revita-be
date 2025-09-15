@@ -26,14 +26,25 @@ export class MedicalRecordService {
       throw new BadRequestException('Missing required field: patientProfileId');
     }
 
-    let doctorId: string | undefined ;
+    let doctorId: string | undefined;
     if (user.role === Role.DOCTOR) {
       const providedDoctorId = (dto as any)['doctorId'] as string | undefined;
       if (providedDoctorId) {
-        const doctor = await this.prisma.doctor.findUnique({
-          where: { id: providedDoctorId },
+        // Nếu có providedDoctorId, có thể là authId hoặc doctorId
+        // Thử tìm theo authId trước, nếu không có thì tìm theo doctorId
+        let doctor = await this.prisma.doctor.findUnique({
+          where: { authId: providedDoctorId },
           select: { id: true }
         });
+
+        if (!doctor) {
+          // Thử tìm theo doctorId
+          doctor = await this.prisma.doctor.findUnique({
+            where: { id: providedDoctorId },
+            select: { id: true }
+          });
+        }
+
         if (!doctor) {
           throw new NotFoundException('Không tìm thấy bác sĩ');
         }
@@ -49,19 +60,31 @@ export class MedicalRecordService {
         }
       }
     } else if (
-      user.role === Role.ADMIN 
+      user.role === Role.ADMIN
     ) {
       doctorId = (dto as any)['doctorId'];
       if (!doctorId) {
         throw new ForbiddenException('Admin phải chọn bác sĩ tạo hồ sơ (doctorId)');
       }
-      const doctor = await this.prisma.doctor.findUnique({
-        where: { id: doctorId },
+
+      // Tương tự như trên, có thể là authId hoặc doctorId
+      let doctor = await this.prisma.doctor.findUnique({
+        where: { authId: doctorId },
         select: { id: true }
       });
+
+      if (!doctor) {
+        // Thử tìm theo doctorId
+        doctor = await this.prisma.doctor.findUnique({
+          where: { id: doctorId },
+          select: { id: true }
+        });
+      }
+
       if (!doctor) {
         throw new NotFoundException('Không tìm thấy bác sĩ');
       }
+      doctorId = doctor.id;
     }
 
     // Validate patient profile exists

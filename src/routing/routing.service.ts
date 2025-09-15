@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { KafkaProducerService } from '../kafka/kafka.producer';
+import { PrescriptionServiceManagementService } from '../service/prescription-service-management.service';
 
 export type AssignRequest = {
   patientProfileId: string;
@@ -67,6 +68,7 @@ export class RoutingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kafka: KafkaProducerService,
+    private readonly prescriptionServiceManagement: PrescriptionServiceManagementService,
   ) {}
 
   async listRooms() {
@@ -331,6 +333,60 @@ export class RoutingService {
     if (perServiceAssignments.length === 0) {
       console.warn('No available doctors or booths for the requested services at this time');
       return [];
+    }
+
+    // Phân công prescription services cho doctors/technicians
+    console.log('Assigning prescription services...');
+    for (const assignment of perServiceAssignments) {
+      for (const serviceId of assignment.serviceIds) {
+        try {
+          // Tìm prescription service cho patient và service này
+          const prescriptionService =
+            await this.prisma.prescriptionService.findFirst({
+              where: {
+                prescription: {
+                  patientProfileId: request.patientProfileId,
+                },
+                serviceId: serviceId,
+              },
+              include: {
+                prescription: true,
+              },
+            });
+
+          if (prescriptionService) {
+            if (assignment.doctorId) {
+              await this.prescriptionServiceManagement.assignServiceToStaff(
+                prescriptionService.prescriptionId,
+                serviceId,
+                assignment.doctorId,
+                'DOCTOR',
+              );
+              console.log(
+                `Assigned service ${prescriptionService.prescriptionId}-${serviceId} to doctor ${assignment.doctorId}`,
+              );
+            } else if (assignment.technicianId) {
+              await this.prescriptionServiceManagement.assignServiceToStaff(
+                prescriptionService.prescriptionId,
+                serviceId,
+                assignment.technicianId,
+                'TECHNICIAN',
+              );
+              console.log(
+                `Assigned service ${prescriptionService.prescriptionId}-${serviceId} to technician ${assignment.technicianId}`,
+              );
+            }
+          } else {
+            console.warn(
+              `No prescription service found for patient ${request.patientProfileId} and service ${serviceId}`,
+            );
+          }
+        } catch (error) {
+          console.error(
+            `Failed to assign service ${serviceId}: ${(error as Error).message}`,
+          );
+        }
+      }
     }
 
     // Publish to Kafka for each assignment
