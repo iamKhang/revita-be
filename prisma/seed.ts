@@ -1026,6 +1026,22 @@ async function main() {
   // Vui lòng sử dụng file `prisma/seed_clinic.ts` để seed dữ liệu phòng, bác sĩ, dịch vụ và mapping n-n.
   // const targetSpecialties: never[] = [];
 
+  console.log(
+    '🎉 Basic seed completed! Please run the following commands to complete the setup:',
+  );
+  console.log(
+    '1. npm run seed:specialties - to seed specialties from JSON file',
+  );
+  console.log(
+    '2. npm run seed:clinic-rooms - to seed clinic rooms from JSON file',
+  );
+  console.log(
+    '3. npm run seed:clinic - to seed doctors and additional clinic data',
+  );
+  console.log('4. npm run seed:booths - to seed booths from JSON file');
+  console.log('5. npm run seed:services - to seed services from JSON file');
+  console.log('6. npm run seed:worksession - to seed work sessions');
+
   const password = await bcrypt.hash('123456789', 10);
 
   // 4. Tạo các user và auth cho từng role
