@@ -228,10 +228,10 @@ model ClinicRoom {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
   booth Booth[]
-  
+  appointments Appointment[]
+
   specialty   Specialty   @relation(fields: [specialtyId], references: [id])
   services    ClinicRoomService[]
-  appointments Appointment[]
 
   @@map("clinic_rooms")
 }
@@ -247,19 +247,27 @@ model ClinicRoomService {
   @@map("clinic_room_services")
 }
 
-// Bảng Service cho dịch vụ
 model Service {
   id          String      @id @default(uuid())
-  serviceCode String   @unique @map("service_code")
-  name        String   @map("name")
-  price       Float    @map("price")
-  description String   @map("description")
+  serviceCode String      @unique @map("service_code")
+  name        String      @map("name")
+  price       Float?        @map("price")
+  description String       @map("description")
+  timePerPatient Int?       @default(15) @map("time_per_patient") @db.SmallInt
+  isAllowed Boolean        @default(false) @map("is_allowed")
+
+  // Quan hệ cha–con
+  parentId   String?       @map("parent_id")
+  parent     Service?      @relation("ServiceHierarchy", fields: [parentId], references: [id])
+  children   Service[]     @relation("ServiceHierarchy")
+
+  // Các quan hệ hiện có
   clinicRoomServices ClinicRoomService[]
-  appointments Appointment[]
   prescriptions PrescriptionService[]
   invoiceDetails InvoiceDetail[]
-  timePerPatient Int @default(15) @map("time_per_patient") @db.SmallInt
   workSessionServices WorkSessionService[]
+  appointmentServices AppointmentService[]
+  appointments Appointment[]
 
   @@map("services")
 }
@@ -268,45 +276,64 @@ model Service {
 model Appointment {
   id          String      @id @default(uuid())
   appointmentCode String   @map("appointment_code")
-  bookerId    String      @map("booker_id")
   patientProfileId String  @map("patient_profile_id")
   specialtyId String      @map("specialty_id")
   doctorId    String      @map("doctor_id")
-  serviceId   String      @map("service_id")
-  clinicRoomId String?    @map("clinic_room_id")
-  status      String   @map("status")
-  date        DateTime @map("date")
-  startTime   String   @map("start_time")
-  endTime     String   @map("end_time")
+  clinicRoomId String?    @map("clinic_room_id") // Phòng khám (có thể null)
+  serviceId   String?     @map("service_id") // Dịch vụ chính (có thể null)
+  bookerId    String?     @map("booker_id") // Người đặt lịch (có thể null)
+  status      String      @default("PENDING") @map("status") // PENDING, CONFIRMED, COMPLETED, CANCELLED
+  date        DateTime    @map("date")
+  startTime   String      @map("start_time")
+  endTime     String      @map("end_time")
+
   patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
   specialty   Specialty @relation(fields: [specialtyId], references: [id])
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
-  service     Service  @relation(fields: [serviceId], references: [id])
   clinicRoom  ClinicRoom? @relation(fields: [clinicRoomId], references: [id])
-  invoiceId   String?     @map("invoice_id")
+  service     Service? @relation(fields: [serviceId], references: [id])
+  appointmentServices AppointmentService[]
   medicalRecords MedicalRecord[]
+
   counterQueueItems CounterQueueItem[]
   counterAssignments CounterAssignment[]
 
   @@map("appointments")
 }
 
-// Bảng Invoice cho thông tin thanh toán
+model AppointmentService {
+  appointmentId String
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  serviceId String
+  service Service @relation(fields: [serviceId], references: [id])
+  workSession WorkSession? @relation(fields: [workSessionId], references: [id])
+  workSessionId String?
+  @@unique([appointmentId, serviceId])
+  @@map("appointment_services")
+}
+
 model Invoice {
-  id            String      @id @default(uuid())
-  invoiceCode   String   @map("invoice_code")
-  totalAmount   Float    @map("total_amount")
-  paymentMethod String   @map("payment_method")
-  paymentStatus String   @map("payment_status")
-  createdAt     DateTime @default(now()) @map("created_at")
-  isPaid        Boolean  @default(false) @map("is_paid")
+  id              String      @id @default(uuid())
+  invoiceCode     String      @map("invoice_code")
+  totalAmount     Float       @map("total_amount")           // Tổng tiền phải thanh toán
+  amountPaid      Float       @default(0) @map("amount_paid") // Số tiền bệnh nhân đã đưa
+  changeAmount    Float       @default(0) @map("change_amount") // Tiền thối lại cho bệnh nhân
+
+  paymentMethod   String      @map("payment_method")          // Tiền mặt, thẻ, chuyển khoản...
+  paymentStatus   String      @map("payment_status")           // Pending, Paid, Refunded...
+  createdAt       DateTime    @default(now()) @map("created_at")
+  isPaid           Boolean     @default(false) @map("is_paid")
+
   patientProfileId String
-  patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
-  cashierId String
-  cashier Cashier @relation(fields: [cashierId], references: [id])
-  invoiceDetails InvoiceDetail[]
+  patientProfile    PatientProfile @relation(fields: [patientProfileId], references: [id])
+  cashierId          String
+  cashier             Cashier @relation(fields: [cashierId], references: [id])
+
+  invoiceDetails      InvoiceDetail[]
+
   @@map("invoices")
 }
+
 
 // Bảng chi tiết thông tin thanh toán
 model InvoiceDetail {
@@ -345,7 +372,7 @@ model MedicalRecord {
   templateId  String
   patientProfileId String  @map("patient_profile_id")
   doctorId    String
-  appointmentId String?  // Liên kết với lịch hẹn (tùy chọn)
+  appointmentId String?   @map("appointment_id") // Có thể null nếu không có appointment
   content     Json     // Nội dung bệnh án theo template
   isActive    Boolean  @default(true) // Trạng thái sử dụng
   createdAt   DateTime @default(now())
@@ -459,6 +486,8 @@ model WorkSession {
   nextAvailableAt DateTime? @map("next_available_at")
   status WorkSessionStatus @default(PENDING)
   services WorkSessionService[]
+  appointmentServices AppointmentService[]
+
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

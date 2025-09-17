@@ -13,6 +13,7 @@ import { InvoiceModule } from './invoice/invoice.module';
 import { ServiceModule } from './service/service.module';
 import { FileStorageModule } from './file-storage/file-storage.module';
 import { WorkSessionModule } from './work-session/work-session.module';
+import { AppointmentBookingModule } from './appointment-booking/appointment-booking.module';
 
 @Module({
   imports: [
@@ -26,8 +27,10 @@ import { WorkSessionModule } from './work-session/work-session.module';
     ServiceModule,
     FileStorageModule,
     WorkSessionModule,
+    AppointmentBookingModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
+
 })
 export class AppModule {}

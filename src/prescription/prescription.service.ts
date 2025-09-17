@@ -200,7 +200,9 @@ export class PrescriptionService {
 
     // Check if user is the doctor who created this prescription
     if (existing.doctorId !== user.doctor?.id) {
-      throw new BadRequestException('You can only update prescriptions you created');
+      throw new BadRequestException(
+        'You can only update prescriptions you created',
+      );
     }
 
     // Basic fields
@@ -289,7 +291,9 @@ export class PrescriptionService {
 
     // Check if user is the doctor who created this prescription
     if (existing.doctorId !== user.doctor?.id) {
-      throw new BadRequestException('You can only cancel prescriptions you created');
+      throw new BadRequestException(
+        'You can only cancel prescriptions you created',
+      );
     }
 
     // Mark prescription and all services as CANCELLED
@@ -314,7 +318,10 @@ export class PrescriptionService {
     await this._markServicePaidInternal(prescriptionId, serviceId);
   }
 
-  private async _markServicePaidInternal(prescriptionId: string, serviceId: string) {
+  private async _markServicePaidInternal(
+    prescriptionId: string,
+    serviceId: string,
+  ) {
     // Called after payment success for a given service
     // Mark the paid service as PENDING, then check if we should start the first available service
     const psList = await this.prisma.prescriptionService.findMany({
@@ -341,14 +348,20 @@ export class PrescriptionService {
     });
   }
 
-  async markServiceServing(prescriptionId: string, serviceId: string, user: JwtUserPayload) {
+  async markServiceServing(
+    prescriptionId: string,
+    serviceId: string,
+    user: JwtUserPayload,
+  ) {
     // Check if user is the doctor who created this prescription
     const prescription = await this.prisma.prescription.findUnique({
       where: { id: prescriptionId },
       select: { doctorId: true },
     });
     if (!prescription || prescription.doctorId !== user.doctor?.id) {
-      throw new BadRequestException('You can only modify services in prescriptions you created');
+      throw new BadRequestException(
+        'You can only modify services in prescriptions you created',
+      );
     }
 
     // Tech confirms to start service
@@ -358,14 +371,20 @@ export class PrescriptionService {
     });
   }
 
-  async markServiceWaitingResult(prescriptionId: string, serviceId: string, user: JwtUserPayload) {
+  async markServiceWaitingResult(
+    prescriptionId: string,
+    serviceId: string,
+    user: JwtUserPayload,
+  ) {
     // Check if user is the doctor who created this prescription
     const prescription = await this.prisma.prescription.findUnique({
       where: { id: prescriptionId },
       select: { doctorId: true },
     });
     if (!prescription || prescription.doctorId !== user.doctor?.id) {
-      throw new BadRequestException('You can only modify services in prescriptions you created');
+      throw new BadRequestException(
+        'You can only modify services in prescriptions you created',
+      );
     }
 
     // Service done, waiting result, then unlock next pending service to WAITING
@@ -377,14 +396,20 @@ export class PrescriptionService {
     await this.unlockNextPendingService(prescriptionId);
   }
 
-  async markServiceCompleted(prescriptionId: string, serviceId: string, user: JwtUserPayload) {
+  async markServiceCompleted(
+    prescriptionId: string,
+    serviceId: string,
+    user: JwtUserPayload,
+  ) {
     // Check if user is the doctor who created this prescription
     const prescription = await this.prisma.prescription.findUnique({
       where: { id: prescriptionId },
       select: { doctorId: true },
     });
     if (!prescription || prescription.doctorId !== user.doctor?.id) {
-      throw new BadRequestException('You can only modify services in prescriptions you created');
+      throw new BadRequestException(
+        'You can only modify services in prescriptions you created',
+      );
     }
 
     await this.prisma.prescriptionService.update({

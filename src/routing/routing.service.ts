@@ -211,7 +211,7 @@ export class RoutingService {
       });
 
       const candidates: typeof perServiceAssignments = [] as any;
-      const requiredTimeMs = svc.timePerPatient * 60 * 1000;
+      const requiredTimeMs = (svc.timePerPatient ?? 15) * 60 * 1000;
 
       for (const rs of rsForService) {
         const roomId = rs.clinicRoomId;
@@ -248,7 +248,7 @@ export class RoutingService {
                 serviceIds: [svc.id],
                 estimatedStartTime,
                 estimatedEndTime,
-                totalDuration: svc.timePerPatient,
+                totalDuration: svc.timePerPatient ?? 15,
               });
             }
           }
@@ -274,7 +274,7 @@ export class RoutingService {
           const booth0 = rs0.clinicRoom.booth[0] || null;
           const estimatedStartTime = new Date(currentTime);
           const estimatedEndTime = new Date(
-            currentTime.getTime() + svc.timePerPatient * 60 * 1000,
+            currentTime.getTime() + (svc.timePerPatient ?? 15) * 60 * 1000,
           );
 
           // Try to find any work session for this booth (past, present, or future)
@@ -324,7 +324,7 @@ export class RoutingService {
             serviceIds: [svc.id],
             estimatedStartTime,
             estimatedEndTime,
-            totalDuration: svc.timePerPatient,
+            totalDuration: svc.timePerPatient ?? 15,
           });
         }
       }

@@ -582,9 +582,7 @@ export class ServiceController {
     status: 200,
     description: 'Phân công thành công',
   })
-  async assignServicesFromWorkSession(
-    @Body() body: { workSessionId: string },
-  ) {
+  async assignServicesFromWorkSession(@Body() body: { workSessionId: string }) {
     try {
       const result =
         await this.prescriptionServiceManagement.assignServicesFromWorkSession(

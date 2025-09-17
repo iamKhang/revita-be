@@ -394,8 +394,8 @@ export class CounterAssignmentService {
               request.patientGender || appointment.patientProfile.gender,
             priorityScore,
             assignedCounter,
-            serviceName: appointment.service.name,
-            servicePrice: appointment.service.price,
+            serviceName: appointment.service?.name || 'Unknown',
+            servicePrice: appointment.service?.price || 0,
             timestamp: new Date().toISOString(),
             metadata: {
               isPregnant: request.isPregnant,
@@ -543,8 +543,8 @@ export class CounterAssignmentService {
         age: patientAge,
         gender: appointment.patientProfile.gender,
         appointmentDetails: {
-          serviceName: appointment.service.name,
-          servicePrice: appointment.service.price,
+          serviceName: appointment.service?.name || 'Unknown',
+          servicePrice: appointment.service?.price || 0,
           appointmentDate: appointment.date,
           appointmentTime: appointment.startTime,
         },

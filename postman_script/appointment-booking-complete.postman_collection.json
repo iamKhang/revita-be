@@ -1,0 +1,310 @@
+{
+  "info": {
+    "name": "Complete Appointment Booking System",
+    "description": "Full API collection for appointment booking system with authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{adminIdentifier}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["login"]
+            },
+            "description": "Đăng nhập với tài khoản admin để lấy access token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', response.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', response.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Appointment Booking Flow",
+      "item": [
+        {
+          "name": "1. Get Specialties",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/appointment-booking/specialties",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointment-booking", "specialties"]
+            },
+            "description": "Lấy danh sách tất cả chuyên khoa trong hệ thống"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.specialties && response.specialties.length > 0) {",
+                  "        pm.collectionVariables.set('specialtyId', response.specialties[0].specialtyId);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Get Doctors by Specialty",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/appointment-booking/specialties/{{specialtyId}}/doctors",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointment-booking", "specialties", "{{specialtyId}}", "doctors"]
+            },
+            "description": "Lấy danh sách bác sĩ theo chuyên khoa cụ thể"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.doctors && response.doctors.length > 0) {",
+                  "        pm.collectionVariables.set('doctorId', response.doctors[0].doctorId);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Get Available Doctors",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/appointment-booking/doctors/available?specialtyId={{specialtyId}}&date={{appointmentDate}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointment-booking", "doctors", "available"],
+              "query": [
+                {
+                  "key": "specialtyId",
+                  "value": "{{specialtyId}}"
+                },
+                {
+                  "key": "date",
+                  "value": "{{appointmentDate}}"
+                }
+              ]
+            },
+            "description": "Lấy danh sách bác sĩ có lịch làm việc trong ngày theo chuyên khoa"
+          }
+        },
+        {
+          "name": "4. Get Doctor Services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/appointment-booking/doctors/{{doctorId}}/services?date={{appointmentDate}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointment-booking", "doctors", "{{doctorId}}", "services"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{appointmentDate}}"
+                }
+              ]
+            },
+            "description": "Lấy danh sách dịch vụ mà bác sĩ thực hiện trong ngày"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.services && response.services.length > 0) {",
+                  "        pm.collectionVariables.set('serviceId', response.services[0].serviceId);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Get Available Slots",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/appointment-booking/doctors/{{doctorId}}/available-slots?serviceId={{serviceId}}&date={{appointmentDate}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointment-booking", "doctors", "{{doctorId}}", "available-slots"],
+              "query": [
+                {
+                  "key": "serviceId",
+                  "value": "{{serviceId}}"
+                },
+                {
+                  "key": "date",
+                  "value": "{{appointmentDate}}"
+                }
+              ]
+            },
+            "description": "Lấy danh sách các slot trống của bác sĩ cho dịch vụ cụ thể trong ngày"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.slots && response.slots.length > 0) {",
+                  "        const firstAvailableSlot = response.slots.find(slot => slot.isAvailable);",
+                  "        if (firstAvailableSlot) {",
+                  "            pm.collectionVariables.set('startTime', firstAvailableSlot.startTime);",
+                  "            pm.collectionVariables.set('endTime', firstAvailableSlot.endTime);",
+                  "        }",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Book Appointment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"doctorId\": \"{{doctorId}}\",\n  \"serviceId\": \"{{serviceId}}\",\n  \"date\": \"{{appointmentDate}}\",\n  \"startTime\": \"{{startTime}}\",\n  \"endTime\": \"{{endTime}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/appointment-booking/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["appointment-booking", "appointments"]
+            },
+            "description": "Đặt lịch khám bệnh với thông tin chi tiết. bookerId được tự động lấy từ JWT token của user đang đăng nhập. Cần authentication token."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "specialtyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "doctorId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "serviceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "appointmentDate",
+      "value": "2025-09-25",
+      "type": "string"
+    },
+    {
+      "key": "startTime",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "endTime",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
