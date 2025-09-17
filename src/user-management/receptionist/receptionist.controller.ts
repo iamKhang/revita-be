@@ -258,6 +258,35 @@ export class ReceptionistController {
       throw new BadRequestException('Doctor or patient profile not found');
     }
 
+    // Find appropriate work session for the doctor on the given date
+    const appointmentDate = new Date(date);
+    const startOfDay = new Date(appointmentDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(appointmentDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const workSession = await this.prisma.workSession.findFirst({
+      where: {
+        doctorId: doctorId,
+        startTime: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+        status: {
+          in: ['APPROVED', 'IN_PROGRESS'],
+        },
+        services: {
+          some: {
+            serviceId: serviceId,
+          },
+        },
+      },
+    });
+
+    if (!workSession) {
+      throw new BadRequestException('No available work session found for this doctor and service on the selected date');
+    }
+
     return this.prisma.appointment.create({
       data: {
         appointmentCode: this.codeGenerator.generateAppointmentCode(
@@ -269,6 +298,7 @@ export class ReceptionistController {
         specialtyId,
         doctorId,
         serviceId,
+        workSessionId: workSession.id,
         status,
         date: new Date(date),
         startTime,

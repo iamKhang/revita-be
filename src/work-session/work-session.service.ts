@@ -124,6 +124,26 @@ export class WorkSessionService {
   ) {
     const { startTime, endTime, serviceIds } = createWorkSessionDto;
 
+    // Debug timezone
+    console.log('🔍 Debug timezone - Input startTime:', startTime);
+    console.log('🔍 Debug timezone - Input endTime:', endTime);
+
+    // Parse thời gian - luôn coi input là UTC để tránh confusion timezone
+    let parsedStartTime: Date;
+    let parsedEndTime: Date;
+
+    try {
+      // Luôn parse as UTC để tránh timezone conversion issues
+      parsedStartTime = new Date(startTime + (startTime.includes('Z') ? '' : 'Z'));
+      parsedEndTime = new Date(endTime + (endTime.includes('Z') ? '' : 'Z'));
+
+      console.log('🔍 Debug timezone - Input startTime:', startTime, '-> Parsed as UTC:', parsedStartTime.toISOString());
+      console.log('🔍 Debug timezone - Input endTime:', endTime, '-> Parsed as UTC:', parsedEndTime.toISOString());
+    } catch (error) {
+      console.error('🔍 Debug timezone - Error parsing time:', error);
+      throw new BadRequestException('Invalid time format. Use ISO 8601 format (e.g., 2025-09-17T21:00:00Z)');
+    }
+
     // Validate services exist
     await this.validateServicesExist(serviceIds);
 
@@ -140,8 +160,8 @@ export class WorkSessionService {
         doctorId: userInfo.userType === 'DOCTOR' ? userInfo.id : null,
         technicianId: userInfo.userType === 'TECHNICIAN' ? userInfo.id : null,
         boothId,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
+        startTime: parsedStartTime,
+        endTime: parsedEndTime,
         status: WorkSessionStatus.PENDING,
         services: {
           create: serviceIds.map((serviceId) => ({

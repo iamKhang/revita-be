@@ -10,6 +10,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { AppointmentBookingService } from './appointment-booking.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { Public } from '../rbac/public.decorator';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { BookAppointmentDto } from './dto';
@@ -18,6 +19,7 @@ import { BookAppointmentDto } from './dto';
 export class AppointmentBookingController {
   constructor(
     private readonly appointmentBookingService: AppointmentBookingService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -140,6 +142,123 @@ export class AppointmentBookingController {
       serviceId,
       date,
     );
+  }
+
+  /**
+   * Lấy danh sách các ngày làm việc của bác sĩ trong tháng
+   * GET /appointment-booking/doctors/:doctorId/working-days?month=X
+   */
+  @Get('doctors/:doctorId/working-days')
+  @Public() // Cho phép truy cập công khai
+  async getDoctorWorkingDays(
+    @Param('doctorId') doctorId: string,
+    @Query('month') month: string,
+  ) {
+    if (!doctorId) {
+      throw new BadRequestException('Doctor ID is required');
+    }
+    if (!month) {
+      throw new BadRequestException('Month is required');
+    }
+
+    // Validate month format (MM/YYYY)
+    const monthRegex = /^\d{2}\/\d{4}$/;
+    if (!monthRegex.test(month)) {
+      throw new BadRequestException('Month must be in MM/YYYY format');
+    }
+
+    return this.appointmentBookingService.getDoctorWorkingDays(doctorId, month);
+  }
+
+  /**
+   * Debug: Lấy danh sách work sessions của bác sĩ trong tháng
+   * GET /appointment-booking/doctors/:doctorId/work-sessions?month=X
+   */
+  @Get('doctors/:doctorId/work-sessions')
+  @Public() // Cho phép truy cập công khai
+  async getDoctorWorkSessions(
+    @Param('doctorId') doctorId: string,
+    @Query('month') month: string,
+  ) {
+    if (!doctorId) {
+      throw new BadRequestException('Doctor ID is required');
+    }
+    if (!month) {
+      throw new BadRequestException('Month is required');
+    }
+
+    // Validate month format (MM/YYYY)
+    const monthRegex = /^\d{2}\/\d{4}$/;
+    if (!monthRegex.test(month)) {
+      throw new BadRequestException('Month must be in MM/YYYY format');
+    }
+
+    const [monthStr, yearStr] = month.split('/');
+    const monthNum = parseInt(monthStr, 10);
+    const yearNum = parseInt(yearStr, 10);
+
+    // Tạo khoảng thời gian cho tháng (sử dụng UTC)
+    const startOfMonth = new Date(Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0, 0));
+    const endOfMonth = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999));
+
+    // Lấy tất cả work sessions của bác sĩ trong tháng
+    const workSessions = await this.prisma.workSession.findMany({
+      where: {
+        doctorId: doctorId,
+        OR: [
+          // Work sessions bắt đầu trong tháng
+          {
+            startTime: {
+              gte: startOfMonth,
+              lte: endOfMonth,
+            },
+          },
+          // Work sessions kết thúc trong tháng (kéo dài từ tháng trước)
+          {
+            endTime: {
+              gte: startOfMonth,
+              lte: endOfMonth,
+            },
+          },
+          // Work sessions bao phủ toàn bộ tháng
+          {
+            AND: [
+              { startTime: { lte: startOfMonth } },
+              { endTime: { gte: endOfMonth } },
+            ],
+          },
+        ],
+        status: {
+          in: ['APPROVED', 'IN_PROGRESS'],
+        },
+      },
+    });
+
+    return {
+      doctorId,
+      month,
+      startOfMonth: startOfMonth.toISOString(),
+      endOfMonth: endOfMonth.toISOString(),
+      workSessions: workSessions.map(ws => ({
+        id: ws.id,
+        startTime: ws.startTime,
+        endTime: ws.endTime,
+        status: ws.status,
+        startDate: new Date(ws.startTime).toISOString().split('T')[0],
+        endDate: new Date(ws.endTime).toISOString().split('T')[0],
+      })),
+    };
+  }
+
+  /**
+   * Lấy danh sách tất cả lịch hẹn của patient hiện tại
+   * GET /appointment-booking/patient/appointments
+   */
+  @Get('patient/appointments')
+  @UseGuards(JwtAuthGuard) // Cần authentication để lấy thông tin patient
+  async getPatientAppointments(@Req() req: any) {
+    const patientId = req.user.id; // Lấy patient ID từ JWT token
+    return this.appointmentBookingService.getPatientAppointments(patientId);
   }
 
   /**

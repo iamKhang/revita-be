@@ -344,23 +344,30 @@ export class AdminController {
           const doctorId = doctor.id;
 
           // Handle ClinicRoom that uniquely references this doctor
-          const clinicRoom = await tx.clinicRoom.findFirst({
-            where: { appointments: { some: { doctorId: doctorId } } },
+          // Since clinicRoomId was removed from Appointment, we need to find clinic rooms through services
+          const clinicRooms = await tx.clinicRoom.findMany({
+            where: {
+              services: {
+                some: {
+                  service: {
+                    appointments: {
+                      some: { doctorId: doctorId }
+                    }
+                  }
+                }
+              }
+            },
           });
 
-          if (clinicRoom) {
-            // Remove many-to-many services for this clinic room
+          // Delete clinic room services for this doctor's appointments
+          for (const clinicRoom of clinicRooms) {
             await tx.clinicRoomService.deleteMany({
               where: { clinicRoomId: clinicRoom.id },
             });
+          }
 
-            // Detach appointments from the clinic room (clinicRoomId is nullable)
-            await tx.appointment.updateMany({
-              where: { clinicRoomId: clinicRoom.id },
-              data: { clinicRoomId: null },
-            });
-
-            // Delete the clinic room itself
+          // Delete the clinic rooms themselves
+          for (const clinicRoom of clinicRooms) {
             await tx.clinicRoom.delete({
               where: { id: clinicRoom.id },
             });

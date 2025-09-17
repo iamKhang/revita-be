@@ -228,7 +228,6 @@ model ClinicRoom {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
   booth Booth[]
-  appointments Appointment[]
 
   specialty   Specialty   @relation(fields: [specialtyId], references: [id])
   services    ClinicRoomService[]
@@ -279,18 +278,19 @@ model Appointment {
   patientProfileId String  @map("patient_profile_id")
   specialtyId String      @map("specialty_id")
   doctorId    String      @map("doctor_id")
-  clinicRoomId String?    @map("clinic_room_id") // Phòng khám (có thể null)
-  serviceId   String?     @map("service_id") // Dịch vụ chính (có thể null)
-  bookerId    String?     @map("booker_id") // Người đặt lịch (có thể null)
+  serviceId   String?     @map("service_id") 
+  bookerId    String?     @map("booker_id") 
   status      String      @default("PENDING") @map("status") // PENDING, CONFIRMED, COMPLETED, CANCELLED
   date        DateTime    @map("date")
   startTime   String      @map("start_time")
   endTime     String      @map("end_time")
+  workSessionId String    @map("work_session_id")
+  workSession WorkSession @relation(fields: [workSessionId], references: [id])
+
 
   patientProfile PatientProfile @relation(fields: [patientProfileId], references: [id])
   specialty   Specialty @relation(fields: [specialtyId], references: [id])
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
-  clinicRoom  ClinicRoom? @relation(fields: [clinicRoomId], references: [id])
   service     Service? @relation(fields: [serviceId], references: [id])
   appointmentServices AppointmentService[]
   medicalRecords MedicalRecord[]
@@ -487,6 +487,7 @@ model WorkSession {
   status WorkSessionStatus @default(PENDING)
   services WorkSessionService[]
   appointmentServices AppointmentService[]
+  appointments Appointment[]
 
 
   createdAt DateTime @default(now())
