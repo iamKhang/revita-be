@@ -307,11 +307,15 @@ export class AppointmentBookingService {
   ): Promise<AvailableSlotsResponseDto> {
     // Parse date using UTC để tránh timezone issues
     const dateParts = date.split('-').map(Number);
-    const targetDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2], 0, 0, 0, 0));
+    const targetDate = new Date(
+      Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2], 0, 0, 0, 0),
+    );
 
     // Tạo startOfDay và endOfDay sử dụng UTC
     const startOfDay = new Date(targetDate);
-    const endOfDay = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2], 23, 59, 59, 999));
+    const endOfDay = new Date(
+      Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2], 23, 59, 59, 999),
+    );
 
     // Kiểm tra doctor và service có tồn tại không
     const [doctor, service] = await Promise.all([
@@ -382,12 +386,22 @@ export class AppointmentBookingService {
     });
 
     // Debug: Log query parameters
-    console.log('DEBUG: Querying work sessions for date:', targetDate.toISOString().split('T')[0]);
+    console.log(
+      'DEBUG: Querying work sessions for date:',
+      targetDate.toISOString().split('T')[0],
+    );
     console.log('DEBUG: startOfDay (UTC):', startOfDay.toISOString());
     console.log('DEBUG: endOfDay (UTC):', endOfDay.toISOString());
 
     // Debug: Log work sessions found
-    console.log('DEBUG: Found', workSessions.length, 'work sessions for doctor', doctorId, 'on date', targetDate.toISOString().split('T')[0]);
+    console.log(
+      'DEBUG: Found',
+      workSessions.length,
+      'work sessions for doctor',
+      doctorId,
+      'on date',
+      targetDate.toISOString().split('T')[0],
+    );
     workSessions.forEach((ws, index) => {
       console.log(`Work session ${index}:`, {
         id: ws.id,
@@ -395,15 +409,22 @@ export class AppointmentBookingService {
         endTime: ws.endTime.toISOString(),
         status: ws.status,
         hasService: ws.services.length > 0,
-        services: ws.services.map(s => s.serviceId)
+        services: ws.services.map((s) => s.serviceId),
       });
     });
 
     // Lọc work sessions có chứa service được yêu cầu
-    const validWorkSessions = workSessions.filter(ws => ws.services.length > 0);
+    const validWorkSessions = workSessions.filter(
+      (ws) => ws.services.length > 0,
+    );
 
     if (validWorkSessions.length === 0) {
-      console.log('DEBUG: No valid work sessions found for doctor', doctorId, 'and service', serviceId);
+      console.log(
+        'DEBUG: No valid work sessions found for doctor',
+        doctorId,
+        'and service',
+        serviceId,
+      );
       return {
         doctorId: doctor.id,
         doctorName: doctor.auth.name,
@@ -439,7 +460,14 @@ export class AppointmentBookingService {
       },
     });
 
-    console.log('DEBUG: Found', appointments.length, 'existing appointments for doctor', doctorId, 'on date', targetDate.toISOString().split('T')[0]);
+    console.log(
+      'DEBUG: Found',
+      appointments.length,
+      'existing appointments for doctor',
+      doctorId,
+      'on date',
+      targetDate.toISOString().split('T')[0],
+    );
     appointments.forEach((apt, index) => {
       console.log(`Appointment ${index}:`, {
         id: apt.id,
@@ -447,7 +475,7 @@ export class AppointmentBookingService {
         startTime: apt.startTime,
         endTime: apt.endTime,
         serviceId: apt.serviceId,
-        appointmentServices: apt.appointmentServices.map(as => as.serviceId)
+        appointmentServices: apt.appointmentServices.map((as) => as.serviceId),
       });
     });
 
@@ -455,7 +483,11 @@ export class AppointmentBookingService {
     // Merge tất cả work sessions thành một danh sách slots duy nhất
     const allSlots: AvailableSlotDto[] = [];
 
-    console.log('DEBUG: Processing', validWorkSessions.length, 'valid work sessions');
+    console.log(
+      'DEBUG: Processing',
+      validWorkSessions.length,
+      'valid work sessions',
+    );
     console.log('DEBUG: Service duration:', serviceDuration, 'minutes');
 
     for (const workSession of validWorkSessions) {
@@ -467,21 +499,25 @@ export class AppointmentBookingService {
         startTime: workSessionStart.toISOString(),
         endTime: workSessionEnd.toISOString(),
         startOfDay: startOfDay.toISOString(),
-        endOfDay: endOfDay.toISOString()
+        endOfDay: endOfDay.toISOString(),
       });
 
       // Chỉ tạo slots trong ngày query
-      const effectiveStart = workSessionStart > startOfDay ? workSessionStart : startOfDay;
-      const effectiveEnd = workSessionEnd < endOfDay ? workSessionEnd : endOfDay;
+      const effectiveStart =
+        workSessionStart > startOfDay ? workSessionStart : startOfDay;
+      const effectiveEnd =
+        workSessionEnd < endOfDay ? workSessionEnd : endOfDay;
 
       console.log('DEBUG: Effective time range:', {
         effectiveStart: effectiveStart.toISOString(),
         effectiveEnd: effectiveEnd.toISOString(),
-        isValid: effectiveStart < effectiveEnd
+        isValid: effectiveStart < effectiveEnd,
       });
 
       if (effectiveStart >= effectiveEnd) {
-        console.log('DEBUG: Skipping work session - no valid time range in query date');
+        console.log(
+          'DEBUG: Skipping work session - no valid time range in query date',
+        );
         continue; // Không có thời gian hợp lệ trong ngày
       }
 
@@ -491,7 +527,9 @@ export class AppointmentBookingService {
       // Tạo slots cho work session này
       while (currentTime < effectiveEnd) {
         const slotStart = new Date(currentTime);
-        const slotEnd = new Date(currentTime.getTime() + serviceDuration * 60000);
+        const slotEnd = new Date(
+          currentTime.getTime() + serviceDuration * 60000,
+        );
 
         // Đảm bảo slot không vượt quá work session end
         if (slotEnd > effectiveEnd) {
@@ -508,14 +546,30 @@ export class AppointmentBookingService {
         );
 
         // Format time as HH:mm (giữ nguyên giờ local, không convert UTC)
-        const startTimeStr = slotStart.getUTCHours().toString().padStart(2, '0') + ':' +
-                             slotStart.getUTCMinutes().toString().padStart(2, '0');
-        const endTimeStr = slotEnd.getUTCHours().toString().padStart(2, '0') + ':' +
-                           slotEnd.getUTCMinutes().toString().padStart(2, '0');
+        const startTimeStr =
+          slotStart.getUTCHours().toString().padStart(2, '0') +
+          ':' +
+          slotStart.getUTCMinutes().toString().padStart(2, '0');
+        const endTimeStr =
+          slotEnd.getUTCHours().toString().padStart(2, '0') +
+          ':' +
+          slotEnd.getUTCMinutes().toString().padStart(2, '0');
 
         // Debug: Log slot checking for 14:00 slots
-        if (startTimeStr === '14:00' || startTimeStr === '14:05' || startTimeStr === '14:10' || startTimeStr === '14:15') {
-          console.log('DEBUG: Checking slot', startTimeStr, '-', endTimeStr, 'isAvailable:', isAvailable);
+        if (
+          startTimeStr === '14:00' ||
+          startTimeStr === '14:05' ||
+          startTimeStr === '14:10' ||
+          startTimeStr === '14:15'
+        ) {
+          console.log(
+            'DEBUG: Checking slot',
+            startTimeStr,
+            '-',
+            endTimeStr,
+            'isAvailable:',
+            isAvailable,
+          );
         }
 
         allSlots.push({
@@ -530,10 +584,18 @@ export class AppointmentBookingService {
         // Điều này đảm bảo slots liên tiếp nhau mà không có khoảng trống
         currentTime = new Date(currentTime.getTime() + serviceDuration * 60000);
 
-        console.log('DEBUG: Next slot will start at:', currentTime.toISOString());
+        console.log(
+          'DEBUG: Next slot will start at:',
+          currentTime.toISOString(),
+        );
       }
 
-      console.log('DEBUG: Created', slotsCreated, 'slots for work session', workSession.id);
+      console.log(
+        'DEBUG: Created',
+        slotsCreated,
+        'slots for work session',
+        workSession.id,
+      );
     }
 
     // Sort slots theo thời gian
@@ -546,7 +608,8 @@ export class AppointmentBookingService {
     let overallEnd: Date | null = null;
 
     for (const ws of validWorkSessions) {
-      const effectiveStart = ws.startTime > startOfDay ? ws.startTime : startOfDay;
+      const effectiveStart =
+        ws.startTime > startOfDay ? ws.startTime : startOfDay;
       const effectiveEnd = ws.endTime < endOfDay ? ws.endTime : endOfDay;
 
       if (effectiveStart < effectiveEnd) {
@@ -561,7 +624,7 @@ export class AppointmentBookingService {
 
     console.log('DEBUG: Overall work session range:', {
       overallStart: overallStart?.toISOString(),
-      overallEnd: overallEnd?.toISOString()
+      overallEnd: overallEnd?.toISOString(),
     });
 
     return {
@@ -609,8 +672,10 @@ export class AppointmentBookingService {
       }
 
       // Chỉ tạo slots hoàn toàn thuộc về ngày được query (cả start và end)
-      if (slotStart.toDateString() !== queryDate.toDateString() ||
-          slotEnd.toDateString() !== queryDate.toDateString()) {
+      if (
+        slotStart.toDateString() !== queryDate.toDateString() ||
+        slotEnd.toDateString() !== queryDate.toDateString()
+      ) {
         currentTime = new Date(currentTime.getTime() + serviceDuration * 60000);
         continue; // Bỏ qua slots không hoàn toàn thuộc ngày query
       }
@@ -644,14 +709,26 @@ export class AppointmentBookingService {
     slotStart: Date,
     slotEnd: Date,
     appointments: AppointmentData[],
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     targetServiceId: string,
   ): boolean {
-    console.log('DEBUG: Checking slot availability for', slotStart.toISOString(), '-', slotEnd.toISOString());
+    console.log(
+      'DEBUG: Checking slot availability for',
+      slotStart.toISOString(),
+      '-',
+      slotEnd.toISOString(),
+    );
 
     for (const appointment of appointments) {
       // Parse appointment time using UTC to match database storage
-      const appointmentStart = this.parseAppointmentTimeFromSlot(slotStart, appointment.startTime);
-      const appointmentEnd = this.parseAppointmentTimeFromSlot(slotStart, appointment.endTime);
+      const appointmentStart = this.parseAppointmentTimeFromSlot(
+        slotStart,
+        appointment.startTime,
+      );
+      const appointmentEnd = this.parseAppointmentTimeFromSlot(
+        slotStart,
+        appointment.endTime,
+      );
 
       console.log('DEBUG: Comparing with appointment:', {
         startTime: appointment.startTime,
@@ -660,13 +737,17 @@ export class AppointmentBookingService {
         appointmentEnd: appointmentEnd.toISOString(),
         slotStart: slotStart.toISOString(),
         slotEnd: slotEnd.toISOString(),
-        overlap: (slotStart < appointmentEnd && slotEnd > appointmentStart)
+        overlap: slotStart < appointmentEnd && slotEnd > appointmentStart,
       });
 
       // Check conflict với tất cả appointments của bác sĩ trong ngày
       // Nếu slot overlap với bất kỳ appointment nào (không phân biệt service)
       if (slotStart < appointmentEnd && slotEnd > appointmentStart) {
-        console.log('DEBUG: Slot conflicts with appointment (startTime:', appointment.startTime, ')');
+        console.log(
+          'DEBUG: Slot conflicts with appointment (startTime:',
+          appointment.startTime,
+          ')',
+        );
         return false;
       }
     }
@@ -679,7 +760,11 @@ export class AppointmentBookingService {
    * Parse appointment time từ slot date và time string (sử dụng UTC)
    */
   private parseAppointmentTimeFromSlot(slotDate: Date, timeStr: string): Date {
-    const [year, month, day] = [slotDate.getUTCFullYear(), slotDate.getUTCMonth(), slotDate.getUTCDate()];
+    const [year, month, day] = [
+      slotDate.getUTCFullYear(),
+      slotDate.getUTCMonth(),
+      slotDate.getUTCDate(),
+    ];
     const [hours, minutes] = timeStr.split(':').map(Number);
     // Create Date object in UTC to match database storage
     return new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
@@ -692,17 +777,19 @@ export class AppointmentBookingService {
     bookAppointmentDto: BookAppointmentDto,
     bookerId: string,
   ): Promise<BookAppointmentResponseDto> {
-    const {
-      patientProfileId,
-      doctorId,
-      serviceId,
-      date,
-      startTime,
-      endTime,
-    } = bookAppointmentDto;
+    const { patientProfileId, doctorId, serviceId, date, startTime, endTime } =
+      bookAppointmentDto;
 
     // Validate inputs
-    if (!bookerId || !patientProfileId || !doctorId || !serviceId || !date || !startTime || !endTime) {
+    if (
+      !bookerId ||
+      !patientProfileId ||
+      !doctorId ||
+      !serviceId ||
+      !date ||
+      !startTime ||
+      !endTime
+    ) {
       throw new Error('Missing required fields');
     }
 
@@ -746,9 +833,13 @@ export class AppointmentBookingService {
 
     // Validate time slot is available (using UTC dates like getAvailableSlots)
     const dateParts = date.split('-').map(Number);
-    const targetDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2], 0, 0, 0, 0));
+    const targetDate = new Date(
+      Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2], 0, 0, 0, 0),
+    );
     const startOfDay = new Date(targetDate);
-    const endOfDay = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2], 23, 59, 59, 999));
+    const endOfDay = new Date(
+      Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2], 23, 59, 59, 999),
+    );
 
     // Get work sessions for this doctor and date (bao gồm cả work sessions kéo dài từ ngày trước)
     const workSessions = await this.prisma.workSession.findMany({
@@ -803,12 +894,17 @@ export class AppointmentBookingService {
         endTime: ws.endTime.toISOString(),
         status: ws.status,
         hasService: ws.services.length > 0,
-        serviceIds: ws.services.map(s => s.serviceId)
+        serviceIds: ws.services.map((s) => s.serviceId),
       });
     });
 
-    if (workSessions.length === 0 || !workSessions.some(ws => ws.services.length > 0)) {
-      throw new Error('No available work session for this doctor and service on the selected date');
+    if (
+      workSessions.length === 0 ||
+      !workSessions.some((ws) => ws.services.length > 0)
+    ) {
+      throw new Error(
+        'No available work session for this doctor and service on the selected date',
+      );
     }
 
     // Check if the requested time slot conflicts with existing appointments
@@ -820,7 +916,7 @@ export class AppointmentBookingService {
       startTime,
       endTime,
       requestedStart: requestedStart.toISOString(),
-      requestedEnd: requestedEnd.toISOString()
+      requestedEnd: requestedEnd.toISOString(),
     });
 
     const conflictingAppointments = await this.prisma.appointment.findMany({
@@ -834,9 +930,15 @@ export class AppointmentBookingService {
     });
 
     // Check for time conflicts manually
-    const hasConflict = conflictingAppointments.some(apt => {
-      const aptStart = this.parseAppointmentTime(apt.date.toISOString().split('T')[0], apt.startTime);
-      const aptEnd = this.parseAppointmentTime(apt.date.toISOString().split('T')[0], apt.endTime);
+    const hasConflict = conflictingAppointments.some((apt) => {
+      const aptStart = this.parseAppointmentTime(
+        apt.date.toISOString().split('T')[0],
+        apt.startTime,
+      );
+      const aptEnd = this.parseAppointmentTime(
+        apt.date.toISOString().split('T')[0],
+        apt.endTime,
+      );
       return !(requestedEnd <= aptStart || requestedStart >= aptEnd);
     });
 
@@ -850,10 +952,10 @@ export class AppointmentBookingService {
     // Tìm work session chứa slot được chọn (trong effective time range trong ngày)
     console.log('DEBUG: Looking for suitable work session for slot:', {
       requestedStart: requestedStart.toISOString(),
-      requestedEnd: requestedEnd.toISOString()
+      requestedEnd: requestedEnd.toISOString(),
     });
 
-    const suitableWorkSession = workSessions.find(ws => {
+    const suitableWorkSession = workSessions.find((ws) => {
       const wsStart = new Date(ws.startTime);
       const wsEnd = new Date(ws.endTime);
 
@@ -861,7 +963,10 @@ export class AppointmentBookingService {
       const effectiveStart = wsStart > startOfDay ? wsStart : startOfDay;
       const effectiveEnd = wsEnd < endOfDay ? wsEnd : endOfDay;
 
-      const isSuitable = effectiveStart <= requestedStart && effectiveEnd >= requestedEnd && ws.services.length > 0;
+      const isSuitable =
+        effectiveStart <= requestedStart &&
+        effectiveEnd >= requestedEnd &&
+        ws.services.length > 0;
 
       console.log('DEBUG: Checking work session:', {
         wsId: ws.id,
@@ -870,16 +975,21 @@ export class AppointmentBookingService {
         effectiveStart: effectiveStart.toISOString(),
         effectiveEnd: effectiveEnd.toISOString(),
         hasService: ws.services.length > 0,
-        isSuitable
+        isSuitable,
       });
 
       return isSuitable;
     });
 
-    console.log('DEBUG: Found suitable work session:', suitableWorkSession?.id || 'NONE');
+    console.log(
+      'DEBUG: Found suitable work session:',
+      suitableWorkSession?.id || 'NONE',
+    );
 
     if (!suitableWorkSession) {
-      throw new Error('No suitable work session found for the selected time slot');
+      throw new Error(
+        'No suitable work session found for the selected time slot',
+      );
     }
 
     // Get specialty from work session (through booth -> room)
@@ -977,8 +1087,12 @@ export class AppointmentBookingService {
     }
 
     // Tạo khoảng thời gian cho tháng (sử dụng UTC để tránh vấn đề timezone)
-    const startOfMonth = new Date(Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0, 0)); // Tháng trong JS bắt đầu từ 0
-    const endOfMonth = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999)); // Ngày cuối tháng
+    const startOfMonth = new Date(
+      Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0, 0),
+    ); // Tháng trong JS bắt đầu từ 0
+    const endOfMonth = new Date(
+      Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999),
+    ); // Ngày cuối tháng
 
     // Lấy tất cả work sessions của bác sĩ trong tháng
     const workSessions = await this.prisma.workSession.findMany({
@@ -1014,13 +1128,18 @@ export class AppointmentBookingService {
     });
 
     // Debug: Log work sessions found
-    console.log('DEBUG: Found work sessions for doctor', doctorId, 'in month', month);
+    console.log(
+      'DEBUG: Found work sessions for doctor',
+      doctorId,
+      'in month',
+      month,
+    );
     workSessions.forEach((ws, index) => {
       console.log(`Work session ${index}:`, {
         id: ws.id,
         startTime: ws.startTime,
         endTime: ws.endTime,
-        status: ws.status
+        status: ws.status,
       });
     });
 
@@ -1032,20 +1151,39 @@ export class AppointmentBookingService {
       const endDate = new Date(ws.endTime);
 
       // Thêm ngày của startTime (sử dụng UTC)
-      const startDateNormalized = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
-      if (startDateNormalized >= startOfMonth && startDateNormalized <= endOfMonth) {
+      const startDateNormalized = new Date(
+        Date.UTC(
+          startDate.getUTCFullYear(),
+          startDate.getUTCMonth(),
+          startDate.getUTCDate(),
+        ),
+      );
+      if (
+        startDateNormalized >= startOfMonth &&
+        startDateNormalized <= endOfMonth
+      ) {
         workingDaysSet.add(startDateNormalized.toISOString().split('T')[0]);
       }
 
       // Nếu work session kéo dài sang ngày khác, thêm ngày của endTime
-      const endDateNormalized = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
-      if (endDateNormalized.getTime() !== startDateNormalized.getTime() && endDateNormalized >= startOfMonth && endDateNormalized <= endOfMonth) {
+      const endDateNormalized = new Date(
+        Date.UTC(
+          endDate.getUTCFullYear(),
+          endDate.getUTCMonth(),
+          endDate.getUTCDate(),
+        ),
+      );
+      if (
+        endDateNormalized.getTime() !== startDateNormalized.getTime() &&
+        endDateNormalized >= startOfMonth &&
+        endDateNormalized <= endOfMonth
+      ) {
         workingDaysSet.add(endDateNormalized.toISOString().split('T')[0]);
       }
 
       // Nếu work session kéo dài nhiều ngày, thêm tất cả các ngày trong khoảng
       if (startDateNormalized.getTime() !== endDateNormalized.getTime()) {
-        let currentDate = new Date(startDateNormalized);
+        const currentDate = new Date(startDateNormalized);
         currentDate.setUTCDate(currentDate.getUTCDate() + 1); // Bắt đầu từ ngày sau startDate
 
         while (currentDate < endDateNormalized) {
@@ -1073,7 +1211,9 @@ export class AppointmentBookingService {
   /**
    * Lấy danh sách tất cả lịch hẹn của patient
    */
-  async getPatientAppointments(patientId: string): Promise<PatientAppointmentsResponseDto> {
+  async getPatientAppointments(
+    patientId: string,
+  ): Promise<PatientAppointmentsResponseDto> {
     // Kiểm tra patient có tồn tại không (patientId chính là authId)
     const patient = await this.prisma.auth.findUnique({
       where: { id: patientId },
@@ -1137,46 +1277,158 @@ export class AppointmentBookingService {
     });
 
     // Transform data
-    const transformedAppointments: PatientAppointmentDto[] = appointments.map(apt => {
-      // Lấy danh sách services từ appointmentServices
-      const services: PatientAppointmentServiceDto[] = apt.appointmentServices.map(as => ({
-        serviceId: as.service.id,
-        serviceName: as.service.name,
-        serviceCode: as.service.serviceCode,
-        price: as.service.price,
-        timePerPatient: as.service.timePerPatient ?? 15,
-      }));
+    const transformedAppointments: PatientAppointmentDto[] = appointments.map(
+      (apt) => {
+        // Lấy danh sách services từ appointmentServices
+        const services: PatientAppointmentServiceDto[] =
+          apt.appointmentServices.map((as) => ({
+            serviceId: as.service.id,
+            serviceName: as.service.name,
+            serviceCode: as.service.serviceCode,
+            price: as.service.price,
+            timePerPatient: as.service.timePerPatient ?? 15,
+          }));
 
-      // Nếu không có appointmentServices nhưng có service chính, thêm vào
-      if (services.length === 0 && apt.service) {
-        services.push({
-          serviceId: apt.service.id,
-          serviceName: apt.service.name,
-          serviceCode: apt.service.serviceCode,
-          price: apt.service.price,
-          timePerPatient: apt.service.timePerPatient ?? 15,
-        });
-      }
+        // Nếu không có appointmentServices nhưng có service chính, thêm vào
+        if (services.length === 0 && apt.service) {
+          services.push({
+            serviceId: apt.service.id,
+            serviceName: apt.service.name,
+            serviceCode: apt.service.serviceCode,
+            price: apt.service.price,
+            timePerPatient: apt.service.timePerPatient ?? 15,
+          });
+        }
 
-      return {
-        appointmentId: apt.id,
-        appointmentCode: apt.appointmentCode,
-        doctorId: apt.doctorId,
-        doctorName: apt.doctor.auth.name,
-        specialtyId: apt.specialtyId,
-        specialtyName: apt.specialty.name,
-        date: apt.date.toISOString().split('T')[0],
-        startTime: apt.startTime,
-        endTime: apt.endTime,
-        status: apt.status,
-        services: services,
-        createdAt: new Date().toISOString(), // TODO: Fix createdAt field
-      };
-    });
+        return {
+          appointmentId: apt.id,
+          appointmentCode: apt.appointmentCode,
+          doctorId: apt.doctorId,
+          doctorName: apt.doctor.auth.name,
+          specialtyId: apt.specialtyId,
+          specialtyName: apt.specialty.name,
+          date: apt.date.toISOString().split('T')[0],
+          startTime: apt.startTime,
+          endTime: apt.endTime,
+          status: apt.status,
+          services: services,
+          createdAt: new Date().toISOString(), // TODO: Fix createdAt field
+        };
+      },
+    );
 
     return {
       patientId: patient.id,
       patientName: patient.name,
+      totalAppointments: transformedAppointments.length,
+      appointments: transformedAppointments,
+    };
+  }
+
+  /**
+   * Lấy danh sách tất cả lịch hẹn của bác sĩ (dựa vào Auth ID từ JWT)
+   */
+  async getDoctorAppointments(
+    doctorAuthId: string,
+  ): Promise<PatientAppointmentsResponseDto> {
+    // Tìm doctor bằng authId từ JWT
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { authId: doctorAuthId },
+      include: {
+        auth: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    // Lấy tất cả appointments thuộc về bác sĩ này
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        doctorId: doctor.id,
+      },
+      include: {
+        patientProfile: true,
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            serviceCode: true,
+            price: true,
+            timePerPatient: true,
+          },
+        },
+        appointmentServices: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                name: true,
+                serviceCode: true,
+                price: true,
+                timePerPatient: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        date: 'desc',
+      },
+    });
+
+    const transformedAppointments: PatientAppointmentDto[] = appointments.map(
+      (apt) => {
+        const services: PatientAppointmentServiceDto[] =
+          apt.appointmentServices.map((as) => ({
+            serviceId: as.service.id,
+            serviceName: as.service.name,
+            serviceCode: as.service.serviceCode,
+            price: as.service.price,
+            timePerPatient: as.service.timePerPatient ?? 15,
+          }));
+
+        if (services.length === 0 && apt.service) {
+          services.push({
+            serviceId: apt.service.id,
+            serviceName: apt.service.name,
+            serviceCode: apt.service.serviceCode,
+            price: apt.service.price,
+            timePerPatient: apt.service.timePerPatient ?? 15,
+          });
+        }
+
+        return {
+          appointmentId: apt.id,
+          appointmentCode: apt.appointmentCode,
+          doctorId: apt.doctorId,
+          doctorName: doctor.auth.name,
+          specialtyId: apt.specialtyId,
+          specialtyName: apt.specialty.name,
+          date: apt.date.toISOString().split('T')[0],
+          startTime: apt.startTime,
+          endTime: apt.endTime,
+          status: apt.status,
+          services: services,
+          createdAt: new Date().toISOString(),
+        };
+      },
+    );
+
+    return {
+      patientId: doctor.id,
+      patientName: doctor.auth.name,
       totalAppointments: transformedAppointments.length,
       appointments: transformedAppointments,
     };
@@ -1191,5 +1443,4 @@ export class AppointmentBookingService {
     // Create Date object in UTC to match database storage
     return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0));
   }
-
 }

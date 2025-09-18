@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/require-await */
 import {
   Controller,
   Get,
@@ -198,8 +201,12 @@ export class AppointmentBookingController {
     const yearNum = parseInt(yearStr, 10);
 
     // Tạo khoảng thời gian cho tháng (sử dụng UTC)
-    const startOfMonth = new Date(Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0, 0));
-    const endOfMonth = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999));
+    const startOfMonth = new Date(
+      Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0, 0),
+    );
+    const endOfMonth = new Date(
+      Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999),
+    );
 
     // Lấy tất cả work sessions của bác sĩ trong tháng
     const workSessions = await this.prisma.workSession.findMany({
@@ -239,7 +246,7 @@ export class AppointmentBookingController {
       month,
       startOfMonth: startOfMonth.toISOString(),
       endOfMonth: endOfMonth.toISOString(),
-      workSessions: workSessions.map(ws => ({
+      workSessions: workSessions.map((ws) => ({
         id: ws.id,
         startTime: ws.startTime,
         endTime: ws.endTime,
@@ -257,8 +264,21 @@ export class AppointmentBookingController {
   @Get('patient/appointments')
   @UseGuards(JwtAuthGuard) // Cần authentication để lấy thông tin patient
   async getPatientAppointments(@Req() req: any) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const patientId = req.user.id; // Lấy patient ID từ JWT token
     return this.appointmentBookingService.getPatientAppointments(patientId);
+  }
+
+  /**
+   * Lấy danh sách tất cả lịch hẹn của bác sĩ hiện tại (từ JWT)
+   * GET /appointment-booking/doctor/appointments
+   */
+  @Get('doctor/appointments')
+  @UseGuards(JwtAuthGuard)
+  async getDoctorAppointments(@Req() req: any) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const doctorAuthId = req.user.id; // Auth ID từ JWT
+    return this.appointmentBookingService.getDoctorAppointments(doctorAuthId);
   }
 
   /**
@@ -271,7 +291,12 @@ export class AppointmentBookingController {
     @Body() bookAppointmentDto: BookAppointmentDto,
     @Req() req: any,
   ) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const bookerId = req.user.id; // Lấy user ID từ JWT token
-    return this.appointmentBookingService.bookAppointment(bookAppointmentDto, bookerId);
+    return this.appointmentBookingService.bookAppointment(
+      bookAppointmentDto,
+
+      bookerId,
+    );
   }
 }
