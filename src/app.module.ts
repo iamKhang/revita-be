@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { LoginModule } from './login/login.module';
@@ -14,9 +15,14 @@ import { ServiceModule } from './service/service.module';
 import { FileStorageModule } from './file-storage/file-storage.module';
 import { WorkSessionModule } from './work-session/work-session.module';
 import { AppointmentBookingModule } from './appointment-booking/appointment-booking.module';
+import { AiChatbotModule } from './ai-chatbot/ai-chatbot.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
     LoginModule,
     RegisterModule,
     UserManagementModule,
@@ -28,9 +34,9 @@ import { AppointmentBookingModule } from './appointment-booking/appointment-book
     FileStorageModule,
     WorkSessionModule,
     AppointmentBookingModule,
+    AiChatbotModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
-
 })
 export class AppModule {}
