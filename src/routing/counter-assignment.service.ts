@@ -145,7 +145,7 @@ export class CounterAssignmentService {
     const topic =
       process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
     try {
-      await this.kafka.publish(topic, [
+      void this.kafka.publish(topic, [
         {
           key: counterId,
           value: {
@@ -163,11 +163,21 @@ export class CounterAssignmentService {
       );
     }
 
+    const callCount = Number((skippedPatient as any).callCount || 0);
+    const status = (skippedPatient as any).status || 'MISSED';
+    const message =
+      callCount >= 5
+        ? 'Current patient cancelled after 5 calls'
+        : 'Current patient marked MISSED and will be reinserted after 3 turns';
+
     return {
       ok: true,
       patient: skippedPatient,
-      message: 'Current patient skipped successfully',
-    };
+      message,
+      // expose extended fields for client if needed
+      ...(status ? { status } : {}),
+      ...(callCount ? { callCount } : {}),
+    } as any;
   }
 
   async recallSkippedPatient(counterId: string): Promise<{
@@ -188,7 +198,7 @@ export class CounterAssignmentService {
     const topic =
       process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
     try {
-      await this.kafka.publish(topic, [
+      void this.kafka.publish(topic, [
         {
           key: counterId,
           value: {
@@ -232,7 +242,7 @@ export class CounterAssignmentService {
     const topic =
       process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
     try {
-      await this.kafka.publish(topic, [
+      void this.kafka.publish(topic, [
         {
           key: counterId,
           value: {
@@ -274,7 +284,7 @@ export class CounterAssignmentService {
     const topic =
       process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
     try {
-      await this.kafka.publish(topic, [
+      void this.kafka.publish(topic, [
         {
           key: counterId,
           value: {
@@ -433,6 +443,24 @@ export class CounterAssignmentService {
     }
 
     return score;
+  }
+
+  async getAllCounters(): Promise<any[]> {
+    const counters = await this.prisma.counter.findMany({
+      where: {
+        isActive: true,
+      },
+      orderBy: {
+        counterCode: 'asc',
+      },
+    });
+
+    return counters.map(counter => ({
+      counterId: counter.id,
+      counterCode: counter.counterCode,
+      counterName: counter.counterName,
+      location: counter.location,
+    }));
   }
 
   async getAvailableCounters(): Promise<CounterStatus[]> {

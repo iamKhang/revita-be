@@ -28,17 +28,12 @@ export class CounterAssignmentController {
   ) {}
 
   @Public()
-  @Post('assign')
-  async assignPatientToCounter(@Body() body: AssignCounterDto): Promise<{
-    success: true;
-    assignment: AssignedCounter;
+  @Get('counters')
+  async getAllCounters(): Promise<{
+    counters: any[];
   }> {
-    const assignment =
-      await this.counterAssignmentService.assignPatientToCounter(body);
-    return {
-      success: true,
-      assignment,
-    };
+    const counters = await this.counterAssignmentService.getAllCounters();
+    return { counters };
   }
 
   @Public()
@@ -122,24 +117,6 @@ export class CounterAssignmentController {
   @Delete('counters/:counterId/queue')
   async clearCounterQueue(@Param('counterId') counterId: string) {
     return this.counterAssignmentService.clearCounterQueue(counterId);
-  }
-
-  @Public()
-  @Post('scan-invoice')
-  async scanInvoiceAndAssign(@Body() body: ScanInvoiceDto) {
-    return this.counterAssignmentService.scanInvoiceAndAssign(body);
-  }
-
-  @Public()
-  @Post('direct-assignment')
-  async assignDirectPatient(@Body() body: DirectAssignmentDto) {
-    return this.counterAssignmentService.assignDirectPatient(body);
-  }
-
-  @Public()
-  @Post('simple-assignment')
-  async assignSimplePatient(@Body() body: SimpleAssignmentDto) {
-    return this.counterAssignmentService.assignSimplePatient(body);
   }
 
   @Public()

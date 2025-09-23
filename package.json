@@ -25,6 +25,7 @@
     "seed:services": "ts-node -r tsconfig-paths/register prisma/seed_services.ts",
     "seed:booths": "ts-node -r tsconfig-paths/register prisma/seed_booths.ts",
     "seed:worksession": "ts-node -r tsconfig-paths/register prisma/seed_worksession.ts",
+    "seed:counters": "ts-node -r tsconfig-paths/register prisma/seed_counters.ts",
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
     "db:clear": "ts-node -r tsconfig-paths/register prisma/clear.ts"
   },
@@ -36,7 +37,9 @@
     "@nestjs/microservices": "^11.1.6",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-socket.io": "^11.1.6",
     "@nestjs/swagger": "^11.2.0",
+    "@nestjs/websockets": "^11.1.6",
     "@prisma/client": "^6.10.0",
     "@supabase/supabase-js": "^2.57.0",
     "@types/bcrypt": "^6.0.0",
@@ -61,6 +64,7 @@
     "reflect-metadata": "^0.2.2",
     "resend": "^4.7.0",
     "rxjs": "^7.8.1",
+    "socket.io": "^4.8.1",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^11.1.0"
   },

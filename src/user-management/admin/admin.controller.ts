@@ -381,12 +381,10 @@ export class AdminController {
           const appointmentIds = appointments.map((a) => a.id);
 
           if (appointmentIds.length > 0) {
-            await tx.counterQueueItem.deleteMany({
-              where: { appointmentId: { in: appointmentIds } },
-            });
-            await tx.counterAssignment.deleteMany({
-              where: { appointmentId: { in: appointmentIds } },
-            });
+            // Không cần xóa counterQueueItem vì đã được lưu trong Redis
+            // await tx.counterAssignment.deleteMany({
+            //   where: { appointmentId: { in: appointmentIds } },
+            // });
             await tx.medicalRecord.deleteMany({
               where: { appointmentId: { in: appointmentIds } },
             });
@@ -446,12 +444,10 @@ export class AdminController {
             const appointmentIds = appointments.map((a) => a.id);
 
             if (appointmentIds.length > 0) {
-              await tx.counterQueueItem.deleteMany({
-                where: { appointmentId: { in: appointmentIds } },
-              });
-              await tx.counterAssignment.deleteMany({
-                where: { appointmentId: { in: appointmentIds } },
-              });
+              // Không cần xóa counterQueueItem vì đã được lưu trong Redis
+              // await tx.counterAssignment.deleteMany({
+              //   where: { appointmentId: { in: appointmentIds } },
+              // });
               await tx.medicalRecord.deleteMany({
                 where: { appointmentId: { in: appointmentIds } },
               });
@@ -535,10 +531,8 @@ export class AdminController {
           const counterIds = counters.map((c) => c.id);
 
           if (counterIds.length > 0) {
+            // Không cần xóa counterQueueItem vì đã được lưu trong Redis
             // For safety, ensure no active queue items are left
-            await tx.counterQueueItem.deleteMany({
-              where: { counterId: { in: counterIds } },
-            });
             await tx.counterAssignment.deleteMany({
               where: { counterId: { in: counterIds } },
             });
@@ -744,13 +738,15 @@ export class AdminController {
               },
             },
           },
-          queueItems: {
-            where: { status: 'WAITING' },
-            orderBy: { priorityScore: 'desc' },
-          },
+          // queueItems đã được lưu trong Redis
+          // queueItems: {
+          //   where: { status: 'WAITING' },
+          //   orderBy: { priorityScore: 'desc' },
+          // },
           _count: {
             select: {
-              queueItems: { where: { status: 'WAITING' } },
+              // queueItems: { where: { status: 'WAITING' } },
+              assignments: true,
             },
           },
         },
@@ -790,23 +786,26 @@ export class AdminController {
             },
           },
         },
-        queueItems: {
-          include: {
-            appointment: {
-              include: {
-                patientProfile: true,
-              },
-            },
-          },
-          orderBy: {
-            priorityScore: 'desc',
-          },
-        },
+        // queueItems đã được lưu trong Redis
+        // queueItems: {
+        //   include: {
+        //     appointment: {
+        //       include: {
+        //         patientProfile: true,
+        //       },
+        //     },
+        //   },
+        //   orderBy: {
+        //     priorityScore: 'desc',
+        //   },
+        // },
         assignments: {
           include: {
-            appointment: {
+            receptionist: {
               include: {
-                patientProfile: true,
+                auth: {
+                  select: { name: true, email: true },
+                },
               },
             },
           },
@@ -964,30 +963,28 @@ export class AdminController {
   async deleteCounter(@Param('counterId') counterId: string) {
     const counter = await this.prisma.counter.findUnique({
       where: { id: counterId },
-      include: {
-        queueItems: {
-          where: {
-            status: 'WAITING',
-          },
-        },
-      },
+      // include: {
+      //   queueItems: {
+      //     where: {
+      //       status: 'WAITING',
+      //     },
+      //   },
+      // },
     });
 
     if (!counter) {
       throw new NotFoundException('Counter not found');
     }
 
-    // Kiểm tra xem counter có queue items đang chờ không
-    if (counter.queueItems.length > 0) {
-      throw new BadRequestException(
-        'Cannot delete counter with active queue items',
-      );
-    }
+    // Kiểm tra xem counter có queue items đang chờ không (từ Redis)
+    // if (counter.queueItems.length > 0) {
+    //   throw new BadRequestException(
+    //     'Cannot delete counter with active queue items',
+    //   );
+    // }
 
+    // Không cần xóa counterQueueItem vì đã được lưu trong Redis
     // Xóa các bản ghi liên quan trước
-    await this.prisma.counterQueueItem.deleteMany({
-      where: { counterId },
-    });
 
     await this.prisma.counterAssignment.deleteMany({
       where: { counterId },
@@ -1012,13 +1009,14 @@ export class AdminController {
       throw new NotFoundException('Counter not found');
     }
 
-    // Thống kê queue hiện tại
-    const currentQueueCount = await this.prisma.counterQueueItem.count({
-      where: {
-        counterId,
-        status: 'WAITING',
-      },
-    });
+    // Thống kê queue hiện tại (từ Redis thay vì database)
+    // const currentQueueCount = await this.prisma.counterQueueItem.count({
+    //   where: {
+    //     counterId,
+    //     status: 'WAITING',
+    //   },
+    // });
+    const currentQueueCount = 0; // Sẽ lấy từ Redis
 
     // Thống kê assignments hôm nay
     const today = new Date();

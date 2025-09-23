@@ -124,6 +124,56 @@ export class RedisService implements OnModuleDestroy {
     await this.redis.zadd(key, 'NX', priority, JSON.stringify(item));
   }
 
+  /**
+   * Đếm lượt gọi (turn) để phục vụ logic chèn lại sau N lượt
+   */
+  async incrementTurn(counterId: string): Promise<number> {
+    const key = `counterTurn:${counterId}`;
+    return await this.redis.incr(key);
+  }
+
+  async getTurn(counterId: string): Promise<number> {
+    const key = `counterTurn:${counterId}`;
+    const val = await this.redis.get(key);
+    return val ? parseInt(val) : 0;
+  }
+
+  /**
+   * Lên lịch chèn lại bệnh nhân bị bỏ lỡ sau một số lượt
+   * Sử dụng ZSET: score = dueTurn
+   */
+  async scheduleReinsert(
+    counterId: string,
+    patient: Record<string, unknown>,
+    dueTurn: number,
+  ): Promise<void> {
+    const key = `counterSkippedZ:${counterId}`;
+    await this.redis.zadd(key, dueTurn, JSON.stringify(patient));
+  }
+
+  /**
+   * Xử lý những bệnh nhân đến hạn được chèn lại vào queue theo priority
+   */
+  async processDueReinserts(counterId: string): Promise<number> {
+    const key = `counterSkippedZ:${counterId}`;
+    const currentTurn = await this.getTurn(counterId);
+    const due = await this.redis.zrangebyscore(key, '-inf', currentTurn);
+    if (!due || due.length === 0) return 0;
+    await this.redis.zremrangebyscore(key, '-inf', currentTurn);
+    let count = 0;
+    for (const s of due) {
+      try {
+        const patient = JSON.parse(s) as Record<string, unknown>;
+        (patient as any).status = 'READY';
+        await this.pushToCounterQueue(counterId, patient);
+        count++;
+      } catch {
+        // ignore
+      }
+    }
+    return count;
+  }
+
   async popNextFromCounterQueue(
     counterId: string,
   ): Promise<Record<string, unknown> | null> {
@@ -209,7 +259,8 @@ export class RedisService implements OnModuleDestroy {
     const items = await this.redis.zrevrange(key, 0, 0);
     if (items.length === 0) return null;
     try {
-      return JSON.parse(items[0]) as Record<string, unknown>;
+      const patient = JSON.parse(items[0]) as Record<string, unknown>;
+      return patient;
     } catch {
       return null;
     }
@@ -279,6 +330,8 @@ export class RedisService implements OnModuleDestroy {
     const base = isPriority ? 1_000_000_000 : 0;
     const score = base - sequence;
 
+    // Cập nhật trạng thái READY khi trả về queue
+    (patient as any).status = 'READY';
     // Thêm lại vào queue với score cao nhất
     await this.redis.zadd(key, 'XX', score, JSON.stringify(patient));
   }
@@ -291,6 +344,10 @@ export class RedisService implements OnModuleDestroy {
   async callNextPatientEnhanced(
     counterId: string,
   ): Promise<Record<string, unknown> | null> {
+    // Tăng turn và xử lý các bệnh nhân đến hạn chèn lại
+    await this.incrementTurn(counterId);
+    await this.processDueReinserts(counterId);
+
     // Lấy patient hiện tại
     const currentPatient = await this.getCurrentPatient(counterId);
 
@@ -303,7 +360,10 @@ export class RedisService implements OnModuleDestroy {
         await this.addPatientToHistory(counterId, currentPatient);
       }
 
-      // Set làm current patient
+      // Set trạng thái và làm current patient
+      (nextPatient as any).status = 'SERVING';
+      const calls = Number((nextPatient as any).callCount || 0) + 1;
+      (nextPatient as any).callCount = calls;
       await this.setCurrentPatient(counterId, nextPatient);
       // Xóa khỏi queue
       await this.removePatientFromQueue(counterId, nextPatient);
@@ -352,8 +412,20 @@ export class RedisService implements OnModuleDestroy {
       return null;
     }
 
-    // Chuyển current patient vào skipped queue
-    await this.addToSkippedQueue(counterId, currentPatient);
+    // Tăng số lần gọi đã có và xác định trạng thái
+    const callCount = Number((currentPatient as any).callCount || 1);
+    (currentPatient as any).callCount = callCount;
+
+    if (callCount >= 5) {
+      // Nếu đã bị gọi đến lần thứ 5 thì hủy
+      (currentPatient as any).status = 'CANCELLED';
+      await this.addPatientToHistory(counterId, currentPatient);
+    } else {
+      // Đánh dấu MISSED và lên lịch chèn lại sau 3 lượt
+      (currentPatient as any).status = 'MISSED';
+      const currentTurn = await this.getTurn(counterId);
+      await this.scheduleReinsert(counterId, currentPatient, currentTurn + 3);
+    }
 
     // Xóa current patient
     await this.setCurrentPatient(counterId, null);
