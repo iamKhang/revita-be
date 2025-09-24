@@ -36,6 +36,19 @@ export class RedisStreamService {
   constructor(private readonly redis: RedisService) {}
 
   /**
+   * Publish general events to Redis Stream
+   */
+  async publishEvent(streamKey: string, eventData: Record<string, any>): Promise<string> {
+    const messageId = await this.redis['redis'].xadd(
+      streamKey,
+      '*',
+      ...Object.entries(eventData).flat(),
+    ) as string;
+
+    return messageId;
+  }
+
+  /**
    * Thêm ticket vào Redis Stream
    */
   async addTicketToStream(ticket: QueueTicket): Promise<string> {

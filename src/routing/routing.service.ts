@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { KafkaProducerService } from '../kafka/kafka.producer';
+import { RedisStreamService } from '../cache/redis-stream.service';
 import { PrescriptionServiceManagementService } from '../service/prescription-service-management.service';
 
 export type AssignRequest = {
@@ -67,7 +67,7 @@ type ClinicRoomWithBooths = {
 export class RoutingService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly kafka: KafkaProducerService,
+    private readonly redisStream: RedisStreamService,
     private readonly prescriptionServiceManagement: PrescriptionServiceManagementService,
   ) {}
 
@@ -389,36 +389,35 @@ export class RoutingService {
       }
     }
 
-    // Publish to Kafka for each assignment
-    const topic = process.env.KAFKA_TOPIC_ASSIGNMENTS || 'clinic.assignments';
+    // Publish to Redis Stream for each assignment
+    const streamKey = process.env.REDIS_STREAM_ASSIGNMENTS || 'clinic:assignments';
     try {
-      await this.kafka.publish(
-        topic,
-        perServiceAssignments.map((c) => ({
-          key: c.roomId,
-          value: {
-            type: 'PATIENT_ASSIGNED',
-            patientProfileId: request.patientProfileId,
-            patientName,
-            status,
-            roomId: c.roomId,
-            roomCode: c.roomCode,
-            boothId: c.boothId,
-            boothCode: c.boothCode,
-            boothName: c.boothName,
-            doctorId: c.doctorId,
-            doctorCode: c.doctorCode,
-            doctorName: c.doctorName,
-            serviceIds: c.serviceIds,
-            estimatedStartTime: c.estimatedStartTime.toISOString(),
-            estimatedEndTime: c.estimatedEndTime.toISOString(),
-            totalDuration: c.totalDuration,
-            timestamp: new Date().toISOString(),
-          },
-        })),
-      );
+      for (const assignment of perServiceAssignments) {
+        await this.redisStream.publishEvent(streamKey, {
+          type: 'PATIENT_ASSIGNED',
+          patientProfileId: request.patientProfileId,
+          patientName,
+          status,
+          roomId: assignment.roomId,
+          roomCode: assignment.roomCode,
+          boothId: assignment.boothId || '',
+          boothCode: assignment.boothCode || '',
+          boothName: assignment.boothName || '',
+          doctorId: assignment.doctorId || '',
+          doctorCode: assignment.doctorCode || '',
+          doctorName: assignment.doctorName || '',
+          technicianId: assignment.technicianId || '',
+          technicianCode: assignment.technicianCode || '',
+          technicianName: assignment.technicianName || '',
+          serviceIds: assignment.serviceIds.join(','),
+          estimatedStartTime: assignment.estimatedStartTime.toISOString(),
+          estimatedEndTime: assignment.estimatedEndTime.toISOString(),
+          totalDuration: assignment.totalDuration.toString(),
+          timestamp: new Date().toISOString(),
+        });
+      }
     } catch (err) {
-      console.warn('[Kafka] publish skipped:', (err as Error).message);
+      console.warn('[Redis Stream] publish skipped:', (err as Error).message);
     }
 
     return perServiceAssignments;
@@ -519,28 +518,23 @@ export class RoutingService {
 
     const timestamp = new Date().toISOString();
 
-    const topic = process.env.KAFKA_TOPIC_ASSIGNMENTS || 'clinic.assignments';
+    const streamKey = process.env.REDIS_STREAM_ASSIGNMENTS || 'clinic:assignments';
     const event = {
-      type: 'PATIENT_STATUS' as const,
+      type: 'PATIENT_STATUS',
       status,
       patientProfileId: request.patientProfileId,
       patientName,
       roomId: room.id,
       roomCode: room.roomCode,
-      doctorId: currentDoctorId,
-      doctorCode: currentDoctorCode,
+      doctorId: currentDoctorId || '',
+      doctorCode: currentDoctorCode || '',
       timestamp,
     };
 
     try {
-      await this.kafka.publish(topic, [
-        {
-          key: room.id,
-          value: event,
-        },
-      ]);
+      await this.redisStream.publishEvent(streamKey, event);
     } catch (err) {
-      console.warn('[Kafka] publish skipped:', (err as Error).message);
+      console.warn('[Redis Stream] publish skipped:', (err as Error).message);
     }
 
     return {

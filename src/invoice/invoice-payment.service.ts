@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PrescriptionService } from '../prescription/prescription.service';
 import { RoutingService } from '../routing/routing.service';
-import { KafkaProducerService } from '../kafka/kafka.producer';
+import { RedisStreamService } from '../cache/redis-stream.service';
 import { ScanPrescriptionDto } from './dto/scan-prescription.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
@@ -99,7 +99,7 @@ export class InvoicePaymentService {
     private readonly prisma: PrismaService,
     private readonly prescriptionService: PrescriptionService,
     private readonly routingService: RoutingService,
-    private readonly kafka: KafkaProducerService,
+    private readonly redisStream: RedisStreamService,
   ) {}
 
   private async resolveCashierId(identifier?: string): Promise<string> {
@@ -402,38 +402,36 @@ export class InvoicePaymentService {
       nextAvailableAt: assignment.nextAvailableAt,
     }));
 
-    // Publish patient assignment to Kafka for each room
-    const topic = process.env.KAFKA_TOPIC_ASSIGNMENTS || 'clinic.assignments';
+    // Publish patient assignment to Redis Stream for each room
+    const streamKey = process.env.REDIS_STREAM_ASSIGNMENTS || 'clinic:assignments';
     try {
       for (const assignment of detailedRoutingAssignments) {
-        await this.kafka.publish(topic, [
-          {
-            key: assignment.roomId,
-            value: {
-              type: 'PATIENT_ASSIGNED',
-              patientProfileId: invoice.patientProfileId,
-              patientName: invoice.patientProfile.name,
-              status: 'WAITING',
-              roomId: assignment.roomId,
-              roomCode: assignment.roomCode,
-              roomName: assignment.roomName,
-              boothId: assignment.boothId,
-              boothCode: assignment.boothCode,
-              boothName: assignment.boothName,
-              doctorId: assignment.doctorId,
-              doctorCode: assignment.doctorCode,
-              doctorName: assignment.doctorName,
-              serviceIds: selectedServiceIds,
-              prescriptionId: prescription.id,
-              prescriptionCode: prescription.prescriptionCode,
-              timestamp: new Date().toISOString(),
-            },
-          },
-        ]);
+        await this.redisStream.publishEvent(streamKey, {
+          type: 'PATIENT_ASSIGNED',
+          patientProfileId: invoice.patientProfileId,
+          patientName: invoice.patientProfile.name,
+          status: 'WAITING',
+          roomId: assignment.roomId,
+          roomCode: assignment.roomCode,
+          roomName: assignment.roomName,
+          boothId: assignment.boothId || '',
+          boothCode: assignment.boothCode || '',
+          boothName: assignment.boothName || '',
+          doctorId: assignment.doctorId || '',
+          doctorCode: assignment.doctorCode || '',
+          doctorName: assignment.doctorName || '',
+          technicianId: assignment.technicianId || '',
+          technicianCode: assignment.technicianCode || '',
+          technicianName: assignment.technicianName || '',
+          serviceIds: selectedServiceIds.join(','),
+          prescriptionId: prescription.id,
+          prescriptionCode: prescription.prescriptionCode,
+          timestamp: new Date().toISOString(),
+        });
       }
     } catch (err) {
       console.warn(
-        '[Kafka] Patient assignment publish failed:',
+        '[Redis Stream] Patient assignment publish failed:',
         (err as Error).message,
       );
     }

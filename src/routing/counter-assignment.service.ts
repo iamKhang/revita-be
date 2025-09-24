@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { KafkaProducerService } from '../kafka/kafka.producer';
+import { RedisStreamService } from '../cache/redis-stream.service';
 import { AssignCounterDto } from './dto/assign-counter.dto';
 import { ScanInvoiceDto } from './dto/scan-invoice.dto';
 import { DirectAssignmentDto } from './dto/direct-assignment.dto';
@@ -39,7 +39,7 @@ export type CounterStatus = {
 export class CounterAssignmentService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly kafka: KafkaProducerService,
+    private readonly redisStream: RedisStreamService,
     private readonly redis: RedisService,
   ) {}
 
@@ -141,24 +141,18 @@ export class CounterAssignmentService {
       };
     }
 
-    // Publish to Kafka
-    const topic =
-      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+    // Publish to Redis Stream
+    const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      void this.kafka.publish(topic, [
-        {
-          key: counterId,
-          value: {
-            type: 'PATIENT_SKIPPED',
-            counterId,
-            patient: skippedPatient,
-            timestamp: new Date().toISOString(),
-          },
-        },
-      ]);
+      await this.redisStream.publishEvent(streamKey, {
+        type: 'PATIENT_SKIPPED',
+        counterId,
+        patient: JSON.stringify(skippedPatient),
+        timestamp: new Date().toISOString(),
+      });
     } catch (err) {
       console.warn(
-        '[Kafka] Patient skip publish failed:',
+        '[Redis Stream] Patient skip publish failed:',
         (err as Error).message,
       );
     }
@@ -194,31 +188,26 @@ export class CounterAssignmentService {
       };
     }
 
-    // Publish to Kafka
+    // Publish to Redis Stream
     const topic =
-      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      void this.kafka.publish(topic, [
-        {
-          key: counterId,
-          value: {
-            type: 'SKIPPED_PATIENT_RECALLED',
-            counterId,
-            patient: recalledPatient,
-            timestamp: new Date().toISOString(),
-          },
-        },
-      ]);
+      await this.redisStream.publishEvent(topic, {
+        type: 'SKIPPED_PATIENT_RECALLED',
+        counterId,
+        patient: JSON.stringify(recalledPatient),
+        timestamp: new Date().toISOString(),
+      });
     } catch (err) {
       console.warn(
-        '[Kafka] Skipped patient recall publish failed:',
+        '[Redis Stream] Skipped patient recall publish failed:',
         (err as Error).message,
       );
     }
 
     return {
       ok: true,
-      patient: recalledPatient,
+            patient: JSON.stringify(recalledPatient),
       message: 'Skipped patient recalled successfully',
     };
   }
@@ -238,24 +227,19 @@ export class CounterAssignmentService {
       };
     }
 
-    // Publish to Kafka
+    // Publish to Redis Stream
     const topic =
-      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      void this.kafka.publish(topic, [
-        {
-          key: counterId,
-          value: {
+      await this.redisStream.publishEvent(topic, {
             type: 'CURRENT_PATIENT_RETURNED',
             counterId,
             patient: returnedPatient,
             timestamp: new Date().toISOString(),
-          },
-        },
-      ]);
+      });
     } catch (err) {
       console.warn(
-        '[Kafka] Current patient return publish failed:',
+        '[Redis Stream] Current patient return publish failed:',
         (err as Error).message,
       );
     }
@@ -280,24 +264,19 @@ export class CounterAssignmentService {
       };
     }
 
-    // Publish to Kafka
+    // Publish to Redis Stream
     const topic =
-      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      void this.kafka.publish(topic, [
-        {
-          key: counterId,
-          value: {
+      await this.redisStream.publishEvent(topic, {
             type: 'NEXT_PATIENT_CALLED',
             counterId,
-            patient: nextPatient,
+            patient: JSON.stringify(nextPatient),
             timestamp: new Date().toISOString(),
-          },
-        },
-      ]);
+      });
     } catch (err) {
       console.warn(
-        '[Kafka] Next patient call publish failed:',
+        '[Redis Stream] Next patient call publish failed:',
         (err as Error).message,
       );
     }
@@ -321,24 +300,19 @@ export class CounterAssignmentService {
       };
     }
 
-    // Publish to Kafka
+    // Publish to Redis Stream
     const topic =
-      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      await this.kafka.publish(topic, [
-        {
-          key: counterId,
-          value: {
+      await this.redisStream.publishEvent(topic, {
             type: 'CURRENT_PATIENT_RETURNED',
             counterId,
             patient: returnedPatient,
             timestamp: new Date().toISOString(),
-          },
-        },
-      ]);
+      });
     } catch (err) {
       console.warn(
-        '[Kafka] Current patient return publish failed:',
+        '[Redis Stream] Current patient return publish failed:',
         (err as Error).message,
       );
     }
@@ -365,24 +339,19 @@ export class CounterAssignmentService {
       };
     }
 
-    // Publish to Kafka
+    // Publish to Redis Stream
     const topic =
-      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      await this.kafka.publish(topic, [
-        {
-          key: counterId,
-          value: {
+      await this.redisStream.publishEvent(topic, {
             type: 'GO_BACK_PREVIOUS_PATIENT',
             counterId,
             patient: previousPatient,
             timestamp: new Date().toISOString(),
-          },
-        },
-      ]);
+      });
     } catch (err) {
       console.warn(
-        '[Kafka] Go back previous patient publish failed:',
+        '[Redis Stream] Go back previous patient publish failed:',
         (err as Error).message,
       );
     }
@@ -616,43 +585,36 @@ export class CounterAssignmentService {
         bestCounter.currentQueueLength * bestCounter.averageProcessingTime,
     };
 
-    // Publish to Kafka
+    // Publish to Redis Stream
     const topic =
-      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      await this.kafka.publish(topic, [
-        {
-          key: counter.id,
-          value: {
+      await this.redisStream.publishEvent(topic, {
             type: 'PATIENT_ASSIGNED_TO_COUNTER',
             appointmentId: request.appointmentId,
             patientProfileId: request.patientProfileId,
             invoiceId: request.invoiceId,
             patientName,
-            patientAge,
+            patientAge: patientAge.toString(),
             patientGender:
               request.patientGender ||
               appointmentForProfile.patientProfile.gender,
-            priorityScore,
+            priorityScore: priorityScore.toString(),
             assignedCounter,
             serviceName: appointmentForProfile.service?.name || 'Unknown',
-            servicePrice: appointmentForProfile.service?.price || 0,
+            servicePrice: (appointmentForProfile.service?.price || 0).toString(),
             timestamp: new Date().toISOString(),
-            metadata: {
-              isPregnant: request.isPregnant,
-              isEmergency: request.isEmergency,
-              isElderly: request.isElderly,
-              isDisabled: request.isDisabled,
-              isVIP: request.isVIP,
-              priorityLevel: request.priorityLevel,
-              notes: request.notes,
-            },
-          },
-        },
-      ]);
+            isPregnant: request.isPregnant?.toString() || 'false',
+            isEmergency: request.isEmergency?.toString() || 'false',
+            isElderly: request.isElderly?.toString() || 'false',
+            isDisabled: request.isDisabled?.toString() || 'false',
+            isVIP: request.isVIP?.toString() || 'false',
+            priorityLevel: request.priorityLevel || 'MEDIUM',
+            notes: request.notes || '',
+      });
     } catch (err) {
       console.warn(
-        '[Kafka] Counter assignment publish failed:',
+        '[Redis Stream] Counter assignment publish failed:',
         (err as Error).message,
       );
     }
@@ -940,14 +902,11 @@ export class CounterAssignmentService {
         bestCounter.currentQueueLength * bestCounter.averageProcessingTime,
     };
 
-    // Publish to Kafka
+    // Publish to Redis Stream
     const topic =
-      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      await this.kafka.publish(topic, [
-        {
-          key: counter.id,
-          value: {
+      await this.redisStream.publishEvent(topic, {
             type: 'PATIENT_ASSIGNED_TO_COUNTER',
             appointmentId: `direct-${Date.now()}`,
             patientProfileId: `direct-${Date.now()}`,
@@ -955,28 +914,22 @@ export class CounterAssignmentService {
             patientName: request.patientName,
             patientAge: request.patientAge,
             patientGender: request.patientGender,
-            priorityScore,
-            assignedCounter: assignment,
+            priorityScore: priorityScore.toString(),
+            assignedCounter: JSON.stringify(assignment),
             serviceName: request.serviceName,
-            servicePrice: request.servicePrice,
+            servicePrice: (request.servicePrice || 0).toString(),
             timestamp: new Date().toISOString(),
-            metadata: {
-              isPregnant,
-              isEmergency: request.isEmergency || false,
-              isElderly,
-              isDisabled: request.isDisabled || false,
-              isVIP: request.isVIP || false,
-              priorityLevel:
-                request.priorityLevel ||
-                (isElderly || isPregnant ? 'HIGH' : 'MEDIUM'),
-              notes: `Direct assignment by: ${request.assignedBy || 'Unknown'}`,
-            },
-          },
-        },
-      ]);
+            isPregnant: isPregnant.toString(),
+            isEmergency: (request.isEmergency || false).toString(),
+            isElderly: isElderly.toString(),
+            isDisabled: (request.isDisabled || false).toString(),
+            isVIP: (request.isVIP || false).toString(),
+            priorityLevel: request.priorityLevel || (isElderly || isPregnant ? 'HIGH' : 'MEDIUM'),
+            notes: `Direct assignment by: ${request.assignedBy || 'Unknown'}`,
+      });
     } catch (err) {
       console.warn(
-        '[Kafka] Counter direct assignment publish failed:',
+        '[Redis Stream] Counter direct assignment publish failed:',
         (err as Error).message,
       );
     }
@@ -1097,39 +1050,32 @@ export class CounterAssignmentService {
         bestCounter.currentQueueLength * bestCounter.averageProcessingTime,
     };
 
-    // Publish to Kafka
+    // Publish to Redis Stream
     const topic =
-      process.env.KAFKA_TOPIC_COUNTER_ASSIGNMENTS || 'counter.assignments';
+      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      await this.kafka.publish(topic, [
-        {
-          key: counter.id,
-          value: {
+      await this.redisStream.publishEvent(topic, {
             type: 'PATIENT_ASSIGNED_TO_COUNTER',
             appointmentId: generatedAppointmentId,
             patientProfileId: generatedProfileId,
             invoiceId: `simple-${Date.now()}`,
             patientName,
-            patientAge,
+            patientAge: patientAge.toString(),
             patientGender,
-            priorityScore,
-            assignedCounter: assignment,
+            priorityScore: priorityScore.toString(),
+            assignedCounter: JSON.stringify(assignment),
             timestamp: new Date().toISOString(),
-            metadata: {
-              isPregnant: request.isPregnant ?? false,
-              isEmergency: request.isEmergency ?? false,
-              isElderly: request.isElderly ?? false,
-              isDisabled: request.isDisabled ?? false,
-              isVIP: request.isVIP ?? false,
-              priorityLevel: chosenPriority,
-              notes: `Simple assignment by: ${request.assignedBy || 'Unknown'}`,
-            },
-          },
-        },
-      ]);
+            isPregnant: (request.isPregnant ?? false).toString(),
+            isEmergency: (request.isEmergency ?? false).toString(),
+            isElderly: (request.isElderly ?? false).toString(),
+            isDisabled: (request.isDisabled ?? false).toString(),
+            isVIP: (request.isVIP ?? false).toString(),
+            priorityLevel: chosenPriority,
+            notes: `Simple assignment by: ${request.assignedBy || 'Unknown'}`,
+      });
     } catch (err) {
       console.warn(
-        '[Kafka] Counter simple assignment publish failed:',
+        '[Redis Stream] Counter simple assignment publish failed:',
         (err as Error).message,
       );
     }
