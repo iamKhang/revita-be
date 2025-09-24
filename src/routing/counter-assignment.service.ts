@@ -417,6 +417,64 @@ export class CounterAssignmentService {
     };
   }
 
+  /**
+   * Rollback: Gọi lại bệnh nhân trước đó (nếu có lỗi khi nhấn next)
+   */
+  async rollbackPreviousPatient(counterId: string): Promise<{ ok: true; patient?: any; message?: string }> {
+    const startTime = Date.now();
+    console.log(`[PERF] rollbackPreviousPatient started for counter ${counterId} at ${new Date().toISOString()}`);
+    
+    // Step 1: Check if there's a current patient
+    const currentPatient = await this.redis.getCurrentPatient(counterId);
+    
+    if (currentPatient) {
+      const totalDuration = Date.now() - startTime;
+      console.log(`[PERF] rollbackPreviousPatient completed in ${totalDuration}ms (already has current patient)`);
+      return { 
+        ok: true, 
+        message: 'Counter already has a current patient. Use skip or mark-served first.',
+        patient: currentPatient 
+      };
+    }
+
+    // Step 2: Get the last served patient from history
+    const lastServed = await this.redis.getLastServedPatient(counterId);
+    
+    if (!lastServed) {
+      const totalDuration = Date.now() - startTime;
+      console.log(`[PERF] rollbackPreviousPatient completed in ${totalDuration}ms (no previous patient)`);
+      return { 
+        ok: true, 
+        message: 'No previous patient found to rollback to' 
+      };
+    }
+
+    // Step 3: Set the last served patient as current again
+    await this.redis.setCurrentPatient(counterId, lastServed);
+    
+    // Step 4: Publish rollback event
+    const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
+    try {
+      await this.redisStream.publishEventWithTimeout(streamKey, {
+        type: 'PATIENT_ROLLBACK',
+        counterId,
+        patient: JSON.stringify(lastServed),
+        timestamp: new Date().toISOString(),
+      }, 100);
+    } catch (err) {
+      console.warn('Failed to publish rollback event:', (err as Error).message);
+    }
+
+    const totalDuration = Date.now() - startTime;
+    console.log(`[PERF] rollbackPreviousPatient completed in ${totalDuration}ms (patient: ${lastServed?.patientName || 'Unknown'})`);
+
+    return { 
+      ok: true, 
+      patient: lastServed,
+      message: 'Successfully rolled back to previous patient'
+    };
+  }
+
   async goBackToPreviousPatient(counterId: string): Promise<{
     ok: true;
     patient?: any;
@@ -828,9 +886,9 @@ export class CounterAssignmentService {
   private calculatePriorityScore(patient: AssignCounterDto): number {
     let score = 0;
 
-    // Ưu tiên cao nhất cho cấp cứu
-    if (patient.isEmergency) {
-      score += 1000;
+    // Ưu tiên cao cho Khám VIP
+    if (patient.isVIP) {
+      score += 800;
     }
 
     // Ưu tiên cho người cao tuổi (>70)
@@ -1067,7 +1125,6 @@ export class CounterAssignmentService {
             servicePrice: (appointmentForProfile.service?.price || 0).toString(),
             timestamp: new Date().toISOString(),
             isPregnant: request.isPregnant?.toString() || 'false',
-            isEmergency: request.isEmergency?.toString() || 'false',
             isElderly: request.isElderly?.toString() || 'false',
             isDisabled: request.isDisabled?.toString() || 'false',
             isVIP: request.isVIP?.toString() || 'false',
@@ -1091,7 +1148,6 @@ export class CounterAssignmentService {
       assignedAt: new Date().toISOString(),
       sequence: sequence,
       isPriority:
-        request.isEmergency ||
         request.isVIP ||
         request.isPregnant ||
         request.isElderly ||
@@ -1230,7 +1286,6 @@ export class CounterAssignmentService {
       patientGender: appointment.patientProfile.gender,
       isElderly,
       isPregnant,
-      isEmergency: false, // Cần logic để xác định
       isDisabled: false, // Cần logic để xác định
       isVIP: false, // Cần logic để xác định
       priorityLevel: isElderly || isPregnant ? 'HIGH' : 'MEDIUM',
@@ -1254,7 +1309,6 @@ export class CounterAssignmentService {
       queueNumber,
       sequence: sequence,
       isPriority:
-        assignmentRequest.isEmergency ||
         assignmentRequest.isVIP ||
         assignmentRequest.isPregnant ||
         assignmentRequest.isElderly ||
@@ -1305,7 +1359,6 @@ export class CounterAssignmentService {
       patientGender: request.patientGender,
       isElderly,
       isPregnant,
-      isEmergency: request.isEmergency || false,
       isDisabled: request.isDisabled || false,
       isVIP: request.isVIP || false,
       priorityLevel:
@@ -1382,7 +1435,6 @@ export class CounterAssignmentService {
             servicePrice: (request.servicePrice || 0).toString(),
             timestamp: new Date().toISOString(),
             isPregnant: isPregnant.toString(),
-            isEmergency: (request.isEmergency || false).toString(),
             isElderly: isElderly.toString(),
             isDisabled: (request.isDisabled || false).toString(),
             isVIP: (request.isVIP || false).toString(),
@@ -1406,7 +1458,6 @@ export class CounterAssignmentService {
       assignedAt: new Date().toISOString(),
       sequence: sequence,
       isPriority:
-        request.isEmergency ||
         request.isVIP ||
         request.isPregnant ||
         request.isElderly ||
@@ -1451,7 +1502,6 @@ export class CounterAssignmentService {
       patientGender,
       isElderly: request.isElderly ?? false,
       isPregnant: request.isPregnant ?? false,
-      isEmergency: request.isEmergency ?? false,
       isDisabled: request.isDisabled ?? false,
       isVIP: request.isVIP ?? false,
       priorityLevel: chosenPriority,
@@ -1528,7 +1578,6 @@ export class CounterAssignmentService {
             assignedCounter: JSON.stringify(assignment),
             timestamp: new Date().toISOString(),
             isPregnant: (request.isPregnant ?? false).toString(),
-            isEmergency: (request.isEmergency ?? false).toString(),
             isElderly: (request.isElderly ?? false).toString(),
             isDisabled: (request.isDisabled ?? false).toString(),
             isVIP: (request.isVIP ?? false).toString(),
@@ -1552,7 +1601,6 @@ export class CounterAssignmentService {
       queueNumber,
       sequence: sequence,
       isPriority:
-        (request.isEmergency ?? false) ||
         (request.isVIP ?? false) ||
         (request.isPregnant ?? false) ||
         (request.isElderly ?? false) ||

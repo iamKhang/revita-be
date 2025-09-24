@@ -92,24 +92,6 @@ export class TakeNumberService {
       patientInfo = result.patientInfo;
       hasAppointment = true;
       appointmentDetails = result.appointmentDetails;
-    } else if (request.qrCode) {
-      const result = await this.parseQrCode(request.qrCode);
-      if (result.type === 'profile') {
-        patientInfo = await this.withTimeout(
-          this.getPatientByProfileCode(result.code),
-          500,
-          () => null,
-        );
-      } else if (result.type === 'appointment') {
-        const appointmentResult = await this.withTimeout(
-          this.getPatientByAppointmentCode(result.code),
-          500,
-          () => ({ patientInfo: null as any, appointmentDetails: null as any }),
-        );
-        patientInfo = appointmentResult.patientInfo;
-        hasAppointment = true;
-        appointmentDetails = appointmentResult.appointmentDetails;
-      }
     }
     t = tlog('patient lookup', t);
 
@@ -118,11 +100,14 @@ export class TakeNumberService {
       if (!request.patientName) {
         throw new BadRequestException('Không tìm thấy thông tin bệnh nhân. Vui lòng cung cấp tên bệnh nhân.');
       }
+      if (!request.patientAge) {
+        throw new BadRequestException('Vui lòng cung cấp tuổi bệnh nhân để tính điểm ưu tiên.');
+      }
       patientInfo = {
         name: request.patientName,
-        age: 30, // Tuổi mặc định
+        age: request.patientAge,
         gender: 'UNKNOWN',
-        dateOfBirth: new Date(1990, 0, 1),
+        dateOfBirth: new Date(new Date().getFullYear() - request.patientAge, 0, 1),
       };
     }
 
@@ -291,40 +276,6 @@ export class TakeNumberService {
   }
 
   /**
-   * Parse QR code để lấy mã hồ sơ hoặc mã lịch khám
-   */
-  private async parseQrCode(qrCode: string): Promise<{
-    type: 'profile' | 'appointment';
-    code: string;
-  }> {
-    try {
-      const obj = JSON.parse(qrCode);
-      if (obj.profileCode) {
-        return { type: 'profile', code: obj.profileCode };
-      }
-      if (obj.appointmentCode) {
-        return { type: 'appointment', code: obj.appointmentCode };
-      }
-    } catch {
-      // Fallback to regex
-    }
-
-    // Thử tìm mã hồ sơ (format: PP-XXXXXX)
-    const profileMatch = qrCode.match(/PP-\d{6}/);
-    if (profileMatch) {
-      return { type: 'profile', code: profileMatch[0] };
-    }
-
-    // Thử tìm mã lịch khám (format: AP-XXXXXX)
-    const appointmentMatch = qrCode.match(/AP-\d{6}/);
-    if (appointmentMatch) {
-      return { type: 'appointment', code: appointmentMatch[0] };
-    }
-
-    throw new BadRequestException('QR code không hợp lệ');
-  }
-
-  /**
    * Tính điểm ưu tiên cho bệnh nhân
    */
   private calculatePatientPriority(
@@ -364,11 +315,8 @@ export class TakeNumberService {
     );
 
     // Thêm điểm cho các đặc điểm đặc biệt
-    if (request.isEmergency) {
-      priorityScore += 10; // Cấp cứu có điểm cao nhất
-    }
     if (request.isVIP) {
-      priorityScore += 5; // VIP có điểm cao
+      priorityScore += 8; // Khám VIP có điểm cao
     }
 
     return priorityScore;
@@ -467,7 +415,6 @@ export class TakeNumberService {
         isPregnant: request.isPregnant,
         isDisabled: request.isDisabled,
         isElderly: request.isElderly,
-        isEmergency: request.isEmergency,
         isVIP: request.isVIP,
         notes: request.notes,
         hasAppointment,
@@ -479,8 +426,8 @@ export class TakeNumberService {
    * Lấy sequence tiếp theo cho counter
    */
   private async getNextSequence(counterId: string): Promise<number> {
-    // Trong thực tế, có thể sử dụng Redis counter
-    return Math.floor(Math.random() * 1000) + 1;
+    // Sử dụng Redis counter để đảm bảo sequence tăng dần và không duplicate
+    return await this.redis.getNextCounterSequence(counterId);
   }
 
   /**

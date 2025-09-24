@@ -155,7 +155,7 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
         // Convert string numbers back to numbers
         if (['patientAge', 'priorityScore', 'sequence', 'estimatedWaitTime'].includes(key)) {
           data[key] = parseInt(value) || 0;
-        } else if (['isPregnant', 'isDisabled', 'isElderly', 'isEmergency', 'isVIP'].includes(key)) {
+        } else if (['isPregnant', 'isDisabled', 'isElderly', 'isVIP'].includes(key)) {
           data[key] = value === 'true' || value === true;
         } else if (key === 'metadata' && typeof value === 'string') {
           // Parse metadata JSON string nếu có

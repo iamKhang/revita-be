@@ -126,6 +126,12 @@ export class CounterAssignmentController {
   }
 
   @Public()
+  @Post('rollback/:counterId')
+  async rollbackPreviousPatient(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.rollbackPreviousPatient(counterId);
+  }
+
+  @Public()
   @Post('return-previous/:counterId')
   async returnPreviousPatient(@Param('counterId') counterId: string) {
     return this.counterAssignmentService.returnPreviousPatient(counterId);

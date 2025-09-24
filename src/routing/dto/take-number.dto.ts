@@ -3,6 +3,10 @@ import {
   IsNotEmpty,
   IsOptional,
   IsBoolean,
+  IsNumber,
+  IsDateString,
+  Min,
+  Max,
 } from 'class-validator';
 
 export class TakeNumberDto {
@@ -14,13 +18,16 @@ export class TakeNumberDto {
   @IsOptional()
   appointmentCode?: string; // Mã lịch khám
 
-  @IsString()
-  @IsOptional()
-  qrCode?: string; // QR code có thể chứa mã hồ sơ hoặc mã lịch
 
   @IsString()
   @IsOptional()
   patientName?: string; // Tên bệnh nhân (nếu không có mã)
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Max(150)
+  patientAge?: number; // Tuổi bệnh nhân (bắt buộc nếu không có mã)
 
   @IsString()
   @IsOptional()
@@ -40,11 +47,7 @@ export class TakeNumberDto {
 
   @IsBoolean()
   @IsOptional()
-  isEmergency?: boolean; // Cấp cứu
-
-  @IsBoolean()
-  @IsOptional()
-  isVIP?: boolean; // Khách VIP
+  isVIP?: boolean; // Khám VIP
 
   @IsString()
   @IsOptional()

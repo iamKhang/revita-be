@@ -41,10 +41,6 @@ export class DirectAssignmentDto {
 
   @IsBoolean()
   @IsOptional()
-  isEmergency?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
   isElderly?: boolean;
 
   @IsBoolean()
@@ -53,7 +49,7 @@ export class DirectAssignmentDto {
 
   @IsBoolean()
   @IsOptional()
-  isVIP?: boolean;
+  isVIP?: boolean; // Khám VIP
 
   @IsString()
   @IsOptional()

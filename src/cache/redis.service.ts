@@ -146,23 +146,30 @@ export class RedisService implements OnModuleDestroy {
       }
     }
     
-    // Compute composite score: priority bucket first, then FIFO by sequence
+    // Compute composite score: priority score first, then FIFO by sequence (lower sequence = earlier)
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const hasSequence = (item as any)?.sequence !== undefined;
-    if (hasSequence) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const isPriority = Boolean((item as any)?.isPriority);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const sequenceNum = Number((item as any)?.sequence) || 0;
-      const base = isPriority ? 1_000_000_000 : 0;
-      const score = base - sequenceNum;
-      await this.redis.zadd(key, score, JSON.stringify(item));
-      return;
+    const priorityScore = Number((item as any)?.priorityScore) || 0;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const sequenceNum = Number((item as any)?.sequence) || 0;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const assignedAt = (item as any)?.assignedAt;
+    
+    // Score calculation: higher priority score = higher score, earlier time = higher score
+    // Use priority score as primary factor, then time as secondary factor
+    let timeScore = 0;
+    if (assignedAt) {
+      // Convert assignedAt to timestamp for comparison (earlier = higher score)
+      const assignedTime = new Date(assignedAt).getTime();
+      const now = Date.now();
+      // Invert time so earlier times get higher scores (but smaller impact than priority)
+      timeScore = (now - assignedTime) / 1000; // seconds difference, max ~86400 for 1 day
     }
-    // Fallback: use priorityScore only
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const priority = Number((item as any)?.priorityScore ?? 0);
-    await this.redis.zadd(key, priority, JSON.stringify(item));
+    
+    // Primary: priority score (0-100+), Secondary: time score (smaller range)
+    // This ensures priority is the main factor, but time breaks ties
+    const score = (priorityScore * 10000) + (timeScore / 1000);
+    
+    await this.redis.zadd(key, score, JSON.stringify(item));
   }
 
   /**
@@ -267,6 +274,26 @@ export class RedisService implements OnModuleDestroy {
       return JSON.parse(current) as Record<string, unknown>;
     } catch {
       return null;
+    }
+  }
+
+  async getLastServedPatient(counterId: string): Promise<Record<string, unknown> | null> {
+    const key = `counterServed:${counterId}`;
+    const served = await this.redis.get(key);
+    if (!served) return null;
+    try {
+      return JSON.parse(served) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  async setLastServedPatient(counterId: string, patient: Record<string, unknown> | null): Promise<void> {
+    const key = `counterServed:${counterId}`;
+    if (patient) {
+      await this.redis.set(key, JSON.stringify(patient));
+    } else {
+      await this.redis.del(key);
     }
   }
 
@@ -803,6 +830,13 @@ export class RedisService implements OnModuleDestroy {
       local queueKey = KEYS[1]
       local currentKey = KEYS[2]
       local turnKey = KEYS[3]
+      local servedKey = KEYS[4]
+      
+      -- Save current patient as last served before getting new one
+      local current = redis.call('GET', currentKey)
+      if current then
+        redis.call('SET', servedKey, current)
+      end
       
       -- Get next patient
       local result = redis.call('ZPOPMAX', queueKey, 1)
@@ -819,10 +853,11 @@ export class RedisService implements OnModuleDestroy {
       redis.call('INCR', turnKey)
       
       return {1, patient}
-    `, 3, 
+    `, 4, 
     `counterQueueZ:${counterId}`,
     `counterCurrent:${counterId}`,
-    `counterTurn:${counterId}`
+    `counterTurn:${counterId}`,
+    `counterServed:${counterId}`
     );
     
     const scriptDuration = Date.now() - scriptStart;

@@ -38,10 +38,6 @@ export class AssignCounterDto {
 
   @IsBoolean()
   @IsOptional()
-  isEmergency?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
   isElderly?: boolean; // >70 tuổi
 
   @IsBoolean()
@@ -50,7 +46,7 @@ export class AssignCounterDto {
 
   @IsBoolean()
   @IsOptional()
-  isVIP?: boolean;
+  isVIP?: boolean; // Khám VIP
 
   @IsArray()
   @IsString({ each: true })

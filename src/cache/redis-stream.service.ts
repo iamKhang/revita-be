@@ -21,7 +21,6 @@ export interface QueueTicket {
     isPregnant?: boolean;
     isDisabled?: boolean;
     isElderly?: boolean;
-    isEmergency?: boolean;
     isVIP?: boolean;
     hasAppointment?: boolean;
     notes?: string;
@@ -141,7 +140,6 @@ export class RedisStreamService {
       isPregnant: ticket.metadata.isPregnant?.toString() || 'false',
       isDisabled: ticket.metadata.isDisabled?.toString() || 'false',
       isElderly: ticket.metadata.isElderly?.toString() || 'false',
-      isEmergency: ticket.metadata.isEmergency?.toString() || 'false',
       isVIP: ticket.metadata.isVIP?.toString() || 'false',
       hasAppointment: ticket.metadata.hasAppointment?.toString() || 'false',
       notes: ticket.metadata.notes || '',
