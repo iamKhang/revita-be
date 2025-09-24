@@ -39,13 +39,83 @@ export class RedisStreamService {
    * Publish general events to Redis Stream
    */
   async publishEvent(streamKey: string, eventData: Record<string, any>): Promise<string> {
-    const messageId = await this.redis['redis'].xadd(
-      streamKey,
-      '*',
-      ...Object.entries(eventData).flat(),
-    ) as string;
-
+    const startTime = Date.now();
+    console.log(`[STREAM_PERF] publishEvent started for stream ${streamKey}`);
+    
+    // Step 1: Prepare data
+    const prepareStart = Date.now();
+    const flatData = Object.entries(eventData).flat();
+    const prepareDuration = Date.now() - prepareStart;
+    console.log(`[STREAM_PERF] Data preparation completed in ${prepareDuration}ms (${flatData.length} fields)`);
+    
+    // Step 2: Use pipeline for Redis Stream publish
+    const publishStart = Date.now();
+    console.log(`[STREAM_PERF] Publishing to Redis Stream with pipeline...`);
+    
+    const pipeline = this.redis['redis'].pipeline();
+    pipeline.xadd(streamKey, '*', ...flatData);
+    
+    const results = await pipeline.exec();
+    const messageId = results?.[0]?.[1] as string;
+    
+    const publishDuration = Date.now() - publishStart;
+    console.log(`[STREAM_PERF] Redis Stream publish completed in ${publishDuration}ms (messageId: ${messageId})`);
+    
+    const totalDuration = Date.now() - startTime;
+    console.log(`[STREAM_PERF] publishEvent completed in ${totalDuration}ms`);
+    
     return messageId;
+  }
+
+  /**
+   * Publish event asynchronously (non-blocking)
+   */
+  async publishEventAsync(streamKey: string, eventData: Record<string, any>): Promise<void> {
+    // Don't await - let it run in background
+    setImmediate(async () => {
+      try {
+        const flatData = Object.entries(eventData).flat();
+        await this.redis['redis'].xadd(streamKey, '*', ...flatData);
+        console.log(`[STREAM_ASYNC] Event published to ${streamKey}`);
+      } catch (err) {
+        console.error(`[STREAM_ASYNC] Failed to publish to ${streamKey}:`, err);
+      }
+    });
+  }
+
+  /**
+   * Publish event with timeout
+   */
+  async publishEventWithTimeout(streamKey: string, eventData: Record<string, any>, timeoutMs: number = 500): Promise<string | null> {
+    const startTime = Date.now();
+    console.log(`[STREAM_TIMEOUT] publishEventWithTimeout started for stream ${streamKey} (timeout: ${timeoutMs}ms)`);
+    
+    try {
+      const flatData = Object.entries(eventData).flat();
+      
+      // Use Promise.race to implement timeout
+      const publishPromise = this.redis['redis'].xadd(streamKey, '*', ...flatData);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Stream publish timeout')), timeoutMs);
+      });
+      
+      const messageId = await Promise.race([publishPromise, timeoutPromise]) as string;
+      
+      const duration = Date.now() - startTime;
+      console.log(`[STREAM_TIMEOUT] publishEventWithTimeout completed in ${duration}ms (messageId: ${messageId})`);
+      
+      return messageId;
+    } catch (err) {
+      const duration = Date.now() - startTime;
+      console.warn(`[STREAM_TIMEOUT] publishEventWithTimeout failed after ${duration}ms:`, (err as Error).message);
+      
+      // Auto-disable streams if they're consistently slow
+      if (duration > timeoutMs * 0.8) {
+        console.warn(`[STREAM_TIMEOUT] Streams are consistently slow. Consider setting ENABLE_REDIS_STREAMS=false`);
+      }
+      
+      return null;
+    }
   }
 
   /**

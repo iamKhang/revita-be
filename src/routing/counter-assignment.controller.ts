@@ -156,6 +156,48 @@ export class CounterAssignmentController {
   }
 
   @Public()
+  @Post('mark-served/:counterId')
+  async markPatientServed(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.markPatientServed(counterId);
+  }
+
+  @Public()
+  @Post('cleanup-queue/:counterId')
+  async cleanupQueue(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.cleanupQueue(counterId);
+  }
+
+  @Public()
+  @Get('debug-queue/:counterId')
+  async debugQueue(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.debugQueue(counterId);
+  }
+
+  @Public()
+  @Post('test-skip/:counterId')
+  async testSkipLogic(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.testSkipLogic(counterId);
+  }
+
+  @Public()
+  @Get('redis-health/:counterId')
+  async checkRedisHealth(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.checkRedisHealth(counterId);
+  }
+
+  @Public()
+  @Post('test-performance/:counterId')
+  async testPerformance(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.testPerformance(counterId);
+  }
+
+  @Public()
+  @Get('redis-benchmark')
+  async redisBenchmark() {
+    return this.counterAssignmentService.redisBenchmark();
+  }
+
+  @Public()
   @Post('counters/:counterId/assign-receptionist')
   async assignReceptionistToCounter(
     @Param('counterId') counterId: string,

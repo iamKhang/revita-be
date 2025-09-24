@@ -8,12 +8,12 @@ import { RoutingController } from './routing.controller';
 import { CounterAssignmentService } from './counter-assignment.service';
 import { CounterAssignmentController } from './counter-assignment.controller';
 import { TakeNumberModule } from './take-number.module';
-import { StreamConsumerService } from './stream-consumer.service';
+// import { StreamConsumerService } from './stream-consumer.service';
 
 @Module({
   imports: [PrismaModule, CacheModule, ServiceModule, WebSocketModule, TakeNumberModule],
   controllers: [RoutingController, CounterAssignmentController],
-  providers: [RoutingService, CounterAssignmentService, StreamConsumerService],
+  providers: [RoutingService, CounterAssignmentService], // StreamConsumerService temporarily disabled
   exports: [RoutingService, CounterAssignmentService],
 })
 export class RoutingModule {}

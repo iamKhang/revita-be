@@ -109,13 +109,22 @@ export class CounterAssignmentService {
   }
 
   async getCounterQueue(counterId: string): Promise<any[]> {
-    return await this.redis.getCounterQueue(counterId);
+    // Use cleanup method to remove duplicates and get clean data
+    const status = await this.redis.getQueueStatusWithCleanup(counterId);
+    
+    // Log if duplicates were found and cleaned
+    if (status.cleanedDuplicates > 0) {
+      console.log(`[Counter ${counterId}] Cleaned ${status.cleanedDuplicates} duplicate entries from queue`);
+    }
+    
+    return status.queue;
   }
 
   async getCurrentPatient(
     counterId: string,
   ): Promise<Record<string, unknown> | null> {
-    return await this.redis.getCurrentPatient(counterId);
+    // Use fallback method for better performance
+    return await this.redis.getCurrentPatientWithFallback(counterId);
   }
 
   async getQueueStatus(counterId: string): Promise<{
@@ -123,8 +132,32 @@ export class CounterAssignmentService {
     queue: Record<string, unknown>[];
     history: Record<string, unknown>[];
     skipped: Record<string, unknown>[];
+    queueCount: number;
+    skippedCount: number;
+    isOnline: boolean;
+    cleanedDuplicates?: number;
   }> {
-    return await this.redis.getQueueStatus(counterId);
+    // Use cleanup method to remove duplicates and get clean data
+    const status = await this.redis.getQueueStatusWithCleanup(counterId);
+    
+    // Log if duplicates were found and cleaned
+    if (status.cleanedDuplicates > 0) {
+      console.log(`[Counter ${counterId}] Cleaned ${status.cleanedDuplicates} duplicate entries from queue status`);
+    }
+    
+    // Get skipped patients
+    const skipped = await this.redis.getSkippedQueue(counterId);
+    
+    return {
+      current: status.current,
+      queue: status.queue,
+      history: [], // TODO: Implement history if needed
+      skipped,
+      queueCount: status.queueCount,
+      skippedCount: status.skippedCount,
+      isOnline: status.isOnline,
+      cleanedDuplicates: status.cleanedDuplicates,
+    };
   }
 
   async skipCurrentPatient(counterId: string): Promise<{
@@ -132,41 +165,73 @@ export class CounterAssignmentService {
     patient?: any;
     message?: string;
   }> {
-    const skippedPatient = await this.redis.skipCurrentPatient(counterId);
+    const startTime = Date.now();
+    console.log(`[SKIP_PERF] skipCurrentPatient started for counter ${counterId} at ${new Date().toISOString()}`);
+    
+    // Step 1: Skip patient using optimized Redis method
+    const step1Start = Date.now();
+    console.log(`[SKIP_PERF] Step 1: Calling skipCurrentPatientOptimized...`);
+    const result = await this.redis.skipCurrentPatientOptimized(counterId);
+    const step1Duration = Date.now() - step1Start;
+    console.log(`[SKIP_PERF] Step 1 completed in ${step1Duration}ms. Success: ${result.success}`);
 
-    if (!skippedPatient) {
+    if (!result.success) {
+      const totalDuration = Date.now() - startTime;
+      console.log(`[SKIP_PERF] skipCurrentPatient completed in ${totalDuration}ms (no patient to skip)`);
       return {
         ok: true,
-        message: 'No current patient to skip',
+        message: result.message || 'No current patient to skip',
       };
     }
 
-    // Publish to Redis Stream
+    // Step 2: Publish to Redis Stream
+    const step2Start = Date.now();
+    console.log(`[SKIP_PERF] Step 2: Publishing to Redis Stream...`);
     const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
-    try {
-      await this.redisStream.publishEvent(streamKey, {
-        type: 'PATIENT_SKIPPED',
-        counterId,
-        patient: JSON.stringify(skippedPatient),
-        timestamp: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.warn(
-        '[Redis Stream] Patient skip publish failed:',
-        (err as Error).message,
-      );
+    const enableStreams = process.env.ENABLE_REDIS_STREAMS !== 'false';
+    
+    if (enableStreams) {
+      try {
+        const messageId = await this.redisStream.publishEventWithTimeout(streamKey, {
+          type: 'PATIENT_SKIPPED',
+          counterId,
+          patient: JSON.stringify(result.patient),
+          timestamp: new Date().toISOString(),
+        }, 100); // 100ms timeout
+        
+        const step2Duration = Date.now() - step2Start;
+        console.log(`[SKIP_PERF] Step 2 completed in ${step2Duration}ms (stream published: ${messageId ? 'success' : 'timeout'})`);
+      } catch (err) {
+        const step2Duration = Date.now() - step2Start;
+        console.warn(
+          `[SKIP_PERF] Step 2 completed in ${step2Duration}ms (stream publish failed):`,
+          (err as Error).message,
+        );
+      }
+    } else {
+      const step2Duration = Date.now() - step2Start;
+      console.log(`[SKIP_PERF] Step 2 skipped in ${step2Duration}ms (Redis Streams disabled)`);
     }
 
-    const callCount = Number((skippedPatient as any).callCount || 0);
-    const status = (skippedPatient as any).status || 'MISSED';
-    const message =
-      callCount >= 5
+    // Step 3: Process response
+    const step3Start = Date.now();
+    const callCount = Number((result.patient as any)?.callCount || 0);
+    const status = (result.patient as any)?.status || 'MISSED';
+    
+    // Use the message from Redis operation
+    const message = result.message || 
+      (callCount >= 5
         ? 'Current patient cancelled after 5 calls'
-        : 'Current patient marked MISSED and will be reinserted after 3 turns';
+        : 'Current patient marked MISSED and will be reinserted after 3 turns');
+
+    const step3Duration = Date.now() - step3Start;
+    const totalDuration = Date.now() - startTime;
+    console.log(`[SKIP_PERF] Step 3 completed in ${step3Duration}ms`);
+    console.log(`[SKIP_PERF] skipCurrentPatient completed in ${totalDuration}ms (patient: ${result.patient?.patientName || 'Unknown'})`);
 
     return {
       ok: true,
-      patient: skippedPatient,
+      patient: result.patient,
       message,
       // expose extended fields for client if needed
       ...(status ? { status } : {}),
@@ -254,34 +319,66 @@ export class CounterAssignmentService {
   async callNextPatient(
     counterId: string,
   ): Promise<{ ok: true; patient?: any; message?: string }> {
-    const nextPatient = await this.redis.callNextPatientEnhanced(counterId);
-    if (!nextPatient) {
-      // Kiểm tra và reset sequence nếu queue rỗng
+    const startTime = Date.now();
+    console.log(`[PERF] callNextPatient started for counter ${counterId} at ${new Date().toISOString()}`);
+    
+    // Step 1: Call optimized Redis method
+    const step1Start = Date.now();
+    console.log(`[PERF] Step 1: Calling callNextPatientOptimized...`);
+    const result = await this.redis.callNextPatientOptimized(counterId);
+    const step1Duration = Date.now() - step1Start;
+    console.log(`[PERF] Step 1 completed in ${step1Duration}ms. Success: ${result.success}`);
+    
+    if (!result.success) {
+      // Step 2: Check and reset sequence if queue empty
+      const step2Start = Date.now();
+      console.log(`[PERF] Step 2: Checking and resetting sequence...`);
       await this.redis.checkAndResetSequenceIfEmpty(counterId);
+      const step2Duration = Date.now() - step2Start;
+      console.log(`[PERF] Step 2 completed in ${step2Duration}ms`);
+      
+      const totalDuration = Date.now() - startTime;
+      console.log(`[PERF] callNextPatient completed in ${totalDuration}ms (no patient found)`);
+      
       return {
         ok: true,
-        message: 'No patients in queue, sequence reset if queue was empty',
+        message: result.message || 'No patients in queue, sequence reset if queue was empty',
       };
     }
 
-    // Publish to Redis Stream
-    const topic =
-      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
-    try {
-      await this.redisStream.publishEvent(topic, {
-            type: 'NEXT_PATIENT_CALLED',
-            counterId,
-            patient: JSON.stringify(nextPatient),
-            timestamp: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.warn(
-        '[Redis Stream] Next patient call publish failed:',
-        (err as Error).message,
-      );
+    // Step 3: Publish to Redis Stream
+    const step3Start = Date.now();
+    // Step 3: Publish to Redis Stream (with option to disable)
+    const enableStreams = process.env.ENABLE_REDIS_STREAMS !== 'false';
+    if (enableStreams) {
+      console.log(`[PERF] Step 3: Publishing to Redis Stream with timeout...`);
+      const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
+      try {
+        const messageId = await this.redisStream.publishEventWithTimeout(streamKey, {
+          type: 'NEXT_PATIENT_CALLED',
+          counterId,
+          patient: JSON.stringify(result.patient),
+          timestamp: new Date().toISOString(),
+        }, 100); // Reduced timeout to 100ms
+        
+        const step3Duration = Date.now() - step3Start;
+        console.log(`[PERF] Step 3 completed in ${step3Duration}ms (stream published: ${messageId ? 'success' : 'timeout'})`);
+      } catch (err) {
+        const step3Duration = Date.now() - step3Start;
+        console.warn(
+          `[PERF] Step 3 completed in ${step3Duration}ms (stream publish failed):`,
+          (err as Error).message,
+        );
+      }
+    } else {
+      const step3Duration = Date.now() - step3Start;
+      console.log(`[PERF] Step 3 skipped in ${step3Duration}ms (Redis Streams disabled)`);
     }
 
-    return { ok: true, patient: nextPatient };
+    const totalDuration = Date.now() - startTime;
+    console.log(`[PERF] callNextPatient completed in ${totalDuration}ms (patient found: ${result.patient?.patientName || 'Unknown'})`);
+    
+    return { ok: true, patient: result.patient };
   }
 
   async returnPreviousPatient(counterId: string): Promise<{
@@ -289,26 +386,23 @@ export class CounterAssignmentService {
     patient?: any;
     message?: string;
   }> {
-    // Đưa current patient quay lại queue
-    const returnedPatient =
-      await this.redis.callPreviousPatientEnhanced(counterId);
+    // Use optimized method for better performance
+    const result = await this.redis.returnToPreviousPatientOptimized(counterId);
 
-    if (!returnedPatient) {
+    if (!result.success) {
       return {
         ok: true,
-        message: 'No current patient to return to queue',
+        message: result.message || 'No current patient to return to queue',
       };
     }
 
     // Publish to Redis Stream
-    const topic =
-      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
+    const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      await this.redisStream.publishEvent(topic, {
-            type: 'CURRENT_PATIENT_RETURNED',
-            counterId,
-            patient: returnedPatient,
-            timestamp: new Date().toISOString(),
+      await this.redisStream.publishEvent(streamKey, {
+        type: 'CURRENT_PATIENT_RETURNED',
+        counterId,
+        timestamp: new Date().toISOString(),
       });
     } catch (err) {
       console.warn(
@@ -319,7 +413,6 @@ export class CounterAssignmentService {
 
     return {
       ok: true,
-      patient: returnedPatient,
       message: 'Current patient returned to queue successfully',
     };
   }
@@ -340,14 +433,13 @@ export class CounterAssignmentService {
     }
 
     // Publish to Redis Stream
-    const topic =
-      process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
+    const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     try {
-      await this.redisStream.publishEvent(topic, {
-            type: 'GO_BACK_PREVIOUS_PATIENT',
-            counterId,
-            patient: previousPatient,
-            timestamp: new Date().toISOString(),
+      await this.redisStream.publishEvent(streamKey, {
+        type: 'GO_BACK_PREVIOUS_PATIENT',
+        counterId,
+        patient: JSON.stringify(previousPatient),
+        timestamp: new Date().toISOString(),
       });
     } catch (err) {
       console.warn(
@@ -360,6 +452,376 @@ export class CounterAssignmentService {
       ok: true,
       patient: previousPatient,
       message: 'Previous patient recalled successfully',
+    };
+  }
+
+  /**
+   * Mark current patient as served/completed
+   */
+  async markPatientServed(counterId: string): Promise<{
+    ok: true;
+    patient?: any;
+    message?: string;
+  }> {
+    const currentPatient = await this.redis.getCurrentPatient(counterId);
+    
+    if (!currentPatient) {
+      return {
+        ok: true,
+        message: 'No current patient to mark as served',
+      };
+    }
+
+    // Clear current patient
+    await this.redis.setCurrentPatient(counterId, null);
+
+    // Publish to Redis Stream
+    const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
+    try {
+      await this.redisStream.publishEvent(streamKey, {
+        type: 'PATIENT_SERVED',
+        counterId,
+        patient: JSON.stringify(currentPatient),
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn(
+        '[Redis Stream] Patient served publish failed:',
+        (err as Error).message,
+      );
+    }
+
+    return {
+      ok: true,
+      patient: currentPatient,
+      message: 'Patient marked as served successfully',
+    };
+  }
+
+  /**
+   * Clean up duplicate entries in queue
+   */
+  async cleanupQueue(counterId: string): Promise<{
+    ok: true;
+    cleanedDuplicates: number;
+    message: string;
+  }> {
+    const cleanedDuplicates = await this.redis.cleanupCounterQueueDuplicates(counterId);
+    
+    return {
+      ok: true,
+      cleanedDuplicates,
+      message: `Cleaned ${cleanedDuplicates} duplicate entries from queue`,
+    };
+  }
+
+  /**
+   * Debug queue information
+   */
+  async debugQueue(counterId: string): Promise<{
+    queueCount: number;
+    rawQueueData: any[];
+    currentPatient: any;
+    isOnline: boolean;
+    duplicates: string[];
+  }> {
+    const key = `counterQueueZ:${counterId}`;
+    const rawMembers = await this.redis['redis'].zrange(key, 0, -1);
+    
+    // Analyze duplicates
+    const seen = new Map<string, number>();
+    const duplicates: string[] = [];
+    
+    const rawQueueData = rawMembers.map(member => {
+      try {
+        const item = JSON.parse(member);
+        const uniqueId = item.ticketId || item.appointmentId || `${item.patientName}-${item.sequence}`;
+        
+        if (seen.has(uniqueId)) {
+          duplicates.push(uniqueId);
+          seen.set(uniqueId, seen.get(uniqueId)! + 1);
+        } else {
+          seen.set(uniqueId, 1);
+        }
+        
+        return item;
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+    
+    const currentPatient = await this.redis.getCurrentPatient(counterId);
+    const isOnline = await this.redis.isCounterOnline(counterId);
+    
+    return {
+      queueCount: rawQueueData.length,
+      rawQueueData,
+      currentPatient,
+      isOnline,
+      duplicates,
+    };
+  }
+
+  /**
+   * Test skip logic
+   */
+  async testSkipLogic(counterId: string): Promise<{
+    beforeSkip: any;
+    afterSkip: any;
+    skipResult: any;
+  }> {
+    // Get status before skip
+    const beforeSkip = await this.debugQueue(counterId);
+    
+    // Try to skip current patient
+    const skipResult = await this.skipCurrentPatient(counterId);
+    
+    // Get status after skip
+    const afterSkip = await this.debugQueue(counterId);
+    
+    return {
+      beforeSkip,
+      afterSkip,
+      skipResult,
+    };
+  }
+
+  /**
+   * Check Redis health and performance
+   */
+  async checkRedisHealth(counterId: string): Promise<{
+    redisPing: number;
+    queueLength: number;
+    queueLengthTime: number;
+    simpleSetGet: number;
+    pipelineTest: number;
+    streamTest: number;
+    recommendations: string[];
+  }> {
+    const recommendations: string[] = [];
+    
+    // Test 1: Redis PING
+    const pingStart = Date.now();
+    await this.redis['redis'].ping();
+    const redisPing = Date.now() - pingStart;
+    
+    // Test 2: Queue length check
+    const queueStart = Date.now();
+    const queueLength = await this.redis.getCounterQueueLength(counterId);
+    const queueLengthTime = Date.now() - queueStart;
+    
+    // Test 3: Simple SET/GET
+    const setGetStart = Date.now();
+    const testKey = `health_test:${counterId}:${Date.now()}`;
+    await this.redis['redis'].set(testKey, 'test_value');
+    await this.redis['redis'].get(testKey);
+    await this.redis['redis'].del(testKey);
+    const simpleSetGet = Date.now() - setGetStart;
+    
+    // Test 4: Pipeline test
+    const pipelineStart = Date.now();
+    const pipeline = this.redis['redis'].pipeline();
+    pipeline.ping();
+    pipeline.ping();
+    pipeline.ping();
+    await pipeline.exec();
+    const pipelineTest = Date.now() - pipelineStart;
+    
+    // Test 5: Stream test
+    const streamStart = Date.now();
+    const streamKey = `health_test_stream:${counterId}`;
+    try {
+      await this.redis['redis'].xadd(streamKey, '*', 'test', 'value');
+      await this.redis['redis'].xtrim(streamKey, 'MAXLEN', 0); // Clear stream
+    } catch (err) {
+      console.warn('Stream test failed:', err);
+    }
+    const streamTest = Date.now() - streamStart;
+    
+    // Generate recommendations
+    if (redisPing > 100) {
+      recommendations.push('Redis PING is slow (>100ms) - check network connection');
+    }
+    if (queueLengthTime > 500) {
+      recommendations.push('Queue length check is very slow (>500ms) - Redis may be overloaded');
+    }
+    if (simpleSetGet > 200) {
+      recommendations.push('Simple Redis operations are slow (>200ms) - Redis server issues');
+    }
+    if (pipelineTest > 300) {
+      recommendations.push('Pipeline operations are slow (>300ms) - Redis performance issues');
+    }
+    if (streamTest > 500) {
+      recommendations.push('Stream operations are slow (>500ms) - Redis Streams performance issues');
+    }
+    
+    if (recommendations.length === 0) {
+      recommendations.push('Redis performance looks good!');
+    }
+    
+    return {
+      redisPing,
+      queueLength,
+      queueLengthTime,
+      simpleSetGet,
+      pipelineTest,
+      streamTest,
+      recommendations,
+    };
+  }
+
+  /**
+   * Test performance with different configurations
+   */
+  async testPerformance(counterId: string): Promise<{
+    withStreams: number;
+    withoutStreams: number;
+    withTimeout: number;
+    recommendations: string[];
+  }> {
+    const recommendations: string[] = [];
+    
+    // Test 1: With Redis Streams enabled
+    const withStreamsStart = Date.now();
+    const originalStreams = process.env.ENABLE_REDIS_STREAMS;
+    process.env.ENABLE_REDIS_STREAMS = 'true';
+    
+    try {
+      await this.callNextPatient(counterId);
+    } catch (err) {
+      console.warn('Test with streams failed:', err);
+    }
+    const withStreams = Date.now() - withStreamsStart;
+    
+    // Test 2: Without Redis Streams
+    const withoutStreamsStart = Date.now();
+    process.env.ENABLE_REDIS_STREAMS = 'false';
+    
+    try {
+      await this.callNextPatient(counterId);
+    } catch (err) {
+      console.warn('Test without streams failed:', err);
+    }
+    const withoutStreams = Date.now() - withoutStreamsStart;
+    
+    // Test 3: With timeout (already implemented in callNextPatient)
+    const withTimeoutStart = Date.now();
+    process.env.ENABLE_REDIS_STREAMS = 'true';
+    
+    try {
+      await this.callNextPatient(counterId);
+    } catch (err) {
+      console.warn('Test with timeout failed:', err);
+    }
+    const withTimeout = Date.now() - withTimeoutStart;
+    
+    // Restore original setting
+    process.env.ENABLE_REDIS_STREAMS = originalStreams;
+    
+    // Generate recommendations
+    if (withStreams > withoutStreams * 2) {
+      recommendations.push('Redis Streams are significantly slowing down the API. Consider disabling them temporarily.');
+    }
+    if (withTimeout < withStreams * 0.8) {
+      recommendations.push('Timeout mechanism is helping. Consider reducing timeout further.');
+    }
+    if (withoutStreams < 500) {
+      recommendations.push('Performance without Redis Streams is good. Streams may be the bottleneck.');
+    }
+    
+    if (recommendations.length === 0) {
+      recommendations.push('Performance looks acceptable across all configurations.');
+    }
+    
+    return {
+      withStreams,
+      withoutStreams,
+      withTimeout,
+      recommendations,
+    };
+  }
+
+  /**
+   * Redis benchmark test
+   */
+  async redisBenchmark(): Promise<{
+    simplePing: number;
+    simpleSetGet: number;
+    pipelineTest: number;
+    streamTest: number;
+    luaScriptTest: number;
+    recommendations: string[];
+  }> {
+    const recommendations: string[] = [];
+    
+    // Test 1: Simple PING
+    const pingStart = Date.now();
+    await this.redis['redis'].ping();
+    const simplePing = Date.now() - pingStart;
+    
+    // Test 2: Simple SET/GET
+    const setGetStart = Date.now();
+    const testKey = `benchmark_test:${Date.now()}`;
+    await this.redis['redis'].set(testKey, 'test_value');
+    await this.redis['redis'].get(testKey);
+    await this.redis['redis'].del(testKey);
+    const simpleSetGet = Date.now() - setGetStart;
+    
+    // Test 3: Pipeline test
+    const pipelineStart = Date.now();
+    const pipeline = this.redis['redis'].pipeline();
+    for (let i = 0; i < 10; i++) {
+      pipeline.ping();
+    }
+    await pipeline.exec();
+    const pipelineTest = Date.now() - pipelineStart;
+    
+    // Test 4: Stream test
+    const streamStart = Date.now();
+    const streamKey = `benchmark_stream:${Date.now()}`;
+    try {
+      await this.redis['redis'].xadd(streamKey, '*', 'test', 'value');
+      await this.redis['redis'].xtrim(streamKey, 'MAXLEN', 0); // Clear stream
+    } catch (err) {
+      console.warn('Stream benchmark failed:', err);
+    }
+    const streamTest = Date.now() - streamStart;
+    
+    // Test 5: Lua script test
+    const luaStart = Date.now();
+    await this.redis['redis'].eval(`
+      return redis.call('PING')
+    `, 0);
+    const luaScriptTest = Date.now() - luaStart;
+    
+    // Generate recommendations
+    if (simplePing > 10) {
+      recommendations.push(`Simple PING is slow (${simplePing}ms) - check Redis connection`);
+    }
+    if (simpleSetGet > 20) {
+      recommendations.push(`Simple SET/GET is slow (${simpleSetGet}ms) - check Redis performance`);
+    }
+    if (pipelineTest > 50) {
+      recommendations.push(`Pipeline test is slow (${pipelineTest}ms) - check Redis pipeline performance`);
+    }
+    if (streamTest > 100) {
+      recommendations.push(`Stream test is slow (${streamTest}ms) - check Redis Streams performance`);
+    }
+    if (luaScriptTest > 30) {
+      recommendations.push(`Lua script test is slow (${luaScriptTest}ms) - check Redis Lua performance`);
+    }
+    
+    if (recommendations.length === 0) {
+      recommendations.push('Redis performance looks good for basic operations');
+    }
+    
+    return {
+      simplePing,
+      simpleSetGet,
+      pipelineTest,
+      streamTest,
+      luaScriptTest,
+      recommendations,
     };
   }
 
