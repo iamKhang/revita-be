@@ -10,6 +10,7 @@ import { ScanInvoiceDto } from './dto/scan-invoice.dto';
 import { DirectAssignmentDto } from './dto/direct-assignment.dto';
 import { SimpleAssignmentDto } from './dto/simple-assignment.dto';
 import { RedisService } from '../cache/redis.service';
+import { WebSocketService } from '../websocket/websocket.service';
 
 export type AssignedCounter = {
   counterId: string;
@@ -41,6 +42,7 @@ export class CounterAssignmentService {
     private readonly prisma: PrismaService,
     private readonly redisStream: RedisStreamService,
     private readonly redis: RedisService,
+    private readonly webSocket: WebSocketService,
   ) {}
 
   async setCounterOnline(counterId: string): Promise<{ ok: true }> {
@@ -215,6 +217,22 @@ export class CounterAssignmentService {
     }
     const step3Duration = Date.now() - step3Start;
 
+    // Send WebSocket notification directly
+    try {
+      await this.webSocket.sendToCounter(counterId, 'patient_skipped', {
+        type: 'PATIENT_SKIPPED_AND_NEXT_CALLED',
+        data: {
+          counterId,
+          skippedPatient: result.patient,
+          currentPatient: nextResult.patient,
+        },
+        timestamp: new Date().toISOString(),
+      });
+      console.log('⏭️ [WebSocket] Sent PATIENT_SKIPPED_AND_NEXT_CALLED notification directly');
+    } catch (err) {
+      console.warn('[WebSocket] Patient skipped notification failed:', (err as Error).message);
+    }
+
     // Step 4: Publish to Redis Stream
     const step4Start = Date.now();
     const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
@@ -356,6 +374,14 @@ export class CounterAssignmentService {
       // Clear current patient (mark as served)
       await this.redis.setCurrentPatient(counterId, null);
       
+      // Send WebSocket notification directly
+      try {
+        await this.webSocket.notifyTicketCompleted(counterId, currentPatient);
+        console.log('✅ [WebSocket] Sent PATIENT_SERVED notification directly');
+      } catch (err) {
+        console.warn('[WebSocket] Patient served notification failed:', (err as Error).message);
+      }
+      
       // Publish patient served event
       if (enableStreams) {
         const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
@@ -405,6 +431,21 @@ export class CounterAssignmentService {
     await this.redis.removeFromCounterQueue(counterId, nextPatient);
     const maxPriorityScore = Number.MAX_SAFE_INTEGER;
     await this.redis.addToCounterQueueWithScore(counterId, preparingPatient, maxPriorityScore);
+
+    // Send WebSocket notification directly
+    try {
+      await this.webSocket.sendToCounter(counterId, 'patient_preparing', {
+        type: 'PATIENT_PREPARING',
+        data: {
+          counterId,
+          patient: preparingPatient,
+        },
+        timestamp: new Date().toISOString(),
+      });
+      console.log('🔄 [WebSocket] Sent PATIENT_PREPARING notification directly');
+    } catch (err) {
+      console.warn('[WebSocket] Patient preparing notification failed:', (err as Error).message);
+    }
 
     // Publish preparing event
     if (enableStreams) {
@@ -479,6 +520,21 @@ export class CounterAssignmentService {
       }
     }
     const step4Duration = Date.now() - step4Start;
+
+    // Send WebSocket notification directly
+    try {
+      await this.webSocket.sendToCounter(counterId, 'next_patient_called', {
+        type: 'NEXT_PATIENT_CALLED',
+        data: {
+          counterId,
+          patient: result.patient,
+        },
+        timestamp: new Date().toISOString(),
+      });
+      console.log('📞 [WebSocket] Sent NEXT_PATIENT_CALLED notification directly');
+    } catch (err) {
+      console.warn('[WebSocket] Next patient called notification failed:', (err as Error).message);
+    }
 
     // Step 5: Publish to Redis Stream
     const step5Start = Date.now();
