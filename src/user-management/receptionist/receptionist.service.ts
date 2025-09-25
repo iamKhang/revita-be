@@ -33,7 +33,7 @@ export class ReceptionistService {
       counterId: counter.id,
       counterCode: counter.counterCode,
       counterName: counter.counterName,
-      location: counter.location,
+      location: counter.location || undefined,
       isActive: counter.isActive,
       currentAssignment: counter.assignments.length > 0 ? {
         id: counter.assignments[0].id,
@@ -41,7 +41,7 @@ export class ReceptionistService {
         receptionistName: counter.assignments[0].receptionist.auth.name,
         assignedAt: counter.assignments[0].assignedAt,
         status: counter.assignments[0].status,
-        notes: counter.assignments[0].notes
+        notes: counter.assignments[0].notes || undefined
       } : undefined
     }));
 
@@ -170,7 +170,7 @@ export class ReceptionistService {
       counterId: activeAssignment.counter.id,
       counterCode: activeAssignment.counter.counterCode,
       counterName: activeAssignment.counter.counterName,
-      location: activeAssignment.counter.location,
+      location: activeAssignment.counter.location || undefined,
       isActive: activeAssignment.counter.isActive,
       currentAssignment: {
         id: activeAssignment.id,
@@ -178,7 +178,7 @@ export class ReceptionistService {
         receptionistName: activeAssignment.receptionist.auth.name,
         assignedAt: activeAssignment.assignedAt,
         status: activeAssignment.status,
-        notes: activeAssignment.notes
+        notes: activeAssignment.notes || undefined
       }
     };
   }

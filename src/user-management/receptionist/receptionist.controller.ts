@@ -22,9 +22,6 @@ import { JwtAuthGuard } from 'src/login/jwt-auth.guard';
 import { CodeGeneratorService } from '../patient-profile/code-generator.service';
 import { ReceptionistService } from './receptionist.service';
 import { OpenCounterDto, CloseCounterDto } from './dto/counter-management.dto';
-import { TakeNumberService } from '../../routing/take-number.service';
-import { RedisStreamService } from '../../cache/redis-stream.service';
-import { WebSocketService } from '../../websocket/websocket.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('receptionists')
@@ -32,12 +29,7 @@ export class ReceptionistController {
   private prisma = new PrismaClient();
   private codeGenerator = new CodeGeneratorService();
 
-  constructor(
-    private receptionistService: ReceptionistService,
-    private takeNumberService: TakeNumberService,
-    private redisStream: RedisStreamService,
-    private webSocket: WebSocketService,
-  ) {}
+  constructor(private receptionistService: ReceptionistService) {}
 
   @Get('users')
   @Roles(Role.RECEPTIONIST)
@@ -408,4 +400,13 @@ export class ReceptionistController {
     }
     return this.receptionistService.getCurrentCounterStatus(receptionistId);
   }
+
+  // ===== QUEUE MANAGEMENT ENDPOINTS =====
+  // Lưu ý: Các endpoint quản lý hàng chờ đã có sẵn trong counter-assignment.controller.ts
+  // Sử dụng các endpoint sau thay vì tạo mới:
+  // - GET /counter-assignment/counters/:counterId/queue
+  // - POST /counter-assignment/next-patient/:counterId  
+  // - POST /counter-assignment/skip-current/:counterId
+  // - POST /counter-assignment/mark-served/:counterId
+  // - GET /counter-assignment/counters/:counterId/queue-status
 }
