@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "AI Chatbot Test Collection",
-    "description": "Collection để test AI Chatbot API endpoints",
+    "description": "Collection để test AI Chatbot API endpoints với khả năng query database tự động. Bao gồm:\n- Chat với AI (câu hỏi y tế và câu hỏi về hệ thống)\n- AI tự động tạo và thực thi Prisma query\n- Thống kê hệ thống\n- Tìm kiếm bác sĩ\n- Health tips theo category",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -182,6 +182,294 @@
           }
         },
         {
+          "name": "Chat with AI - Database Query: Count Doctors",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains system data', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('systemData');",
+                  "    pm.expect(response.systemData).to.have.property('query');",
+                  "    pm.expect(response.systemData).to.have.property('data');",
+                  "    pm.expect(response.isMedicalAdvice).to.be.false;",
+                  "});",
+                  "",
+                  "pm.test('Query contains doctor count', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.systemData.query).to.include('doctor.count()');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Có bao nhiêu bác sĩ trong hệ thống?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "chat"]
+            }
+          }
+        },
+        {
+          "name": "Chat with AI - Database Query: Today Appointments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains system data', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('systemData');",
+                  "    pm.expect(response.systemData).to.have.property('query');",
+                  "    pm.expect(response.systemData).to.have.property('data');",
+                  "    pm.expect(response.isMedicalAdvice).to.be.false;",
+                  "});",
+                  "",
+                  "pm.test('Query contains appointment', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.systemData.query).to.include('appointment');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Danh sách lịch hẹn hôm nay\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "chat"]
+            }
+          }
+        },
+        {
+          "name": "Chat with AI - Database Query: Total Revenue",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains system data', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('systemData');",
+                  "    pm.expect(response.systemData).to.have.property('query');",
+                  "    pm.expect(response.systemData).to.have.property('data');",
+                  "    pm.expect(response.isMedicalAdvice).to.be.false;",
+                  "});",
+                  "",
+                  "pm.test('Query contains invoice aggregate', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.systemData.query).to.include('invoice.aggregate');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Tổng doanh thu tháng này là bao nhiêu?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "chat"]
+            }
+          }
+        },
+        {
+          "name": "Chat with AI - Database Query: Search Doctors",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains system data', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('systemData');",
+                  "    pm.expect(response.systemData).to.have.property('query');",
+                  "    pm.expect(response.systemData).to.have.property('data');",
+                  "    pm.expect(response.isMedicalAdvice).to.be.false;",
+                  "});",
+                  "",
+                  "pm.test('Query contains doctor findMany', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.systemData.query).to.include('doctor.findMany');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Tìm bác sĩ có tên Nguyễn\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "chat"]
+            }
+          }
+        },
+        {
+          "name": "Chat with AI - Database Query: My Paid Invoices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains system data', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('systemData');",
+                  "    pm.expect(response.systemData).to.have.property('query');",
+                  "    pm.expect(response.isMedicalAdvice).to.be.false;",
+                  "});",
+                  "",
+                  "pm.test('Query targets invoice table', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.systemData.query).to.include('invoice');",
+                  "    pm.expect(response.systemData.query).to.include('findMany');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwtToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Danh sách hóa đơn của tôi đã thanh toán?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "chat"]
+            }
+          }
+        },
+        {
+          "name": "Chat with AI - Database Query: My Medical Records This Year",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains system data', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('systemData');",
+                  "    pm.expect(response.systemData).to.have.property('query');",
+                  "    pm.expect(response.isMedicalAdvice).to.be.false;",
+                  "});",
+                  "",
+                  "pm.test('Query targets medicalRecord table', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.systemData.query).to.include('medicalRecord');",
+                  "    pm.expect(response.systemData.query).to.include('findMany');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwtToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Danh sách bệnh án của tôi trong năm nay\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "chat"]
+            }
+          }
+        },
+        {
           "name": "Get Health Tips - General",
           "event": [
             {
@@ -309,6 +597,133 @@
           }
         },
         {
+          "name": "Get System Statistics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains system stats', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('totalDoctors');",
+                  "    pm.expect(response).to.have.property('totalPatients');",
+                  "    pm.expect(response).to.have.property('totalAppointments');",
+                  "    pm.expect(response).to.have.property('totalRevenue');",
+                  "    pm.expect(response).to.have.property('todayAppointments');",
+                  "    pm.expect(response).to.have.property('pendingPrescriptions');",
+                  "});",
+                  "",
+                  "pm.test('Stats are numbers', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.totalDoctors).to.be.a('number');",
+                  "    pm.expect(response.totalPatients).to.be.a('number');",
+                  "    pm.expect(response.totalAppointments).to.be.a('number');",
+                  "    pm.expect(response.totalRevenue).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/system-stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "system-stats"]
+            }
+          }
+        },
+        {
+          "name": "Search Doctors by Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is an array', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/search-doctors?q=Nguyen",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "search-doctors"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Nguyen"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Doctors by Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is an array', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/search-doctors?q=DOC",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "search-doctors"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "DOC"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Check AI Service Status",
           "event": [
             {
@@ -340,6 +755,141 @@
               "raw": "{{baseUrl}}/api/ai-chatbot/status",
               "host": ["{{baseUrl}}"],
               "path": ["api", "ai-chatbot", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Database Query Edge Cases",
+      "item": [
+        {
+          "name": "Chat with AI - Non-database Question",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is medical advice', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.isMedicalAdvice).to.be.true;",
+                  "    pm.expect(response).to.have.property('disclaimer');",
+                  "    pm.expect(response.systemData).to.be.undefined;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Làm thế nào để giữ gìn sức khỏe?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "chat"]
+            }
+          }
+        },
+        {
+          "name": "Chat with AI - Complex Database Query",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains system data', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('systemData');",
+                  "    pm.expect(response.isMedicalAdvice).to.be.false;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Bệnh nhân nào có nhiều lịch hẹn nhất?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "chat"]
+            }
+          }
+        },
+        {
+          "name": "Chat with AI - Ambiguous Question",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is handled appropriately', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('response');",
+                  "    pm.expect(response.response.length).to.be.greaterThan(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Thống kê\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai-chatbot/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai-chatbot", "chat"]
             }
           }
         }

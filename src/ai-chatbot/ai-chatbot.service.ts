@@ -7,6 +7,7 @@ import {
   HarmBlockThreshold,
 } from '@google/generative-ai';
 import { ChatRequestDto, ChatResponseDto } from './dto';
+import { DatabaseQueryService } from './database-query.service';
 
 @Injectable()
 export class AiChatbotService {
@@ -14,15 +15,16 @@ export class AiChatbotService {
   private genAI: GoogleGenerativeAI;
   private model: GenerativeModel;
 
-  constructor(private configService: ConfigService) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+  constructor(
+    private configService: ConfigService,
+    private databaseQueryService: DatabaseQueryService,
+  ) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
 
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     this.genAI = new GoogleGenerativeAI(apiKey);
     this.model = this.genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
@@ -51,18 +53,35 @@ export class AiChatbotService {
     chatRequest: ChatRequestDto,
   ): Promise<ChatResponseDto> {
     try {
-      const prompt = this.buildMedicalAssistantPrompt(chatRequest.message);
+      // Kiểm tra xem câu hỏi có liên quan đến dữ liệu hệ thống không
+      const databaseQuery =
+        await this.databaseQueryService.processDatabaseQuery(
+          chatRequest.message,
+        );
 
-      const result = await this.model.generateContent(prompt);
-      const response = result.response;
-      const text = response.text();
+      let text: string;
+      let isMedicalAdvice = false;
+      let systemData: any = null;
+
+      if (databaseQuery.success) {
+        // Trả lời dựa trên dữ liệu hệ thống
+        text = databaseQuery.explanation || 'Đây là thông tin từ hệ thống.';
+        systemData = {
+          query: databaseQuery.query,
+          data: databaseQuery.data,
+        };
+      } else {
+        // Trả lời y tế thông thường
+        const prompt = this.buildMedicalAssistantPrompt(chatRequest.message);
+        const result = await this.model.generateContent(prompt);
+        const response = result.response;
+        text = response.text();
+        isMedicalAdvice = this.containsMedicalAdvice(text);
+      }
 
       // Generate conversation ID if not provided
       const conversationId =
         chatRequest.conversationId || this.generateConversationId();
-
-      // Check if response contains medical advice
-      const isMedicalAdvice = this.containsMedicalAdvice(text);
 
       return {
         response: text,
@@ -70,12 +89,16 @@ export class AiChatbotService {
         timestamp: new Date(),
         isMedicalAdvice,
         disclaimer: isMedicalAdvice ? this.getMedicalDisclaimer() : undefined,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        systemData: systemData || undefined,
       };
     } catch (error) {
       this.logger.error('Error generating AI response:', error);
       throw new BadRequestException('Failed to generate AI response');
     }
   }
+
+  // JWT is handled in DatabaseQueryService (request-scoped)
 
   private buildMedicalAssistantPrompt(userMessage: string): string {
     return `Bạn là một trợ lý y tế AI thông minh và có kinh nghiệm. Nhiệm vụ của bạn là:
@@ -84,7 +107,7 @@ export class AiChatbotService {
 2. Cung cấp thông tin giáo dục về sức khỏe, triệu chứng, và các vấn đề y tế phổ biến
 3. Đưa ra lời khuyên chung về lối sống lành mạnh và phòng ngừa bệnh tật
 4. Hướng dẫn người dùng khi nào cần tìm kiếm sự chăm sóc y tế chuyên nghiệp
-
+5. Trà lời ngắn gọn khoảng một đoạn (5-10 câu)
 QUAN TRỌNG:
 - Bạn KHÔNG được chẩn đoán bệnh cụ thể
 - Bạn KHÔNG được thay thế cho bác sĩ hoặc chuyên gia y tế

@@ -9,16 +9,23 @@ import {
   UseGuards,
   Logger,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { AiChatbotService } from './ai-chatbot.service';
+import { DatabaseQueryService } from './database-query.service';
 import { ChatRequestDto, ChatResponseDto } from './dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
+
+// JWT user is read in services via request-scoped providers
 
 @Controller('ai-chatbot')
 @UseGuards(JwtAuthGuard)
 export class AiChatbotController {
   private readonly logger = new Logger(AiChatbotController.name);
 
-  constructor(private readonly aiChatbotService: AiChatbotService) {}
+  constructor(
+    private readonly aiChatbotService: AiChatbotService,
+    private readonly databaseQueryService: DatabaseQueryService,
+  ) {}
 
   @Post('chat')
   @HttpCode(HttpStatus.OK)
@@ -46,6 +53,30 @@ export class AiChatbotController {
       return await this.aiChatbotService.getHealthTips(category);
     } catch (error) {
       this.logger.error('Error getting health tips:', error);
+      throw error;
+    }
+  }
+
+  @Get('system-stats')
+  @HttpCode(HttpStatus.OK)
+  async getSystemStats(): Promise<any> {
+    try {
+      this.logger.log('Getting system statistics');
+      return await this.databaseQueryService.getSystemStats();
+    } catch (error) {
+      this.logger.error('Error getting system stats:', error);
+      throw error;
+    }
+  }
+
+  @Get('search-doctors')
+  @HttpCode(HttpStatus.OK)
+  async searchDoctors(@Query('q') searchTerm: string): Promise<any[]> {
+    try {
+      this.logger.log(`Searching doctors with term: ${searchTerm}`);
+      return await this.databaseQueryService.searchDoctors(searchTerm);
+    } catch (error) {
+      this.logger.error('Error searching doctors:', error);
       throw error;
     }
   }
