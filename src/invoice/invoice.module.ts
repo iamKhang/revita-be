@@ -4,12 +4,12 @@ import { InvoicePaymentController } from './invoice-payment.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PrescriptionModule } from '../prescription/prescription.module';
 import { RoutingModule } from '../routing/routing.module';
-import { KafkaProducerService } from '../kafka/kafka.producer';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
-  imports: [PrismaModule, PrescriptionModule, RoutingModule],
+  imports: [PrismaModule, PrescriptionModule, RoutingModule, CacheModule],
   controllers: [InvoicePaymentController],
-  providers: [InvoicePaymentService, KafkaProducerService],
+  providers: [InvoicePaymentService],
   exports: [InvoicePaymentService],
 })
 export class InvoiceModule {}

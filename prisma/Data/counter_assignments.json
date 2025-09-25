@@ -1,0 +1,162 @@
+[
+  {
+    "counterId": "counter-1-uuid",
+    "receptionistId": "receptionist-1-uuid",
+    "assignedAt": "2025-09-20T16:24:00.000Z",
+    "completedAt": null,
+    "status": "ACTIVE",
+    "notes": "Ca sáng - Quầy tiếp nhận 1"
+  },
+  {
+    "counterId": "counter-2-uuid",
+    "receptionistId": "receptionist-2-uuid",
+    "assignedAt": "2025-09-20T16:24:00.000Z",
+    "completedAt": null,
+    "status": "ACTIVE",
+    "notes": "Ca sáng - Quầy tiếp nhận 2"
+  },
+  {
+    "counterId": "counter-1-uuid",
+    "receptionistId": "receptionist-3-uuid",
+    "assignedAt": "2025-09-20T20:00:00.000Z",
+    "completedAt": "2025-09-21T08:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca tối - Quầy tiếp nhận 1"
+  },
+  {
+    "counterId": "counter-2-uuid",
+    "receptionistId": "receptionist-4-uuid",
+    "assignedAt": "2025-09-20T20:00:00.000Z",
+    "completedAt": "2025-09-21T08:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca tối - Quầy tiếp nhận 2"
+  },
+  {
+    "counterId": "counter-1-uuid",
+    "receptionistId": "receptionist-1-uuid",
+    "assignedAt": "2025-09-21T08:00:00.000Z",
+    "completedAt": "2025-09-21T16:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca sáng ngày 21/9 - Quầy tiếp nhận 1"
+  },
+  {
+    "counterId": "counter-2-uuid",
+    "receptionistId": "receptionist-2-uuid",
+    "assignedAt": "2025-09-21T08:00:00.000Z",
+    "completedAt": "2025-09-21T16:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca sáng ngày 21/9 - Quầy tiếp nhận 2"
+  },
+  {
+    "counterId": "counter-1-uuid",
+    "receptionistId": "receptionist-5-uuid",
+    "assignedAt": "2025-09-21T16:00:00.000Z",
+    "completedAt": "2025-09-22T00:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca chiều ngày 21/9 - Quầy tiếp nhận 1"
+  },
+  {
+    "counterId": "counter-2-uuid",
+    "receptionistId": "receptionist-6-uuid",
+    "assignedAt": "2025-09-21T16:00:00.000Z",
+    "completedAt": "2025-09-22T00:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca chiều ngày 21/9 - Quầy tiếp nhận 2"
+  },
+  {
+    "counterId": "counter-1-uuid",
+    "receptionistId": "receptionist-1-uuid",
+    "assignedAt": "2025-09-22T08:00:00.000Z",
+    "completedAt": "2025-09-22T16:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca sáng ngày 22/9 - Quầy tiếp nhận 1"
+  },
+  {
+    "counterId": "counter-2-uuid",
+    "receptionistId": "receptionist-2-uuid",
+    "assignedAt": "2025-09-22T08:00:00.000Z",
+    "completedAt": "2025-09-22T16:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca sáng ngày 22/9 - Quầy tiếp nhận 2"
+  },
+  {
+    "counterId": "counter-1-uuid",
+    "receptionistId": "receptionist-7-uuid",
+    "assignedAt": "2025-09-22T16:00:00.000Z",
+    "completedAt": "2025-09-23T00:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca chiều ngày 22/9 - Quầy tiếp nhận 1"
+  },
+  {
+    "counterId": "counter-2-uuid",
+    "receptionistId": "receptionist-8-uuid",
+    "assignedAt": "2025-09-22T16:00:00.000Z",
+    "completedAt": "2025-09-23T00:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca chiều ngày 22/9 - Quầy tiếp nhận 2"
+  },
+  {
+    "counterId": "counter-1-uuid",
+    "receptionistId": "receptionist-1-uuid",
+    "assignedAt": "2025-09-23T08:00:00.000Z",
+    "completedAt": "2025-09-23T16:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca sáng ngày 23/9 - Quầy tiếp nhận 1"
+  },
+  {
+    "counterId": "counter-2-uuid",
+    "receptionistId": "receptionist-2-uuid",
+    "assignedAt": "2025-09-23T08:00:00.000Z",
+    "completedAt": "2025-09-23T16:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca sáng ngày 23/9 - Quầy tiếp nhận 2"
+  },
+  {
+    "counterId": "counter-1-uuid",
+    "receptionistId": "receptionist-9-uuid",
+    "assignedAt": "2025-09-23T16:00:00.000Z",
+    "completedAt": "2025-09-24T00:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca chiều ngày 23/9 - Quầy tiếp nhận 1"
+  },
+  {
+    "counterId": "counter-2-uuid",
+    "receptionistId": "receptionist-10-uuid",
+    "assignedAt": "2025-09-23T16:00:00.000Z",
+    "completedAt": "2025-09-24T00:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca chiều ngày 23/9 - Quầy tiếp nhận 2"
+  },
+  {
+    "counterId": "counter-1-uuid",
+    "receptionistId": "receptionist-1-uuid",
+    "assignedAt": "2025-09-24T08:00:00.000Z",
+    "completedAt": "2025-09-24T16:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca sáng ngày 24/9 - Quầy tiếp nhận 1"
+  },
+  {
+    "counterId": "counter-2-uuid",
+    "receptionistId": "receptionist-2-uuid",
+    "assignedAt": "2025-09-24T08:00:00.000Z",
+    "completedAt": "2025-09-24T16:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca sáng ngày 24/9 - Quầy tiếp nhận 2"
+  },
+  {
+    "counterId": "counter-1-uuid",
+    "receptionistId": "receptionist-11-uuid",
+    "assignedAt": "2025-09-24T16:00:00.000Z",
+    "completedAt": "2025-09-25T00:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca chiều ngày 24/9 - Quầy tiếp nhận 1"
+  },
+  {
+    "counterId": "counter-2-uuid",
+    "receptionistId": "receptionist-12-uuid",
+    "assignedAt": "2025-09-24T16:00:00.000Z",
+    "completedAt": "2025-09-25T00:00:00.000Z",
+    "status": "COMPLETED",
+    "notes": "Ca chiều ngày 24/9 - Quầy tiếp nhận 2"
+  }
+]

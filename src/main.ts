@@ -2,9 +2,13 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  
+  // Cấu hình WebSocket adapter
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   // Cấu hình CORS - Cho phép tất cả origins
   // Thêm tiền tố 'api' cho tất cả endpoints (loại trừ docs và health check)

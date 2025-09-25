@@ -128,6 +128,7 @@ model Receptionist {
   authId   String      @unique @map("auth_id")
   auth     Auth        @relation(fields: [authId], references: [id])
   counters Counter[]    // Quan hệ với các counter
+  counterAssignments CounterAssignment[] // Quan hệ với counter assignments
 
   @@map("receptionists")
 }
@@ -146,42 +147,25 @@ model Counter {
   receptionistId String?  @map("receptionist_id") // Có thể null khi không có receptionist
   receptionist   Receptionist? @relation(fields: [receptionistId], references: [id])
   
-  // Quan hệ với queue và assignments
-  queueItems    CounterQueueItem[]
+  // Quan hệ với assignments
   assignments   CounterAssignment[]
 
   @@map("counters")
 }
 
-// Bảng CounterQueueItem để lưu queue của từng counter
-model CounterQueueItem {
-  id          String      @id @default(uuid())
-  counterId   String      @map("counter_id")
-  appointmentId String    @map("appointment_id")
-  patientName String      @map("patient_name")
-  priorityScore Int       @map("priority_score")
-  estimatedWaitTime Int   @map("estimated_wait_time") // phút
-  assignedAt  DateTime    @default(now()) @map("assigned_at")
-  status      String      @default("WAITING") // WAITING, CALLED, COMPLETED, CANCELLED
-  
-  counter     Counter     @relation(fields: [counterId], references: [id])
-  appointment Appointment @relation(fields: [appointmentId], references: [id])
 
-  @@map("counter_queue_items")
-}
-
-// Bảng CounterAssignment để lưu lịch sử phân bổ
+// Bảng CounterAssignment để lưu lịch sử phân bổ Receptionist vào Counter
 model CounterAssignment {
-  id          String      @id @default(uuid())
-  counterId   String      @map("counter_id")
-  appointmentId String    @map("appointment_id")
-  patientName String      @map("patient_name")
-  priorityScore Int       @map("priority_score")
-  assignedAt  DateTime    @default(now()) @map("assigned_at")
-  completedAt DateTime?   @map("completed_at")
+  id            String      @id @default(uuid())
+  counterId     String      @map("counter_id")
+  receptionistId String     @map("receptionist_id")
+  assignedAt    DateTime    @default(now()) @map("assigned_at")
+  completedAt   DateTime?   @map("completed_at")
+  status        String      @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  notes         String?     @map("notes")
   
-  counter     Counter     @relation(fields: [counterId], references: [id])
-  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  counter       Counter     @relation(fields: [counterId], references: [id])
+  receptionist  Receptionist @relation(fields: [receptionistId], references: [id])
 
   @@map("counter_assignments")
 }
@@ -294,9 +278,6 @@ model Appointment {
   service     Service? @relation(fields: [serviceId], references: [id])
   appointmentServices AppointmentService[]
   medicalRecords MedicalRecord[]
-
-  counterQueueItems CounterQueueItem[]
-  counterAssignments CounterAssignment[]
 
   @@map("appointments")
 }

@@ -16,6 +16,7 @@ import { FileStorageModule } from './file-storage/file-storage.module';
 import { WorkSessionModule } from './work-session/work-session.module';
 import { AppointmentBookingModule } from './appointment-booking/appointment-booking.module';
 import { AiChatbotModule } from './ai-chatbot/ai-chatbot.module';
+import { WebSocketModule } from './websocket/websocket.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { AiChatbotModule } from './ai-chatbot/ai-chatbot.module';
     WorkSessionModule,
     AppointmentBookingModule,
     AiChatbotModule,
+    WebSocketModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],

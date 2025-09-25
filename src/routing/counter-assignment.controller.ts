@@ -28,17 +28,12 @@ export class CounterAssignmentController {
   ) {}
 
   @Public()
-  @Post('assign')
-  async assignPatientToCounter(@Body() body: AssignCounterDto): Promise<{
-    success: true;
-    assignment: AssignedCounter;
+  @Get('counters')
+  async getAllCounters(): Promise<{
+    counters: any[];
   }> {
-    const assignment =
-      await this.counterAssignmentService.assignPatientToCounter(body);
-    return {
-      success: true,
-      assignment,
-    };
+    const counters = await this.counterAssignmentService.getAllCounters();
+    return { counters };
   }
 
   @Public()
@@ -125,24 +120,6 @@ export class CounterAssignmentController {
   }
 
   @Public()
-  @Post('scan-invoice')
-  async scanInvoiceAndAssign(@Body() body: ScanInvoiceDto) {
-    return this.counterAssignmentService.scanInvoiceAndAssign(body);
-  }
-
-  @Public()
-  @Post('direct-assignment')
-  async assignDirectPatient(@Body() body: DirectAssignmentDto) {
-    return this.counterAssignmentService.assignDirectPatient(body);
-  }
-
-  @Public()
-  @Post('simple-assignment')
-  async assignSimplePatient(@Body() body: SimpleAssignmentDto) {
-    return this.counterAssignmentService.assignSimplePatient(body);
-  }
-
-  @Public()
   @Post('next-patient/:counterId')
   async callNextPatient(@Param('counterId') counterId: string) {
     return this.counterAssignmentService.callNextPatient(counterId);
@@ -176,6 +153,48 @@ export class CounterAssignmentController {
   @Post('return-current/:counterId')
   async returnCurrentPatientToQueue(@Param('counterId') counterId: string) {
     return this.counterAssignmentService.returnCurrentPatientToQueue(counterId);
+  }
+
+  @Public()
+  @Post('mark-served/:counterId')
+  async markPatientServed(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.markPatientServed(counterId);
+  }
+
+  @Public()
+  @Post('cleanup-queue/:counterId')
+  async cleanupQueue(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.cleanupQueue(counterId);
+  }
+
+  @Public()
+  @Get('debug-queue/:counterId')
+  async debugQueue(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.debugQueue(counterId);
+  }
+
+  @Public()
+  @Post('test-skip/:counterId')
+  async testSkipLogic(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.testSkipLogic(counterId);
+  }
+
+  @Public()
+  @Get('redis-health/:counterId')
+  async checkRedisHealth(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.checkRedisHealth(counterId);
+  }
+
+  @Public()
+  @Post('test-performance/:counterId')
+  async testPerformance(@Param('counterId') counterId: string) {
+    return this.counterAssignmentService.testPerformance(counterId);
+  }
+
+  @Public()
+  @Get('redis-benchmark')
+  async redisBenchmark() {
+    return this.counterAssignmentService.redisBenchmark();
   }
 
   @Public()
