@@ -360,23 +360,55 @@ export class TakeNumberService {
    * Chọn counter tốt nhất dựa trên điểm ưu tiên
    */
   private async selectBestCounter(priorityScore: number): Promise<any> {
+    // Lấy tất cả counter có assignment ACTIVE (có nhân viên đang làm việc)
     const counters = await this.prisma.counter.findMany({
-      where: { isActive: true },
-      select: { id: true, counterCode: true, counterName: true },
+      where: { 
+        isActive: true,
+        assignments: {
+          some: {
+            status: 'ACTIVE',
+            completedAt: null
+          }
+        }
+      },
+      include: {
+        receptionist: {
+          include: {
+            auth: true
+          }
+        },
+        assignments: {
+          where: {
+            status: 'ACTIVE',
+            completedAt: null
+          },
+          orderBy: {
+            assignedAt: 'desc'
+          },
+          take: 1
+        }
+      }
     });
 
     if (counters.length === 0) {
-      throw new NotFoundException('Không có counter nào khả dụng');
+      throw new NotFoundException('Không có quầy nào đang có nhân viên tiếp nhận làm việc');
     }
 
-    // Ưu tiên counter có ít người đợi nhất
-    // Trong thực tế, có thể query từ Redis để lấy queue length
-    const sortedCounters = counters.sort((a, b) => {
-      // Logic chọn counter có thể phức tạp hơn
-      return Math.random() - 0.5; // Tạm thời random
-    });
+    // Sử dụng tất cả counter có assignment ACTIVE (không cần kiểm tra online status)
+    const availableCounters = counters;
 
-    return sortedCounters[0];
+    // Ưu tiên counter có ít người đợi nhất
+    const sortedCounters = await Promise.all(
+      availableCounters.map(async (counter) => {
+        const queueLength = await this.redis.getCounterQueueLength(counter.id);
+        return { counter, queueLength };
+      })
+    );
+
+    sortedCounters.sort((a, b) => a.queueLength - b.queueLength);
+
+    // Lấy counter có ít người đợi nhất
+    return sortedCounters[0].counter;
   }
 
   /**
