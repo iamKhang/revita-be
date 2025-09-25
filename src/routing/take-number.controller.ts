@@ -24,6 +24,7 @@ export class TakeNumberController {
   @Public()
   @Post('take')
   async takeNumber(@Body() body: TakeNumberDto): Promise<TakeNumberResult> {
+    console.log('[CONTROLLER DEBUG] Request body:', JSON.stringify(body, null, 2));
     return this.takeNumberService.takeNumber(body);
   }
 

@@ -106,7 +106,8 @@ export class TakeNumberService {
       patientInfo = {
         name: request.patientName,
         age: request.patientAge,
-        gender: 'UNKNOWN',
+        gender: request.patientGender || 'UNKNOWN',
+        phone: request.patientPhone,
         dateOfBirth: new Date(new Date().getFullYear() - request.patientAge, 0, 1),
       };
     }
@@ -312,6 +313,7 @@ export class TakeNumberService {
       false, // isFollowUpWithin14Days - cần logic để xác định
       undefined, // lastVisitDate - cần query từ database
       false, // isReturnedAfterService
+      patientInfo.gender, // Truyền giới tính để tính ưu tiên cho phụ nữ cao tuổi
     );
 
     // Thêm điểm cho các đặc điểm đặc biệt

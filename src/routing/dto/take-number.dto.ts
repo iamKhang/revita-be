@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsNumber,
   IsDateString,
+  IsIn,
   Min,
   Max,
 } from 'class-validator';
@@ -32,6 +33,8 @@ export class TakeNumberDto {
   @IsString()
   @IsOptional()
   patientPhone?: string; // Số điện thoại (nếu không có mã)
+
+  patientGender?: string; // Giới tính bệnh nhân (MALE, FEMALE, OTHER, UNKNOWN)
 
   @IsBoolean()
   @IsOptional()
