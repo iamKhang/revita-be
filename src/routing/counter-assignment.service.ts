@@ -165,9 +165,9 @@ export class CounterAssignmentService {
   }> {
     const startTime = Date.now();
     
-    // Step 1: Skip patient using optimized Redis method
+    // Step 1: Skip patient using simple Redis method
     const step1Start = Date.now();
-    const result = await this.redis.skipCurrentPatientOptimized(counterId);
+    const result = await this.redis.skipCurrentPatientSimple(counterId);
     const step1Duration = Date.now() - step1Start;
 
     if (!result.success) {
@@ -442,8 +442,46 @@ export class CounterAssignmentService {
       };
     }
 
-    // Step 4: Publish to Redis Stream
+    // Step 4: Set next patient as preparing (after current patient is serving)
     const step4Start = Date.now();
+    const newQueueStatus = await this.redis.getQueueStatusWithCleanup(counterId);
+    
+    if (newQueueStatus.queue && newQueueStatus.queue.length > 0) {
+      // Get the next patient in queue
+      const nextNextPatient = newQueueStatus.queue[0];
+      
+      // Set this patient as preparing with special status
+      const preparingPatient = {
+        ...nextNextPatient,
+        status: 'PREPARING',
+        isPriority: true,
+        preparingAt: new Date().toISOString(),
+      };
+
+      // Update the patient in the queue with PREPARING status
+      await this.redis.removeFromCounterQueue(counterId, nextNextPatient);
+      const maxPriorityScore = Number.MAX_SAFE_INTEGER;
+      await this.redis.addToCounterQueueWithScore(counterId, preparingPatient, maxPriorityScore);
+
+      // Publish preparing event
+      if (enableStreams) {
+        const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
+        try {
+          await this.redisStream.publishEventWithTimeout(streamKey, {
+            type: 'PATIENT_PREPARING',
+            counterId,
+            patient: JSON.stringify(preparingPatient),
+            timestamp: new Date().toISOString(),
+          }, 100);
+        } catch (err) {
+          console.warn('[Redis Stream] Patient preparing publish failed:', (err as Error).message);
+        }
+      }
+    }
+    const step4Duration = Date.now() - step4Start;
+
+    // Step 5: Publish to Redis Stream
+    const step5Start = Date.now();
     if (enableStreams) {
       const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
       try {
@@ -454,16 +492,16 @@ export class CounterAssignmentService {
           timestamp: new Date().toISOString(),
         }, 100); // Reduced timeout to 100ms
         
-        const step4Duration = Date.now() - step4Start;
+        const step5Duration = Date.now() - step5Start;
       } catch (err) {
-        const step4Duration = Date.now() - step4Start;
+        const step5Duration = Date.now() - step5Start;
         console.warn(
-          `[PERF] Step 4 completed in ${step4Duration}ms (stream publish failed):`,
+          `[PERF] Step 5 completed in ${step5Duration}ms (stream publish failed):`,
           (err as Error).message,
         );
       }
     } else {
-      const step4Duration = Date.now() - step4Start;
+      const step5Duration = Date.now() - step5Start;
     }
 
     const totalDuration = Date.now() - startTime;

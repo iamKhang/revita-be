@@ -888,6 +888,88 @@ export class RedisService implements OnModuleDestroy {
   /**
    * Optimized skip patient with atomic operations
    */
+  async skipCurrentPatientSimple(counterId: string): Promise<{
+    success: boolean;
+    patient?: Record<string, unknown>;
+    message?: string;
+  }> {
+    try {
+      // Step 1: Get current patient
+      const currentKey = `counterCurrent:${counterId}`;
+      const current = await this.redis.get(currentKey);
+      
+      if (!current) {
+        return { success: false, message: 'No current patient to skip' };
+      }
+      
+      // Step 2: Parse and update patient data
+      const patientData = JSON.parse(current);
+      patientData.callCount = (patientData.callCount || 0) + 1;
+      patientData.status = 'MISSED';
+      
+      // Step 3: Add to skipped list for tracking
+      const skippedKey = `counterSkipped:${counterId}`;
+      await this.redis.lpush(skippedKey, JSON.stringify(patientData));
+      
+      // Step 4: Clear current patient
+      await this.redis.del(currentKey);
+      
+      // Step 5: If callCount > 3, remove patient completely (don't add back to queue)
+      if (patientData.callCount > 3) {
+        return { 
+          success: true, 
+          patient: patientData, 
+          message: 'patient_removed_callcount_exceeded' 
+        };
+      }
+      
+      // Step 6: Get queue length
+      const queueKey = `counterQueueZ:${counterId}`;
+      const queueLength = await this.redis.zcard(queueKey);
+      
+      // Step 7: Always insert after 3rd position (3 people will be called before this patient)
+      if (queueLength >= 3) {
+        // Get the score of the 3rd patient
+        const queueOrdered = await this.redis.zrevrange(queueKey, 0, 2, 'WITHSCORES');
+        const thirdPatientScore = parseFloat(queueOrdered[5]); // 3rd patient score
+        
+        // Insert after 3rd patient with slightly lower score
+        const insertScore = thirdPatientScore - 0.001;
+        
+        // Add back to queue with new score
+        await this.redis.zadd(queueKey, insertScore, JSON.stringify(patientData));
+        
+        return { 
+          success: true, 
+          patient: patientData, 
+          message: 'inserted_after_3rd_patient' 
+        };
+      } else {
+        // If queue has less than 3 people, insert at the end (lowest priority)
+        let minScore = 0;
+        if (queueLength > 0) {
+          const allScores = await this.redis.zrange(queueKey, 0, 0, 'WITHSCORES');
+          if (allScores.length >= 2) {
+            minScore = parseFloat(allScores[1]) - 1;
+          }
+        }
+        
+        await this.redis.zadd(queueKey, minScore, JSON.stringify(patientData));
+        
+        return { 
+          success: true, 
+          patient: patientData, 
+          message: 'inserted_at_end' 
+        };
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        message: `Error in skipCurrentPatientSimple: ${(error as Error).message}` 
+      };
+    }
+  }
+
   async skipCurrentPatientOptimized(counterId: string): Promise<{
     success: boolean;
     patient?: Record<string, unknown>;
@@ -977,6 +1059,12 @@ export class RedisService implements OnModuleDestroy {
     const processStart = Date.now();
     
     // Check if results exist and have the expected structure
+    // Handle case where pipeline.exec() returns null (Redis connection issues)
+    if (results === null) {
+      const totalDuration = Date.now() - startTime;
+      return { success: false, message: 'Redis pipeline returned null - connection issue' };
+    }
+    
     if (!results || !Array.isArray(results) || results.length === 0) {
       const totalDuration = Date.now() - startTime;
       return { success: false, message: 'No results from Redis pipeline' };
@@ -985,6 +1073,7 @@ export class RedisService implements OnModuleDestroy {
     const firstResult = results[0];
     
     // Redis pipeline returns [error, result] format
+    
     if (!firstResult || firstResult.length < 2) {
       const totalDuration = Date.now() - startTime;
       return { success: false, message: 'Invalid result structure from Redis' };
