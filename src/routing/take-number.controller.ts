@@ -26,7 +26,6 @@ export class TakeNumberController {
   @Public()
   @Post('take')
   async takeNumber(@Body() body: TakeNumberDto): Promise<TakeNumberResult> {
-    console.log('[CONTROLLER DEBUG] Request body:', JSON.stringify(body, null, 2));
     return this.takeNumberService.takeNumber(body);
   }
 
@@ -66,19 +65,15 @@ export class TakeNumberController {
   @Public()
   @Post('test-skip-logic/:counterId')
   async testSkipLogic(@Param('counterId') counterId: string): Promise<any> {
-    console.log(`[TEST_SKIP] Testing skip logic for counter ${counterId}`);
     
     // Get current queue status
     const queueStatus = await this.redis.getQueueStatusWithCleanup(counterId);
-    console.log(`[TEST_SKIP] Queue before skip:`, queueStatus.queue.length, 'patients');
     
     // Perform skip
     const skipResult = await this.redis.skipCurrentPatientOptimized(counterId);
-    console.log(`[TEST_SKIP] Skip result:`, skipResult);
     
     // Get queue status after skip
     const queueStatusAfter = await this.redis.getQueueStatusWithCleanup(counterId);
-    console.log(`[TEST_SKIP] Queue after skip:`, queueStatusAfter.queue.length, 'patients');
     
     return {
       before: {

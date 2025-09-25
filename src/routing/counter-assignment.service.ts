@@ -114,7 +114,6 @@ export class CounterAssignmentService {
     
     // Log if duplicates were found and cleaned
     if (status.cleanedDuplicates > 0) {
-      console.log(`[Counter ${counterId}] Cleaned ${status.cleanedDuplicates} duplicate entries from queue`);
     }
     
     return status.queue;
@@ -142,7 +141,6 @@ export class CounterAssignmentService {
     
     // Log if duplicates were found and cleaned
     if (status.cleanedDuplicates > 0) {
-      console.log(`[Counter ${counterId}] Cleaned ${status.cleanedDuplicates} duplicate entries from queue status`);
     }
     
     // Get skipped patients
@@ -166,74 +164,101 @@ export class CounterAssignmentService {
     message?: string;
   }> {
     const startTime = Date.now();
-    console.log(`[SKIP_PERF] skipCurrentPatient started for counter ${counterId} at ${new Date().toISOString()}`);
     
     // Step 1: Skip patient using optimized Redis method
     const step1Start = Date.now();
-    console.log(`[SKIP_PERF] Step 1: Calling skipCurrentPatientOptimized...`);
     const result = await this.redis.skipCurrentPatientOptimized(counterId);
     const step1Duration = Date.now() - step1Start;
-    console.log(`[SKIP_PERF] Step 1 completed in ${step1Duration}ms. Success: ${result.success}`);
 
     if (!result.success) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[SKIP_PERF] skipCurrentPatient completed in ${totalDuration}ms (no patient to skip)`);
       return {
         ok: true,
         message: result.message || 'No current patient to skip',
       };
     }
 
-    // Step 2: Publish to Redis Stream
+    // Step 2: Call next patient (B becomes SERVING)
     const step2Start = Date.now();
-    console.log(`[SKIP_PERF] Step 2: Publishing to Redis Stream...`);
+    const nextResult = await this.redis.callNextPatientOptimized(counterId);
+    const step2Duration = Date.now() - step2Start;
+
+    if (!nextResult.success) {
+      const totalDuration = Date.now() - startTime;
+      return {
+        ok: true,
+        patient: result.patient,
+        message: 'Patient skipped, but no next patient to call',
+      };
+    }
+
+    // Step 3: Set next patient as preparing (C becomes PREPARING)
+    const step3Start = Date.now();
+    const queueStatus = await this.redis.getQueueStatusWithCleanup(counterId);
+    
+    if (queueStatus.queue && queueStatus.queue.length > 0) {
+      const nextNextPatient = queueStatus.queue[0];
+      
+      // Set this patient as preparing with special status
+      const preparingPatient = {
+        ...nextNextPatient,
+        status: 'PREPARING',
+        isPriority: true,
+        preparingAt: new Date().toISOString(),
+      };
+
+      // Update the patient in the queue with PREPARING status
+      await this.redis.removeFromCounterQueue(counterId, nextNextPatient);
+      const maxPriorityScore = Number.MAX_SAFE_INTEGER;
+      await this.redis.addToCounterQueueWithScore(counterId, preparingPatient, maxPriorityScore);
+      
+    }
+    const step3Duration = Date.now() - step3Start;
+
+    // Step 4: Publish to Redis Stream
+    const step4Start = Date.now();
     const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
     const enableStreams = process.env.ENABLE_REDIS_STREAMS !== 'false';
     
     if (enableStreams) {
       try {
         const messageId = await this.redisStream.publishEventWithTimeout(streamKey, {
-          type: 'PATIENT_SKIPPED',
+          type: 'PATIENT_SKIPPED_AND_NEXT_CALLED',
           counterId,
-          patient: JSON.stringify(result.patient),
+          skippedPatient: JSON.stringify(result.patient),
+          currentPatient: JSON.stringify(nextResult.patient),
           timestamp: new Date().toISOString(),
-        }, 100); // 100ms timeout
+        }, 100);
         
-        const step2Duration = Date.now() - step2Start;
-        console.log(`[SKIP_PERF] Step 2 completed in ${step2Duration}ms (stream published: ${messageId ? 'success' : 'timeout'})`);
+        const step4Duration = Date.now() - step4Start;
       } catch (err) {
-        const step2Duration = Date.now() - step2Start;
+        const step4Duration = Date.now() - step4Start;
         console.warn(
-          `[SKIP_PERF] Step 2 completed in ${step2Duration}ms (stream publish failed):`,
+          `[SKIP_PERF] Step 4 completed in ${step4Duration}ms (stream publish failed):`,
           (err as Error).message,
         );
       }
     } else {
-      const step2Duration = Date.now() - step2Start;
-      console.log(`[SKIP_PERF] Step 2 skipped in ${step2Duration}ms (Redis Streams disabled)`);
+      const step4Duration = Date.now() - step4Start;
     }
 
-    // Step 3: Process response
-    const step3Start = Date.now();
+    // Step 5: Process response
+    const step5Start = Date.now();
     const callCount = Number((result.patient as any)?.callCount || 0);
     const status = (result.patient as any)?.status || 'MISSED';
     
     // Use the message from Redis operation
-    const message = result.message || 
-      (callCount >= 5
-        ? 'Current patient cancelled after 5 calls'
-        : 'Current patient marked MISSED and will be reinserted after 3 turns');
+    const message = 'Patient skipped, next patient called, following patient set as preparing';
 
-    const step3Duration = Date.now() - step3Start;
+    const step5Duration = Date.now() - step5Start;
     const totalDuration = Date.now() - startTime;
-    console.log(`[SKIP_PERF] Step 3 completed in ${step3Duration}ms`);
-    console.log(`[SKIP_PERF] skipCurrentPatient completed in ${totalDuration}ms (patient: ${result.patient?.patientName || 'Unknown'})`);
 
     return {
       ok: true,
-      patient: result.patient,
+      patient: nextResult.patient, // Return the new current patient (B)
       message,
       // expose extended fields for client if needed
+      skippedPatient: result.patient,
       ...(status ? { status } : {}),
       ...(callCount ? { callCount } : {}),
     } as any;
@@ -320,25 +345,96 @@ export class CounterAssignmentService {
     counterId: string,
   ): Promise<{ ok: true; patient?: any; message?: string }> {
     const startTime = Date.now();
-    console.log(`[PERF] callNextPatient started for counter ${counterId} at ${new Date().toISOString()}`);
     
-    // Step 1: Call optimized Redis method
+    // Check if Redis Streams are enabled
+    const enableStreams = process.env.ENABLE_REDIS_STREAMS !== 'false';
+    
+    // Step 1: Mark current patient as served (if exists)
     const step1Start = Date.now();
-    console.log(`[PERF] Step 1: Calling callNextPatientOptimized...`);
-    const result = await this.redis.callNextPatientOptimized(counterId);
+    const currentPatient = await this.redis.getCurrentPatient(counterId);
+    if (currentPatient) {
+      // Clear current patient (mark as served)
+      await this.redis.setCurrentPatient(counterId, null);
+      
+      // Publish patient served event
+      if (enableStreams) {
+        const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
+        try {
+          await this.redisStream.publishEventWithTimeout(streamKey, {
+            type: 'PATIENT_SERVED',
+            counterId,
+            patient: JSON.stringify(currentPatient),
+            timestamp: new Date().toISOString(),
+          }, 100);
+        } catch (err) {
+          console.warn('[Redis Stream] Patient served publish failed:', (err as Error).message);
+        }
+      }
+    } else {
+    }
     const step1Duration = Date.now() - step1Start;
-    console.log(`[PERF] Step 1 completed in ${step1Duration}ms. Success: ${result.success}`);
     
-    if (!result.success) {
-      // Step 2: Check and reset sequence if queue empty
-      const step2Start = Date.now();
-      console.log(`[PERF] Step 2: Checking and resetting sequence...`);
-      await this.redis.checkAndResetSequenceIfEmpty(counterId);
+    // Step 2: Set next patient as preparing (priority status - cannot be jumped)
+    const step2Start = Date.now();
+    const queueStatus = await this.redis.getQueueStatusWithCleanup(counterId);
+    
+    if (!queueStatus.queue || queueStatus.queue.length === 0) {
       const step2Duration = Date.now() - step2Start;
-      console.log(`[PERF] Step 2 completed in ${step2Duration}ms`);
       
       const totalDuration = Date.now() - startTime;
-      console.log(`[PERF] callNextPatient completed in ${totalDuration}ms (no patient found)`);
+      
+      return {
+        ok: true,
+        message: 'No patients in queue',
+      };
+    }
+
+    // Get the next patient (highest priority)
+    const nextPatient = queueStatus.queue[0];
+    
+    // Set this patient as preparing with special status
+    const preparingPatient = {
+      ...nextPatient,
+      status: 'PREPARING',
+      isPriority: true,
+      preparingAt: new Date().toISOString(),
+    };
+
+    // Update the patient in the queue with PREPARING status
+    // Remove and re-add with maximum priority score to ensure no one can jump
+    await this.redis.removeFromCounterQueue(counterId, nextPatient);
+    const maxPriorityScore = Number.MAX_SAFE_INTEGER;
+    await this.redis.addToCounterQueueWithScore(counterId, preparingPatient, maxPriorityScore);
+
+    // Publish preparing event
+    if (enableStreams) {
+      const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
+      try {
+        await this.redisStream.publishEventWithTimeout(streamKey, {
+          type: 'PATIENT_PREPARING',
+          counterId,
+          patient: JSON.stringify(preparingPatient),
+          timestamp: new Date().toISOString(),
+        }, 100);
+      } catch (err) {
+        console.warn('[Redis Stream] Patient preparing publish failed:', (err as Error).message);
+      }
+    }
+
+    const step2Duration = Date.now() - step2Start;
+    
+    // Step 3: Call optimized Redis method to get the preparing patient as current
+    const step3Start = Date.now();
+    const result = await this.redis.callNextPatientOptimized(counterId);
+    const step3Duration = Date.now() - step3Start;
+    
+    if (!result.success) {
+      // Step 4: Check and reset sequence if queue empty
+      const step4Start = Date.now();
+      await this.redis.checkAndResetSequenceIfEmpty(counterId);
+      const step4Duration = Date.now() - step4Start;
+      
+      const totalDuration = Date.now() - startTime;
       
       return {
         ok: true,
@@ -346,12 +442,9 @@ export class CounterAssignmentService {
       };
     }
 
-    // Step 3: Publish to Redis Stream
-    const step3Start = Date.now();
-    // Step 3: Publish to Redis Stream (with option to disable)
-    const enableStreams = process.env.ENABLE_REDIS_STREAMS !== 'false';
+    // Step 4: Publish to Redis Stream
+    const step4Start = Date.now();
     if (enableStreams) {
-      console.log(`[PERF] Step 3: Publishing to Redis Stream with timeout...`);
       const streamKey = process.env.REDIS_STREAM_COUNTER_ASSIGNMENTS || 'counter:assignments';
       try {
         const messageId = await this.redisStream.publishEventWithTimeout(streamKey, {
@@ -361,22 +454,19 @@ export class CounterAssignmentService {
           timestamp: new Date().toISOString(),
         }, 100); // Reduced timeout to 100ms
         
-        const step3Duration = Date.now() - step3Start;
-        console.log(`[PERF] Step 3 completed in ${step3Duration}ms (stream published: ${messageId ? 'success' : 'timeout'})`);
+        const step4Duration = Date.now() - step4Start;
       } catch (err) {
-        const step3Duration = Date.now() - step3Start;
+        const step4Duration = Date.now() - step4Start;
         console.warn(
-          `[PERF] Step 3 completed in ${step3Duration}ms (stream publish failed):`,
+          `[PERF] Step 4 completed in ${step4Duration}ms (stream publish failed):`,
           (err as Error).message,
         );
       }
     } else {
-      const step3Duration = Date.now() - step3Start;
-      console.log(`[PERF] Step 3 skipped in ${step3Duration}ms (Redis Streams disabled)`);
+      const step4Duration = Date.now() - step4Start;
     }
 
     const totalDuration = Date.now() - startTime;
-    console.log(`[PERF] callNextPatient completed in ${totalDuration}ms (patient found: ${result.patient?.patientName || 'Unknown'})`);
     
     return { ok: true, patient: result.patient };
   }
@@ -422,14 +512,12 @@ export class CounterAssignmentService {
    */
   async rollbackPreviousPatient(counterId: string): Promise<{ ok: true; patient?: any; message?: string }> {
     const startTime = Date.now();
-    console.log(`[PERF] rollbackPreviousPatient started for counter ${counterId} at ${new Date().toISOString()}`);
     
     // Step 1: Check if there's a current patient
     const currentPatient = await this.redis.getCurrentPatient(counterId);
     
     if (currentPatient) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[PERF] rollbackPreviousPatient completed in ${totalDuration}ms (already has current patient)`);
       return { 
         ok: true, 
         message: 'Counter already has a current patient. Use skip or mark-served first.',
@@ -442,7 +530,6 @@ export class CounterAssignmentService {
     
     if (!lastServed) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[PERF] rollbackPreviousPatient completed in ${totalDuration}ms (no previous patient)`);
       return { 
         ok: true, 
         message: 'No previous patient found to rollback to' 
@@ -466,7 +553,6 @@ export class CounterAssignmentService {
     }
 
     const totalDuration = Date.now() - startTime;
-    console.log(`[PERF] rollbackPreviousPatient completed in ${totalDuration}ms (patient: ${lastServed?.patientName || 'Unknown'})`);
 
     return { 
       ok: true, 
@@ -555,6 +641,7 @@ export class CounterAssignmentService {
       message: 'Patient marked as served successfully',
     };
   }
+
 
   /**
    * Clean up duplicate entries in queue

@@ -697,7 +697,6 @@ export class RedisService implements OnModuleDestroy {
    */
   async checkAndResetSequenceIfEmpty(counterId: string): Promise<void> {
     const startTime = Date.now();
-    console.log(`[REDIS_PERF] checkAndResetSequenceIfEmpty started for counter ${counterId}`);
     
     // Use pipeline to combine operations
     const pipeline = this.redis.pipeline();
@@ -729,7 +728,6 @@ export class RedisService implements OnModuleDestroy {
     const queueLength = result[1];
     
     const totalDuration = Date.now() - startTime;
-    console.log(`[REDIS_PERF] checkAndResetSequenceIfEmpty completed in ${totalDuration}ms (reset: ${wasReset}, queueLength: ${queueLength})`);
   }
 
   // ------------------ Queue number helpers (per counter, per day) ------------------
@@ -811,17 +809,14 @@ export class RedisService implements OnModuleDestroy {
     message?: string;
   }> {
     const startTime = Date.now();
-    console.log(`[REDIS_PERF] callNextPatientOptimized started for counter ${counterId}`);
     
     // Step 1: Create pipeline
     const pipelineStart = Date.now();
     const pipeline = this.redis.pipeline();
     const pipelineDuration = Date.now() - pipelineStart;
-    console.log(`[REDIS_PERF] Pipeline created in ${pipelineDuration}ms`);
     
     // Step 2: Execute Lua script
     const scriptStart = Date.now();
-    console.log(`[REDIS_PERF] Executing Lua script...`);
     pipeline.eval(`
       local queueKey = KEYS[1]
       local currentKey = KEYS[2]
@@ -842,13 +837,19 @@ export class RedisService implements OnModuleDestroy {
       
       local patient = result[1]
       
+      -- Parse and update patient status when moving from queue to current
+      local patientData = cjson.decode(patient)
+      patientData.status = 'SERVING'
+      patientData.callCount = (patientData.callCount or 0) + 1
+      local updatedPatient = cjson.encode(patientData)
+      
       -- Set as current patient
-      redis.call('SET', currentKey, patient)
+      redis.call('SET', currentKey, updatedPatient)
       
       -- Increment turn counter
       redis.call('INCR', turnKey)
       
-      return {1, patient}
+      return {1, updatedPatient}
     `, 4, 
     `counterQueueZ:${counterId}`,
     `counterCurrent:${counterId}`,
@@ -857,14 +858,11 @@ export class RedisService implements OnModuleDestroy {
     );
     
     const scriptDuration = Date.now() - scriptStart;
-    console.log(`[REDIS_PERF] Lua script prepared in ${scriptDuration}ms`);
     
     // Step 3: Execute pipeline
     const execStart = Date.now();
-    console.log(`[REDIS_PERF] Executing pipeline...`);
     const results = await pipeline.exec();
     const execDuration = Date.now() - execStart;
-    console.log(`[REDIS_PERF] Pipeline executed in ${execDuration}ms`);
     
     // Step 4: Process results
     const processStart = Date.now();
@@ -872,7 +870,7 @@ export class RedisService implements OnModuleDestroy {
     
     if (result[0] === 0) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[REDIS_PERF] callNextPatientOptimized completed in ${totalDuration}ms (no patients)`);
+
       return { success: false, message: 'No patients in queue' };
     }
     
@@ -880,12 +878,9 @@ export class RedisService implements OnModuleDestroy {
     const jsonStart = Date.now();
     const patient = JSON.parse(result[1]!);
     const jsonDuration = Date.now() - jsonStart;
-    console.log(`[REDIS_PERF] JSON parsing completed in ${jsonDuration}ms`);
     
     const processDuration = Date.now() - processStart;
     const totalDuration = Date.now() - startTime;
-    console.log(`[REDIS_PERF] callNextPatientOptimized completed in ${totalDuration}ms (patient: ${patient?.patientName || 'Unknown'})`);
-    console.log(`[REDIS_PERF] Breakdown: pipeline=${pipelineDuration}ms, script=${scriptDuration}ms, exec=${execDuration}ms, process=${processDuration}ms, json=${jsonDuration}ms`);
     
     return { success: true, patient };
   }
@@ -899,17 +894,14 @@ export class RedisService implements OnModuleDestroy {
     message?: string;
   }> {
     const startTime = Date.now();
-    console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized started for counter ${counterId}`);
     
     // Step 1: Create pipeline
     const pipelineStart = Date.now();
     const pipeline = this.redis.pipeline();
     const pipelineDuration = Date.now() - pipelineStart;
-    console.log(`[SKIP_REDIS_PERF] Pipeline created in ${pipelineDuration}ms`);
     
     // Step 2: Execute Lua script
     const scriptStart = Date.now();
-    console.log(`[SKIP_REDIS_PERF] Executing skip Lua script...`);
     pipeline.eval(`
       local currentKey = KEYS[1]
       local queueKey = KEYS[2]
@@ -975,14 +967,11 @@ export class RedisService implements OnModuleDestroy {
     );
     
     const scriptDuration = Date.now() - scriptStart;
-    console.log(`[SKIP_REDIS_PERF] Lua script prepared in ${scriptDuration}ms`);
     
     // Step 3: Execute pipeline
     const execStart = Date.now();
-    console.log(`[SKIP_REDIS_PERF] Executing pipeline...`);
     const results = await pipeline.exec();
     const execDuration = Date.now() - execStart;
-    console.log(`[SKIP_REDIS_PERF] Pipeline executed in ${execDuration}ms`);
     
     // Step 4: Process results
     const processStart = Date.now();
@@ -990,39 +979,32 @@ export class RedisService implements OnModuleDestroy {
     // Check if results exist and have the expected structure
     if (!results || !Array.isArray(results) || results.length === 0) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized completed in ${totalDuration}ms (no results from pipeline)`);
       return { success: false, message: 'No results from Redis pipeline' };
     }
     
     const firstResult = results[0];
-    console.log(`[SKIP_REDIS_PERF] First result:`, JSON.stringify(firstResult, null, 2));
     
     // Redis pipeline returns [error, result] format
     if (!firstResult || firstResult.length < 2) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized completed in ${totalDuration}ms (invalid result structure)`);
       return { success: false, message: 'Invalid result structure from Redis' };
     }
     
     // firstResult[0] is error, firstResult[1] is the actual result
     if (firstResult[0]) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized completed in ${totalDuration}ms (Redis error: ${firstResult[0]})`);
       return { success: false, message: `Redis error: ${firstResult[0]}` };
     }
     
     const result = firstResult[1];
-    console.log(`[SKIP_REDIS_PERF] Result data:`, JSON.stringify(result, null, 2));
     
     if (!Array.isArray(result)) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized completed in ${totalDuration}ms (result is not array)`);
       return { success: false, message: 'Result is not an array from Redis' };
     }
     
     if (!result || result[0] === 0) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized completed in ${totalDuration}ms (no current patient)`);
       return { success: false, message: 'No current patient to skip' };
     }
     
@@ -1030,19 +1012,15 @@ export class RedisService implements OnModuleDestroy {
     const jsonStart = Date.now();
     if (!result[1]) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized completed in ${totalDuration}ms (no patient data)`);
       return { success: false, message: 'No patient data returned' };
     }
     
     const patient = JSON.parse(result[1]);
     const insertionType = result[2];
     const jsonDuration = Date.now() - jsonStart;
-    console.log(`[SKIP_REDIS_PERF] JSON parsing completed in ${jsonDuration}ms`);
     
     const processDuration = Date.now() - processStart;
     const totalDuration = Date.now() - startTime;
-    console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized completed in ${totalDuration}ms (patient: ${patient?.patientName || 'Unknown'})`);
-    console.log(`[SKIP_REDIS_PERF] Breakdown: pipeline=${pipelineDuration}ms, script=${scriptDuration}ms, exec=${execDuration}ms, process=${processDuration}ms, json=${jsonDuration}ms`);
     
     return { 
       success: true, 
@@ -1108,6 +1086,10 @@ export class RedisService implements OnModuleDestroy {
     // If no current patient, get next from queue
     const next = await this.popNextFromCounterQueue(counterId);
     if (next) {
+      // Update status when moving from queue to current
+      (next as any).status = 'SERVING';
+      const calls = Number((next as any).callCount || 0) + 1;
+      (next as any).callCount = calls;
       await this.setCurrentPatient(counterId, next);
       return next;
     }
@@ -1175,6 +1157,18 @@ export class RedisService implements OnModuleDestroy {
     pipeline.del(`counterLastServed:${counterId}`);
     
     await pipeline.exec();
+  }
+
+  async removeFromCounterQueue(counterId: string, patient: any): Promise<void> {
+    const key = `counterQueueZ:${counterId}`;
+    const patientString = JSON.stringify(patient);
+    await this.redis.zrem(key, patientString);
+  }
+
+  async addToCounterQueueWithScore(counterId: string, patient: any, score: number): Promise<void> {
+    const key = `counterQueueZ:${counterId}`;
+    const patientString = JSON.stringify(patient);
+    await this.redis.zadd(key, score, patientString);
   }
 
   /**

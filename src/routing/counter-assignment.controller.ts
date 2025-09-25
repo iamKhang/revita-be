@@ -167,6 +167,7 @@ export class CounterAssignmentController {
     return this.counterAssignmentService.markPatientServed(counterId);
   }
 
+
   @Public()
   @Post('cleanup-queue/:counterId')
   async cleanupQueue(@Param('counterId') counterId: string) {

@@ -68,7 +68,6 @@ export class TakeNumberService {
     const tlog = (label: string, tPrev: number) => {
       const now = Date.now();
       const delta = now - tPrev;
-      console.log(`[take-number] ${label} +${delta}ms (total ${now - t0}ms)`);
       return now;
     };
     let t = t0;

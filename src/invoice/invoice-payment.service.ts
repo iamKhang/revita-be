@@ -436,11 +436,7 @@ export class InvoicePaymentService {
       );
     }
 
-    // Log routing result for debugging
-    console.log('Routing result:', {
-      routingAssignmentsCount: routingAssignments.length,
-      detailedAssignments: detailedRoutingAssignments,
-    });
+
 
     return {
       invoiceCode: invoice.invoiceCode,

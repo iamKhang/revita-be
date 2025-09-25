@@ -36,9 +36,7 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
         this.GROUP_NAME,
         '0',
       );
-      console.log(`Consumer group ${this.GROUP_NAME} initialized`);
     } catch (error) {
-      console.log(`Consumer group ${this.GROUP_NAME} already exists or error:`, error.message);
     }
   }
 
@@ -53,7 +51,6 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
       }
     }, 1000); // Xử lý mỗi giây
 
-    console.log(`Stream consumer ${this.CONSUMER_NAME} started`);
   }
 
   /**
@@ -65,7 +62,6 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
       clearInterval(this.consumerInterval);
       this.consumerInterval = null;
     }
-    console.log(`Stream consumer ${this.CONSUMER_NAME} stopped`);
   }
 
   /**
@@ -82,7 +78,6 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
       );
 
       if (messages.length > 0) {
-        console.log(`[${this.CONSUMER_NAME}] Received ${messages.length} messages`);
         // Có thể bật debug chi tiết khi cần
         // console.debug('Messages:', JSON.stringify(messages, null, 2));
       }
@@ -115,7 +110,6 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
         message.id,
       );
 
-      console.log(`Processed ticket ${ticketData.queueNumber} for counter ${ticketData.counterId}`);
     } catch (error) {
       console.error(`Error processing message ${message.id}:`, error);
       // Có thể implement retry logic hoặc dead letter queue ở đây
@@ -126,7 +120,6 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
    * Parse message data từ Redis Stream
    */
   private parseMessageData(message: any): any {
-    console.log('Processing message:', JSON.stringify(message, null, 2));
 
     // Kiểm tra cấu trúc message
     if (!message) {
@@ -170,7 +163,6 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    console.log('Parsed data:', data);
 
     return data;
   }
@@ -182,7 +174,6 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
     try {
       // Lưu thông tin ticket vào Redis (thay vì database)
       // Thông tin queue được lưu trong Redis Stream, không cần lưu vào database
-      console.log(`📝 Ticket ${ticketData.ticketId} đã được lưu vào Redis Stream`);
       
       // Có thể tạo log record nếu cần thiết
       // await this.prisma.counterAssignment.create({
