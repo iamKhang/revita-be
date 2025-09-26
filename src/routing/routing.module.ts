@@ -13,7 +13,7 @@ import { TakeNumberModule } from './take-number.module';
 @Module({
   imports: [PrismaModule, CacheModule, ServiceModule, WebSocketModule, TakeNumberModule],
   controllers: [RoutingController, CounterAssignmentController],
-  providers: [RoutingService, CounterAssignmentService], // StreamConsumerService temporarily disabled
+  providers: [RoutingService, CounterAssignmentService], // StreamConsumerService temporarily disabled due to Redis timeout issues
   exports: [RoutingService, CounterAssignmentService],
 })
 export class RoutingModule {}

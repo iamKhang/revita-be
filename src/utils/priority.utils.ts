@@ -23,6 +23,7 @@ export function calculatePriorityScore(
   isFollowUpWithin14Days?: boolean,
   lastVisitDate?: Date,
   isReturnedAfterService: boolean = false,
+  gender?: string,
 ): number {
   let totalScore = 0;
 
@@ -76,6 +77,12 @@ export function calculatePriorityScore(
     totalScore += 6;
   }
 
+  // Ưu tiên phụ nữ cao tuổi (≥ 65 tuổi): +1 điểm
+  // Chỉ áp dụng cho người già, không áp dụng cho người trẻ và trẻ em
+  if (age >= 65 && gender === 'FEMALE') {
+    totalScore += 1;
+  }
+
   return totalScore;
 }
 
@@ -89,7 +96,7 @@ export function getPriorityLevel(
 ): 'Thấp' | 'Trung bình' | 'Cao' | 'Rất cao' {
   if (score >= 10) return 'Rất cao';
   if (score >= 7) return 'Cao';
-  if (score >= 4) return 'Trung bình';
+  if (score >= 3) return 'Trung bình';  // Người cao tuổi (3 điểm) = Trung bình
   return 'Thấp';
 }
 
@@ -106,11 +113,19 @@ export function calculateSimplePriority(
   checkInTime: Date,
   hasAppointment: boolean = false,
   appointmentTime?: Date,
+  gender?: string,
 ): number {
   return calculatePriorityScore(
     age,
     checkInTime,
     hasAppointment,
     appointmentTime,
+    undefined, // isPregnant
+    undefined, // pregnancyWeeks
+    undefined, // hasDisability
+    undefined, // isFollowUpWithin14Days
+    undefined, // lastVisitDate
+    false, // isReturnedAfterService
+    gender,
   );
 }

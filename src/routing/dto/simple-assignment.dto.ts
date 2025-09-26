@@ -11,15 +11,11 @@ export class SimpleAssignmentDto {
 
   @IsBoolean()
   @IsOptional()
-  isVIP?: boolean;
+  isVIP?: boolean; // Khám VIP
 
   @IsBoolean()
   @IsOptional()
   isElderly?: boolean; // >70 tuổi (đặt thủ công khi bốc số)
-
-  @IsBoolean()
-  @IsOptional()
-  isEmergency?: boolean;
 
   @IsBoolean()
   @IsOptional()

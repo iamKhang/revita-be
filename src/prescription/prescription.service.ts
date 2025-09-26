@@ -43,15 +43,6 @@ export class PrescriptionService {
       );
     }
 
-    console.log('Creating prescription with data:', {
-      prescriptionCode,
-      patientProfileId,
-      doctorId,
-      note,
-      services,
-      medicalRecordId,
-      doctorFromToken: user.doctor?.id,
-    });
 
     if (!services || services.length === 0) {
       throw new BadRequestException('services must not be empty');
@@ -432,10 +423,7 @@ export class PrescriptionService {
   }
 
   async getPrescriptionsByMedicalRecord(medicalRecordId: string) {
-    console.log(
-      'Searching for prescriptions with medicalRecordId:',
-      medicalRecordId,
-    );
+
 
     const prescriptions = await this.prisma.prescription.findMany({
       where: { medicalRecordId },
@@ -450,8 +438,6 @@ export class PrescriptionService {
       orderBy: { id: 'desc' }, // Sắp xếp theo ID (UUID mới nhất trước)
     });
 
-    console.log('Found prescriptions:', prescriptions.length);
-    console.log('Prescriptions:', prescriptions);
 
     return prescriptions;
   }

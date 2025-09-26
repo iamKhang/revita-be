@@ -3,7 +3,7 @@ import { Server, Socket } from 'socket.io';
 import { QueueTicket } from '../cache/redis-stream.service';
 
 export interface WebSocketMessage {
-  type: 'NEW_TICKET' | 'TICKET_CALLED' | 'TICKET_COMPLETED' | 'COUNTER_STATUS';
+  type: 'NEW_TICKET' | 'TICKET_CALLED' | 'TICKET_COMPLETED' | 'COUNTER_STATUS' | 'NEXT_PATIENT_CALLED' | 'PATIENT_SKIPPED_AND_NEXT_CALLED' | 'PATIENT_PREPARING' | 'PATIENT_SERVED';
   data: any;
   timestamp: string;
 }

@@ -9,6 +9,7 @@ import {
   BadRequestException,
   NotFoundException,
   Query,
+  Request,
 } from '@nestjs/common';
 import { Roles } from '../../rbac/roles.decorator';
 import { Role } from '../../rbac/roles.enum';
@@ -19,12 +20,16 @@ import { UpdatePatientDto } from '../dto/update-patient.dto';
 import { BookAppointmentDto } from '../dto/book-appointment.dto';
 import { JwtAuthGuard } from 'src/login/jwt-auth.guard';
 import { CodeGeneratorService } from '../patient-profile/code-generator.service';
+import { ReceptionistService } from './receptionist.service';
+import { OpenCounterDto, CloseCounterDto } from './dto/counter-management.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('receptionists')
 export class ReceptionistController {
   private prisma = new PrismaClient();
   private codeGenerator = new CodeGeneratorService();
+
+  constructor(private receptionistService: ReceptionistService) {}
 
   @Get('users')
   @Roles(Role.RECEPTIONIST)
@@ -345,4 +350,63 @@ export class ReceptionistController {
       },
     };
   }
+
+  // ===== COUNTER MANAGEMENT ENDPOINTS =====
+
+  /**
+   * Lấy danh sách tất cả các quầy với trạng thái hiện tại
+   */
+  @Get('counters')
+  @Roles(Role.RECEPTIONIST)
+  async getAllCounters() {
+    return this.receptionistService.getAllCounters();
+  }
+
+  /**
+   * Mở quầy - tạo CounterAssignment mới
+   */
+  @Post('counters/open')
+  @Roles(Role.RECEPTIONIST)
+  async openCounter(@Request() req, @Body() openCounterDto: OpenCounterDto) {
+    const receptionistId = req.user.receptionist?.id;
+    if (!receptionistId) {
+      throw new BadRequestException('Receptionist ID not found in token');
+    }
+    return this.receptionistService.openCounter(receptionistId, openCounterDto);
+  }
+
+  /**
+   * Đóng quầy - cập nhật CounterAssignment thành COMPLETED
+   */
+  @Post('counters/close')
+  @Roles(Role.RECEPTIONIST)
+  async closeCounter(@Request() req, @Body() closeCounterDto: CloseCounterDto) {
+    const receptionistId = req.user.receptionist?.id;
+    if (!receptionistId) {
+      throw new BadRequestException('Receptionist ID not found in token');
+    }
+    return this.receptionistService.closeCounter(receptionistId, closeCounterDto);
+  }
+
+  /**
+   * Lấy trạng thái quầy hiện tại của receptionist
+   */
+  @Get('counters/current')
+  @Roles(Role.RECEPTIONIST)
+  async getCurrentCounterStatus(@Request() req) {
+    const receptionistId = req.user.receptionist?.id;
+    if (!receptionistId) {
+      throw new BadRequestException('Receptionist ID not found in token');
+    }
+    return this.receptionistService.getCurrentCounterStatus(receptionistId);
+  }
+
+  // ===== QUEUE MANAGEMENT ENDPOINTS =====
+  // Lưu ý: Các endpoint quản lý hàng chờ đã có sẵn trong counter-assignment.controller.ts
+  // Sử dụng các endpoint sau thay vì tạo mới:
+  // - GET /counter-assignment/counters/:counterId/queue
+  // - POST /counter-assignment/next-patient/:counterId  
+  // - POST /counter-assignment/skip-current/:counterId
+  // - POST /counter-assignment/mark-served/:counterId
+  // - GET /counter-assignment/counters/:counterId/queue-status
 }

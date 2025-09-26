@@ -68,7 +68,6 @@ export class TakeNumberService {
     const tlog = (label: string, tPrev: number) => {
       const now = Date.now();
       const delta = now - tPrev;
-      console.log(`[take-number] ${label} +${delta}ms (total ${now - t0}ms)`);
       return now;
     };
     let t = t0;
@@ -92,24 +91,6 @@ export class TakeNumberService {
       patientInfo = result.patientInfo;
       hasAppointment = true;
       appointmentDetails = result.appointmentDetails;
-    } else if (request.qrCode) {
-      const result = await this.parseQrCode(request.qrCode);
-      if (result.type === 'profile') {
-        patientInfo = await this.withTimeout(
-          this.getPatientByProfileCode(result.code),
-          500,
-          () => null,
-        );
-      } else if (result.type === 'appointment') {
-        const appointmentResult = await this.withTimeout(
-          this.getPatientByAppointmentCode(result.code),
-          500,
-          () => ({ patientInfo: null as any, appointmentDetails: null as any }),
-        );
-        patientInfo = appointmentResult.patientInfo;
-        hasAppointment = true;
-        appointmentDetails = appointmentResult.appointmentDetails;
-      }
     }
     t = tlog('patient lookup', t);
 
@@ -118,11 +99,15 @@ export class TakeNumberService {
       if (!request.patientName) {
         throw new BadRequestException('Không tìm thấy thông tin bệnh nhân. Vui lòng cung cấp tên bệnh nhân.');
       }
+      if (!request.patientAge) {
+        throw new BadRequestException('Vui lòng cung cấp tuổi bệnh nhân để tính điểm ưu tiên.');
+      }
       patientInfo = {
         name: request.patientName,
-        age: 30, // Tuổi mặc định
-        gender: 'UNKNOWN',
-        dateOfBirth: new Date(1990, 0, 1),
+        age: request.patientAge,
+        gender: request.patientGender || 'UNKNOWN',
+        phone: request.patientPhone,
+        dateOfBirth: new Date(new Date().getFullYear() - request.patientAge, 0, 1),
       };
     }
 
@@ -291,40 +276,6 @@ export class TakeNumberService {
   }
 
   /**
-   * Parse QR code để lấy mã hồ sơ hoặc mã lịch khám
-   */
-  private async parseQrCode(qrCode: string): Promise<{
-    type: 'profile' | 'appointment';
-    code: string;
-  }> {
-    try {
-      const obj = JSON.parse(qrCode);
-      if (obj.profileCode) {
-        return { type: 'profile', code: obj.profileCode };
-      }
-      if (obj.appointmentCode) {
-        return { type: 'appointment', code: obj.appointmentCode };
-      }
-    } catch {
-      // Fallback to regex
-    }
-
-    // Thử tìm mã hồ sơ (format: PP-XXXXXX)
-    const profileMatch = qrCode.match(/PP-\d{6}/);
-    if (profileMatch) {
-      return { type: 'profile', code: profileMatch[0] };
-    }
-
-    // Thử tìm mã lịch khám (format: AP-XXXXXX)
-    const appointmentMatch = qrCode.match(/AP-\d{6}/);
-    if (appointmentMatch) {
-      return { type: 'appointment', code: appointmentMatch[0] };
-    }
-
-    throw new BadRequestException('QR code không hợp lệ');
-  }
-
-  /**
    * Tính điểm ưu tiên cho bệnh nhân
    */
   private calculatePatientPriority(
@@ -361,14 +312,12 @@ export class TakeNumberService {
       false, // isFollowUpWithin14Days - cần logic để xác định
       undefined, // lastVisitDate - cần query từ database
       false, // isReturnedAfterService
+      patientInfo.gender, // Truyền giới tính để tính ưu tiên cho phụ nữ cao tuổi
     );
 
     // Thêm điểm cho các đặc điểm đặc biệt
-    if (request.isEmergency) {
-      priorityScore += 10; // Cấp cứu có điểm cao nhất
-    }
     if (request.isVIP) {
-      priorityScore += 5; // VIP có điểm cao
+      priorityScore += 8; // Khám VIP có điểm cao
     }
 
     return priorityScore;
@@ -410,23 +359,55 @@ export class TakeNumberService {
    * Chọn counter tốt nhất dựa trên điểm ưu tiên
    */
   private async selectBestCounter(priorityScore: number): Promise<any> {
+    // Lấy tất cả counter có assignment ACTIVE (có nhân viên đang làm việc)
     const counters = await this.prisma.counter.findMany({
-      where: { isActive: true },
-      select: { id: true, counterCode: true, counterName: true },
+      where: { 
+        isActive: true,
+        assignments: {
+          some: {
+            status: 'ACTIVE',
+            completedAt: null
+          }
+        }
+      },
+      include: {
+        receptionist: {
+          include: {
+            auth: true
+          }
+        },
+        assignments: {
+          where: {
+            status: 'ACTIVE',
+            completedAt: null
+          },
+          orderBy: {
+            assignedAt: 'desc'
+          },
+          take: 1
+        }
+      }
     });
 
     if (counters.length === 0) {
-      throw new NotFoundException('Không có counter nào khả dụng');
+      throw new NotFoundException('Không có quầy nào đang có nhân viên tiếp nhận làm việc');
     }
 
-    // Ưu tiên counter có ít người đợi nhất
-    // Trong thực tế, có thể query từ Redis để lấy queue length
-    const sortedCounters = counters.sort((a, b) => {
-      // Logic chọn counter có thể phức tạp hơn
-      return Math.random() - 0.5; // Tạm thời random
-    });
+    // Sử dụng tất cả counter có assignment ACTIVE (không cần kiểm tra online status)
+    const availableCounters = counters;
 
-    return sortedCounters[0];
+    // Ưu tiên counter có ít người đợi nhất
+    const sortedCounters = await Promise.all(
+      availableCounters.map(async (counter) => {
+        const queueLength = await this.redis.getCounterQueueLength(counter.id);
+        return { counter, queueLength };
+      })
+    );
+
+    sortedCounters.sort((a, b) => a.queueLength - b.queueLength);
+
+    // Lấy counter có ít người đợi nhất
+    return sortedCounters[0].counter;
   }
 
   /**
@@ -467,7 +448,6 @@ export class TakeNumberService {
         isPregnant: request.isPregnant,
         isDisabled: request.isDisabled,
         isElderly: request.isElderly,
-        isEmergency: request.isEmergency,
         isVIP: request.isVIP,
         notes: request.notes,
         hasAppointment,
@@ -479,8 +459,8 @@ export class TakeNumberService {
    * Lấy sequence tiếp theo cho counter
    */
   private async getNextSequence(counterId: string): Promise<number> {
-    // Trong thực tế, có thể sử dụng Redis counter
-    return Math.floor(Math.random() * 1000) + 1;
+    // Sử dụng Redis counter để đảm bảo sequence tăng dần và không duplicate
+    return await this.redis.getNextCounterSequence(counterId);
   }
 
   /**

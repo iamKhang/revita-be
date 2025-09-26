@@ -146,23 +146,30 @@ export class RedisService implements OnModuleDestroy {
       }
     }
     
-    // Compute composite score: priority bucket first, then FIFO by sequence
+    // Compute composite score: priority score first, then FIFO by sequence (lower sequence = earlier)
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const hasSequence = (item as any)?.sequence !== undefined;
-    if (hasSequence) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const isPriority = Boolean((item as any)?.isPriority);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const sequenceNum = Number((item as any)?.sequence) || 0;
-      const base = isPriority ? 1_000_000_000 : 0;
-      const score = base - sequenceNum;
-      await this.redis.zadd(key, score, JSON.stringify(item));
-      return;
+    const priorityScore = Number((item as any)?.priorityScore) || 0;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const sequenceNum = Number((item as any)?.sequence) || 0;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const assignedAt = (item as any)?.assignedAt;
+    
+    // Score calculation: higher priority score = higher score, earlier time = higher score
+    // Use priority score as primary factor, then time as secondary factor
+    let timeScore = 0;
+    if (assignedAt) {
+      // Convert assignedAt to timestamp for comparison (earlier = higher score)
+      const assignedTime = new Date(assignedAt).getTime();
+      const now = Date.now();
+      // Invert time so earlier times get higher scores (but smaller impact than priority)
+      timeScore = (now - assignedTime) / 1000; // seconds difference, max ~86400 for 1 day
     }
-    // Fallback: use priorityScore only
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const priority = Number((item as any)?.priorityScore ?? 0);
-    await this.redis.zadd(key, priority, JSON.stringify(item));
+    
+    // Primary: priority score (0-100+), Secondary: time score (smaller range)
+    // This ensures priority is the main factor, but time breaks ties
+    const score = (priorityScore * 10000) + (timeScore / 1000);
+    
+    await this.redis.zadd(key, score, JSON.stringify(item));
   }
 
   /**
@@ -239,10 +246,6 @@ export class RedisService implements OnModuleDestroy {
     return items.map((s) => JSON.parse(s) as Record<string, unknown>);
   }
 
-  async clearCounterQueue(counterId: string): Promise<void> {
-    const key = `counterQueueZ:${counterId}`;
-    await this.redis.del(key);
-  }
 
   async getCounterQueueLength(counterId: string): Promise<number> {
     const key = `counterQueueZ:${counterId}`;
@@ -267,6 +270,26 @@ export class RedisService implements OnModuleDestroy {
       return JSON.parse(current) as Record<string, unknown>;
     } catch {
       return null;
+    }
+  }
+
+  async getLastServedPatient(counterId: string): Promise<Record<string, unknown> | null> {
+    const key = `counterServed:${counterId}`;
+    const served = await this.redis.get(key);
+    if (!served) return null;
+    try {
+      return JSON.parse(served) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  async setLastServedPatient(counterId: string, patient: Record<string, unknown> | null): Promise<void> {
+    const key = `counterServed:${counterId}`;
+    if (patient) {
+      await this.redis.set(key, JSON.stringify(patient));
+    } else {
+      await this.redis.del(key);
     }
   }
 
@@ -674,7 +697,6 @@ export class RedisService implements OnModuleDestroy {
    */
   async checkAndResetSequenceIfEmpty(counterId: string): Promise<void> {
     const startTime = Date.now();
-    console.log(`[REDIS_PERF] checkAndResetSequenceIfEmpty started for counter ${counterId}`);
     
     // Use pipeline to combine operations
     const pipeline = this.redis.pipeline();
@@ -706,7 +728,6 @@ export class RedisService implements OnModuleDestroy {
     const queueLength = result[1];
     
     const totalDuration = Date.now() - startTime;
-    console.log(`[REDIS_PERF] checkAndResetSequenceIfEmpty completed in ${totalDuration}ms (reset: ${wasReset}, queueLength: ${queueLength})`);
   }
 
   // ------------------ Queue number helpers (per counter, per day) ------------------
@@ -788,21 +809,25 @@ export class RedisService implements OnModuleDestroy {
     message?: string;
   }> {
     const startTime = Date.now();
-    console.log(`[REDIS_PERF] callNextPatientOptimized started for counter ${counterId}`);
     
     // Step 1: Create pipeline
     const pipelineStart = Date.now();
     const pipeline = this.redis.pipeline();
     const pipelineDuration = Date.now() - pipelineStart;
-    console.log(`[REDIS_PERF] Pipeline created in ${pipelineDuration}ms`);
     
     // Step 2: Execute Lua script
     const scriptStart = Date.now();
-    console.log(`[REDIS_PERF] Executing Lua script...`);
     pipeline.eval(`
       local queueKey = KEYS[1]
       local currentKey = KEYS[2]
       local turnKey = KEYS[3]
+      local servedKey = KEYS[4]
+      
+      -- Save current patient as last served before getting new one
+      local current = redis.call('GET', currentKey)
+      if current then
+        redis.call('SET', servedKey, current)
+      end
       
       -- Get next patient
       local result = redis.call('ZPOPMAX', queueKey, 1)
@@ -812,28 +837,32 @@ export class RedisService implements OnModuleDestroy {
       
       local patient = result[1]
       
+      -- Parse and update patient status when moving from queue to current
+      local patientData = cjson.decode(patient)
+      patientData.status = 'SERVING'
+      patientData.callCount = (patientData.callCount or 0) + 1
+      local updatedPatient = cjson.encode(patientData)
+      
       -- Set as current patient
-      redis.call('SET', currentKey, patient)
+      redis.call('SET', currentKey, updatedPatient)
       
       -- Increment turn counter
       redis.call('INCR', turnKey)
       
-      return {1, patient}
-    `, 3, 
+      return {1, updatedPatient}
+    `, 4, 
     `counterQueueZ:${counterId}`,
     `counterCurrent:${counterId}`,
-    `counterTurn:${counterId}`
+    `counterTurn:${counterId}`,
+    `counterServed:${counterId}`
     );
     
     const scriptDuration = Date.now() - scriptStart;
-    console.log(`[REDIS_PERF] Lua script prepared in ${scriptDuration}ms`);
     
     // Step 3: Execute pipeline
     const execStart = Date.now();
-    console.log(`[REDIS_PERF] Executing pipeline...`);
     const results = await pipeline.exec();
     const execDuration = Date.now() - execStart;
-    console.log(`[REDIS_PERF] Pipeline executed in ${execDuration}ms`);
     
     // Step 4: Process results
     const processStart = Date.now();
@@ -841,7 +870,7 @@ export class RedisService implements OnModuleDestroy {
     
     if (result[0] === 0) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[REDIS_PERF] callNextPatientOptimized completed in ${totalDuration}ms (no patients)`);
+
       return { success: false, message: 'No patients in queue' };
     }
     
@@ -849,12 +878,9 @@ export class RedisService implements OnModuleDestroy {
     const jsonStart = Date.now();
     const patient = JSON.parse(result[1]!);
     const jsonDuration = Date.now() - jsonStart;
-    console.log(`[REDIS_PERF] JSON parsing completed in ${jsonDuration}ms`);
     
     const processDuration = Date.now() - processStart;
     const totalDuration = Date.now() - startTime;
-    console.log(`[REDIS_PERF] callNextPatientOptimized completed in ${totalDuration}ms (patient: ${patient?.patientName || 'Unknown'})`);
-    console.log(`[REDIS_PERF] Breakdown: pipeline=${pipelineDuration}ms, script=${scriptDuration}ms, exec=${execDuration}ms, process=${processDuration}ms, json=${jsonDuration}ms`);
     
     return { success: true, patient };
   }
@@ -862,23 +888,102 @@ export class RedisService implements OnModuleDestroy {
   /**
    * Optimized skip patient with atomic operations
    */
+  async skipCurrentPatientSimple(counterId: string): Promise<{
+    success: boolean;
+    patient?: Record<string, unknown>;
+    message?: string;
+  }> {
+    try {
+      // Step 1: Get current patient
+      const currentKey = `counterCurrent:${counterId}`;
+      const current = await this.redis.get(currentKey);
+      
+      if (!current) {
+        return { success: false, message: 'No current patient to skip' };
+      }
+      
+      // Step 2: Parse and update patient data
+      const patientData = JSON.parse(current);
+      patientData.callCount = (patientData.callCount || 0) + 1;
+      patientData.status = 'MISSED';
+      
+      // Step 3: Add to skipped list for tracking
+      const skippedKey = `counterSkipped:${counterId}`;
+      await this.redis.lpush(skippedKey, JSON.stringify(patientData));
+      
+      // Step 4: Clear current patient
+      await this.redis.del(currentKey);
+      
+      // Step 5: If callCount > 3, remove patient completely (don't add back to queue)
+      if (patientData.callCount > 3) {
+        return { 
+          success: true, 
+          patient: patientData, 
+          message: 'patient_removed_callcount_exceeded' 
+        };
+      }
+      
+      // Step 6: Get queue length
+      const queueKey = `counterQueueZ:${counterId}`;
+      const queueLength = await this.redis.zcard(queueKey);
+      
+      // Step 7: Always insert after 3rd position (3 people will be called before this patient)
+      if (queueLength >= 3) {
+        // Get the score of the 3rd patient
+        const queueOrdered = await this.redis.zrevrange(queueKey, 0, 2, 'WITHSCORES');
+        const thirdPatientScore = parseFloat(queueOrdered[5]); // 3rd patient score
+        
+        // Insert after 3rd patient with slightly lower score
+        const insertScore = thirdPatientScore - 0.001;
+        
+        // Add back to queue with new score
+        await this.redis.zadd(queueKey, insertScore, JSON.stringify(patientData));
+        
+        return { 
+          success: true, 
+          patient: patientData, 
+          message: 'inserted_after_3rd_patient' 
+        };
+      } else {
+        // If queue has less than 3 people, insert at the end (lowest priority)
+        let minScore = 0;
+        if (queueLength > 0) {
+          const allScores = await this.redis.zrange(queueKey, 0, 0, 'WITHSCORES');
+          if (allScores.length >= 2) {
+            minScore = parseFloat(allScores[1]) - 1;
+          }
+        }
+        
+        await this.redis.zadd(queueKey, minScore, JSON.stringify(patientData));
+        
+        return { 
+          success: true, 
+          patient: patientData, 
+          message: 'inserted_at_end' 
+        };
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        message: `Error in skipCurrentPatientSimple: ${(error as Error).message}` 
+      };
+    }
+  }
+
   async skipCurrentPatientOptimized(counterId: string): Promise<{
     success: boolean;
     patient?: Record<string, unknown>;
     message?: string;
   }> {
     const startTime = Date.now();
-    console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized started for counter ${counterId}`);
     
     // Step 1: Create pipeline
     const pipelineStart = Date.now();
     const pipeline = this.redis.pipeline();
     const pipelineDuration = Date.now() - pipelineStart;
-    console.log(`[SKIP_REDIS_PERF] Pipeline created in ${pipelineDuration}ms`);
     
     // Step 2: Execute Lua script
     const scriptStart = Date.now();
-    console.log(`[SKIP_REDIS_PERF] Executing skip Lua script...`);
     pipeline.eval(`
       local currentKey = KEYS[1]
       local queueKey = KEYS[2]
@@ -887,7 +992,7 @@ export class RedisService implements OnModuleDestroy {
       -- Get current patient
       local current = redis.call('GET', currentKey)
       if not current then
-        return {0}  -- No current patient
+        return {0, '', ''}  -- No current patient
       end
       
       -- Parse current patient to update callCount
@@ -902,28 +1007,27 @@ export class RedisService implements OnModuleDestroy {
       -- Clear current patient
       redis.call('DEL', currentKey)
       
-      -- Get queue length to determine insertion position
-      local queueLength = redis.call('ZCARD', queueKey)
+      -- If callCount > 3, remove patient completely (don't add back to queue)
+      if patientData.callCount > 3 then
+        return {1, updatedCurrent, 'patient_removed_callcount_exceeded'}
+      end
       
-      -- If queue has 3 or more people, insert after 3rd position
+      -- Get queue ordered by priority (highest to lowest score)
+      local queueOrdered = redis.call('ZREVRANGE', queueKey, 0, -1, 'WITHSCORES')
+      local queueLength = #queueOrdered / 2  -- WITHSCORES returns [member, score, member, score, ...]
+      
+      -- Always insert after 3rd position (3 people will be called before this patient)
       if queueLength >= 3 then
-        -- Get top 3 patients
-        local top3 = redis.call('ZREVRANGE', queueKey, 0, 2)
+        -- Find the score of the 3rd patient (index 5 in WITHSCORES: 0,1,2,3,4,5)
+        local thirdPatientScore = tonumber(queueOrdered[5])
         
-        -- Get their scores
-        local scores = {}
-        for i = 1, #top3 do
-          local score = redis.call('ZSCORE', queueKey, top3[i])
-          scores[i] = score
-        end
-        
-        -- Insert after 3rd patient (lowest score among top 3)
-        local insertScore = scores[3] - 1
+        -- Insert after 3rd patient with slightly lower score
+        local insertScore = thirdPatientScore - 0.001
         
         -- Add back to queue with new score
         redis.call('ZADD', queueKey, insertScore, updatedCurrent)
         
-        return {1, updatedCurrent, 'inserted_after_3'}
+        return {1, updatedCurrent, 'inserted_after_3rd_patient'}
       else
         -- If queue has less than 3 people, insert at the end (lowest priority)
         local minScore = 0
@@ -945,36 +1049,67 @@ export class RedisService implements OnModuleDestroy {
     );
     
     const scriptDuration = Date.now() - scriptStart;
-    console.log(`[SKIP_REDIS_PERF] Lua script prepared in ${scriptDuration}ms`);
     
     // Step 3: Execute pipeline
     const execStart = Date.now();
-    console.log(`[SKIP_REDIS_PERF] Executing pipeline...`);
     const results = await pipeline.exec();
     const execDuration = Date.now() - execStart;
-    console.log(`[SKIP_REDIS_PERF] Pipeline executed in ${execDuration}ms`);
     
     // Step 4: Process results
     const processStart = Date.now();
-    const result = results?.[0]?.[1] as [number, string?, string?];
     
-    if (result[0] === 0) {
+    // Check if results exist and have the expected structure
+    // Handle case where pipeline.exec() returns null (Redis connection issues)
+    if (results === null) {
       const totalDuration = Date.now() - startTime;
-      console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized completed in ${totalDuration}ms (no current patient)`);
+      return { success: false, message: 'Redis pipeline returned null - connection issue' };
+    }
+    
+    if (!results || !Array.isArray(results) || results.length === 0) {
+      const totalDuration = Date.now() - startTime;
+      return { success: false, message: 'No results from Redis pipeline' };
+    }
+    
+    const firstResult = results[0];
+    
+    // Redis pipeline returns [error, result] format
+    
+    if (!firstResult || firstResult.length < 2) {
+      const totalDuration = Date.now() - startTime;
+      return { success: false, message: 'Invalid result structure from Redis' };
+    }
+    
+    // firstResult[0] is error, firstResult[1] is the actual result
+    if (firstResult[0]) {
+      const totalDuration = Date.now() - startTime;
+      return { success: false, message: `Redis error: ${firstResult[0]}` };
+    }
+    
+    const result = firstResult[1];
+    
+    if (!Array.isArray(result)) {
+      const totalDuration = Date.now() - startTime;
+      return { success: false, message: 'Result is not an array from Redis' };
+    }
+    
+    if (!result || result[0] === 0) {
+      const totalDuration = Date.now() - startTime;
       return { success: false, message: 'No current patient to skip' };
     }
     
     // Step 5: Parse JSON
     const jsonStart = Date.now();
-    const patient = JSON.parse(result[1]!);
+    if (!result[1]) {
+      const totalDuration = Date.now() - startTime;
+      return { success: false, message: 'No patient data returned' };
+    }
+    
+    const patient = JSON.parse(result[1]);
     const insertionType = result[2];
     const jsonDuration = Date.now() - jsonStart;
-    console.log(`[SKIP_REDIS_PERF] JSON parsing completed in ${jsonDuration}ms`);
     
     const processDuration = Date.now() - processStart;
     const totalDuration = Date.now() - startTime;
-    console.log(`[SKIP_REDIS_PERF] skipCurrentPatientOptimized completed in ${totalDuration}ms (patient: ${patient?.patientName || 'Unknown'})`);
-    console.log(`[SKIP_REDIS_PERF] Breakdown: pipeline=${pipelineDuration}ms, script=${scriptDuration}ms, exec=${execDuration}ms, process=${processDuration}ms, json=${jsonDuration}ms`);
     
     return { 
       success: true, 
@@ -1040,6 +1175,10 @@ export class RedisService implements OnModuleDestroy {
     // If no current patient, get next from queue
     const next = await this.popNextFromCounterQueue(counterId);
     if (next) {
+      // Update status when moving from queue to current
+      (next as any).status = 'SERVING';
+      const calls = Number((next as any).callCount || 0) + 1;
+      (next as any).callCount = calls;
       await this.setCurrentPatient(counterId, next);
       return next;
     }
@@ -1091,6 +1230,34 @@ export class RedisService implements OnModuleDestroy {
     }
     
     return cleanedCount;
+  }
+
+  /**
+   * Clear all queue data for a counter (for testing)
+   */
+  async clearCounterQueue(counterId: string): Promise<void> {
+    const pipeline = this.redis.pipeline();
+    
+    // Clear all queue-related keys
+    pipeline.del(`counterQueueZ:${counterId}`);
+    pipeline.del(`counterCurrent:${counterId}`);
+    pipeline.del(`counterSkipped:${counterId}`);
+    pipeline.del(`counterSequence:${counterId}`);
+    pipeline.del(`counterLastServed:${counterId}`);
+    
+    await pipeline.exec();
+  }
+
+  async removeFromCounterQueue(counterId: string, patient: any): Promise<void> {
+    const key = `counterQueueZ:${counterId}`;
+    const patientString = JSON.stringify(patient);
+    await this.redis.zrem(key, patientString);
+  }
+
+  async addToCounterQueueWithScore(counterId: string, patient: any, score: number): Promise<void> {
+    const key = `counterQueueZ:${counterId}`;
+    const patientString = JSON.stringify(patient);
+    await this.redis.zadd(key, score, patientString);
   }
 
   /**
