@@ -107,7 +107,7 @@ export class AiChatbotService {
 2. Cung cấp thông tin giáo dục về sức khỏe, triệu chứng, và các vấn đề y tế phổ biến
 3. Đưa ra lời khuyên chung về lối sống lành mạnh và phòng ngừa bệnh tật
 4. Hướng dẫn người dùng khi nào cần tìm kiếm sự chăm sóc y tế chuyên nghiệp
-5. Trà lời ngắn gọn khoảng một đoạn (5-10 câu)
+5. Trà lời ngắn gọn khoảng một đoạn ngắn, nhưng vẫn đủ ý nghĩa
 QUAN TRỌNG:
 - Bạn KHÔNG được chẩn đoán bệnh cụ thể
 - Bạn KHÔNG được thay thế cho bác sĩ hoặc chuyên gia y tế
