@@ -150,8 +150,13 @@ export class TakeNumberService {
       .catch((e) => console.warn('[take-number] addTicketToStream error', (e as Error).message));
     void this.redis.pushToCounterQueue(counter.id, enqueueItem)
       .catch((e) => console.warn('[take-number] pushToCounterQueue error', (e as Error).message));
+    console.log('🎫 [TakeNumber] About to send NEW_TICKET WebSocket notification');
+    console.log('🎫 [TakeNumber] Counter ID:', counter.id);
+    console.log('🎫 [TakeNumber] Ticket:', ticket.queueNumber);
+    
     void this.webSocket.notifyNewTicket(counter.id, ticket)
-      .catch((e) => console.warn('[take-number] notifyNewTicket error', (e as Error).message));
+      .then(() => console.log('✅ [TakeNumber] NEW_TICKET notification sent successfully'))
+      .catch((e) => console.warn('❌ [TakeNumber] notifyNewTicket error', (e as Error).message));
     t = tlog('dispatch side-effects (fire-and-forget)', t);
 
     return {

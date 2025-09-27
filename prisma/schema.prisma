@@ -215,6 +215,7 @@ model ClinicRoom {
 
   specialty   Specialty   @relation(fields: [specialtyId], references: [id])
   services    ClinicRoomService[]
+  prescriptionServices PrescriptionService[]
 
   @@map("clinic_rooms")
 }
@@ -418,6 +419,16 @@ model PrescriptionService {
   note String?
   startedAt DateTime? @map("started_at")
   completedAt DateTime? @map("completed_at")
+  
+  // Lưu trữ thông tin buồng và phòng thực hiện dịch vụ
+  boothId String? @map("booth_id")
+  booth Booth? @relation(fields: [boothId], references: [id])
+  clinicRoomId String? @map("clinic_room_id")
+  clinicRoom ClinicRoom? @relation(fields: [clinicRoomId], references: [id])
+  
+  // Lưu trữ work session thực hiện dịch vụ
+  workSessionId String? @map("work_session_id")
+  workSession WorkSession? @relation(fields: [workSessionId], references: [id])
 
   @@unique([prescriptionId, serviceId])
   @@map("prescription_services")
@@ -433,11 +444,8 @@ enum PrescriptionStatus {
   COMPLETED
   DELAYED
   CANCELLED
-  SKIPPED
-  RECALL_FIRST
-  RECALL_SECOND
-  RECALL_THIRD
-  RECALL_BACK
+  MISSING
+  RETURN_AFTER_RESULT
 }
 
 model Booth {
@@ -452,6 +460,7 @@ model Booth {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   workSessions WorkSession[]
+  prescriptionServices PrescriptionService[]
 }
 
 model WorkSession {
@@ -469,7 +478,7 @@ model WorkSession {
   services WorkSessionService[]
   appointmentServices AppointmentService[]
   appointments Appointment[]
-
+  prescriptionServices PrescriptionService[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
