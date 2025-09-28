@@ -146,23 +146,11 @@ export class RedisService implements OnModuleDestroy {
       }
     }
     
-    // Compute composite score: priority bucket first, then FIFO by sequence
+    // Use sequence number for FIFO ordering (lower sequence = higher priority)
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const hasSequence = (item as any)?.sequence !== undefined;
-    if (hasSequence) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const isPriority = Boolean((item as any)?.isPriority);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const sequenceNum = Number((item as any)?.sequence) || 0;
-      const base = isPriority ? 1_000_000_000 : 0;
-      const score = base - sequenceNum;
-      await this.redis.zadd(key, score, JSON.stringify(item));
-      return;
-    }
-    // Fallback: use priorityScore only
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const priority = Number((item as any)?.priorityScore ?? 0);
-    await this.redis.zadd(key, priority, JSON.stringify(item));
+    const sequenceNum = Number((item as any)?.sequence) || 0;
+    const score = -sequenceNum; // Negative so lower sequence numbers come first
+    await this.redis.zadd(key, score, JSON.stringify(item));
   }
 
   /**

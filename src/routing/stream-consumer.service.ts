@@ -153,9 +153,9 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
         const value = message[key];
 
         // Convert string numbers back to numbers
-        if (['patientAge', 'priorityScore', 'sequence', 'estimatedWaitTime'].includes(key)) {
+        if (['patientAge', 'sequence', 'callCount'].includes(key)) {
           data[key] = parseInt(value) || 0;
-        } else if (['isPregnant', 'isDisabled', 'isElderly', 'isEmergency', 'isVIP'].includes(key)) {
+        } else if (['isPregnant', 'isDisabled', 'isOnTime'].includes(key)) {
           data[key] = value === 'true' || value === true;
         } else if (key === 'metadata' && typeof value === 'string') {
           // Parse metadata JSON string nếu có
@@ -215,8 +215,9 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
             ticketId: ticketData.ticketId,
             queueNumber: ticketData.queueNumber,
             patientName: ticketData.patientName,
-            priorityLevel: ticketData.priorityLevel,
-            estimatedWaitTime: ticketData.estimatedWaitTime,
+            isOnTime: ticketData.isOnTime,
+            status: ticketData.status,
+            callCount: ticketData.callCount,
           },
           timestamp: new Date().toISOString(),
         },
@@ -229,7 +230,6 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
           counterId: ticketData.counterId,
           counterCode: ticketData.counterCode,
           queueNumber: ticketData.queueNumber,
-          priorityLevel: ticketData.priorityLevel,
         },
         timestamp: new Date().toISOString(),
       });

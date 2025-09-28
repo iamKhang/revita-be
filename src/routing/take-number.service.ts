@@ -8,10 +8,7 @@ import { RedisStreamService, QueueTicket } from '../cache/redis-stream.service';
 import { WebSocketService } from '../websocket/websocket.service';
 import { RedisService } from '../cache/redis.service';
 import { TakeNumberDto } from './dto/take-number.dto';
-import { 
-  calculatePriorityScore, 
-  getPriorityLevel 
-} from '../utils/priority.utils';
+import { TicketStatus } from '../cache/redis-stream.service';
 
 export interface TakeNumberResult {
   success: true;
@@ -23,16 +20,15 @@ export interface TakeNumberResult {
     counterName: string;
     patientName: string;
     patientAge: number;
-    priorityScore: number;
-    priorityLevel: string;
-    estimatedWaitTime: number;
     assignedAt: string;
+    isOnTime?: boolean;
+    status: TicketStatus;
+    callCount: number;
   };
   patientInfo: {
     name: string;
     age: number;
     gender: string;
-    hasAppointment: boolean;
     appointmentDetails?: any;
   };
 }
@@ -126,30 +122,21 @@ export class TakeNumberService {
       };
     }
 
-    // Tính điểm ưu tiên
-    const priorityScore = this.calculatePatientPriority(
-      patientInfo,
-      hasAppointment,
-      appointmentDetails,
-      request,
-    );
-
-    const priorityLevel = getPriorityLevel(priorityScore);
-    t = tlog('priority calculation', t);
+    // Tính toán xem bệnh nhân có đến đúng giờ không
+    const isOnTime = this.calculateIsOnTime(hasAppointment, appointmentDetails);
+    t = tlog('calculate on-time status', t);
 
     // Chọn counter phù hợp
-    const counter = await this.selectBestCounter(priorityScore);
+    const counter = await this.selectBestCounter();
     t = tlog('select counter', t);
 
     // Tạo ticket
     const ticket = await this.createTicket(
       patientInfo,
-      priorityScore,
-      priorityLevel,
       counter,
       request,
-      hasAppointment,
       appointmentDetails,
+      isOnTime,
     );
     t = tlog('create ticket', t);
 
@@ -158,7 +145,6 @@ export class TakeNumberService {
       ...ticket,
       status: 'READY',
       callCount: 0,
-      isPriority: ticket.priorityScore >= 100, // flag tuỳ vào score nếu cần
     };
     // Thực thi nền để không chặn response nếu Redis/WebSocket chậm
     void this.redisStream.addTicketToStream(ticket)
@@ -179,16 +165,15 @@ export class TakeNumberService {
         counterName: ticket.counterName,
         patientName: ticket.patientName,
         patientAge: ticket.patientAge,
-        priorityScore: ticket.priorityScore,
-        priorityLevel: ticket.priorityLevel,
-        estimatedWaitTime: ticket.estimatedWaitTime,
         assignedAt: ticket.assignedAt,
+        isOnTime: ticket.isOnTime,
+        status: ticket.status,
+        callCount: ticket.callCount,
       },
       patientInfo: {
         name: patientInfo.name,
         age: patientInfo.age,
         gender: patientInfo.gender,
-        hasAppointment,
         appointmentDetails,
       },
     };
@@ -324,92 +309,11 @@ export class TakeNumberService {
     throw new BadRequestException('QR code không hợp lệ');
   }
 
-  /**
-   * Tính điểm ưu tiên cho bệnh nhân
-   */
-  private calculatePatientPriority(
-    patientInfo: any,
-    hasAppointment: boolean,
-    appointmentDetails: any,
-    request: TakeNumberDto,
-  ): number {
-    const checkInTime = new Date();
-    let appointmentTime: Date | undefined;
-
-    if (hasAppointment && appointmentDetails) {
-      // Kết hợp date và startTime để tạo appointmentTime
-      const [hours, minutes] = appointmentDetails.startTime.split(':');
-      appointmentTime = new Date(appointmentDetails.date);
-      appointmentTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    }
-
-    // Xác định các đặc điểm ưu tiên
-    const isPregnant = request.isPregnant || this.checkPregnancyFromEmergencyContact(patientInfo.emergencyContact);
-    const pregnancyWeeks = this.getPregnancyWeeks(patientInfo.emergencyContact);
-    const hasDisability = request.isDisabled || false;
-    const isElderly = request.isElderly || patientInfo.age > 70;
-
-    // Sử dụng priority.utils.ts để tính điểm
-    let priorityScore = calculatePriorityScore(
-      patientInfo.age,
-      checkInTime,
-      hasAppointment,
-      appointmentTime,
-      isPregnant,
-      pregnancyWeeks,
-      hasDisability,
-      false, // isFollowUpWithin14Days - cần logic để xác định
-      undefined, // lastVisitDate - cần query từ database
-      false, // isReturnedAfterService
-    );
-
-    // Thêm điểm cho các đặc điểm đặc biệt
-    if (request.isEmergency) {
-      priorityScore += 10; // Cấp cứu có điểm cao nhất
-    }
-    if (request.isVIP) {
-      priorityScore += 5; // VIP có điểm cao
-    }
-
-    return priorityScore;
-  }
 
   /**
-   * Kiểm tra có thai từ emergency contact
+   * Chọn counter tốt nhất
    */
-  private checkPregnancyFromEmergencyContact(emergencyContact: any): boolean {
-    if (!emergencyContact) return false;
-    
-    try {
-      const contact = typeof emergencyContact === 'string' 
-        ? JSON.parse(emergencyContact) 
-        : emergencyContact;
-      return contact.pregnancyStatus === 'PREGNANT';
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Lấy số tuần mang thai từ emergency contact
-   */
-  private getPregnancyWeeks(emergencyContact: any): number | undefined {
-    if (!emergencyContact) return undefined;
-    
-    try {
-      const contact = typeof emergencyContact === 'string' 
-        ? JSON.parse(emergencyContact) 
-        : emergencyContact;
-      return contact.pregnancyWeeks;
-    } catch {
-      return undefined;
-    }
-  }
-
-  /**
-   * Chọn counter tốt nhất dựa trên điểm ưu tiên
-   */
-  private async selectBestCounter(priorityScore: number): Promise<any> {
+  private async selectBestCounter(): Promise<any> {
     const counters = await this.prisma.counter.findMany({
       where: { isActive: true },
       select: { id: true, counterCode: true, counterName: true },
@@ -434,18 +338,15 @@ export class TakeNumberService {
    */
   private async createTicket(
     patientInfo: any,
-    priorityScore: number,
-    priorityLevel: string,
     counter: any,
     request: TakeNumberDto,
-    hasAppointment: boolean,
     appointmentDetails: any,
+    isOnTime: boolean,
   ): Promise<QueueTicket> {
     const ticketId = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const sequence = await this.getNextSequence(counter.id);
     const queueNumber = `${counter.counterCode}-${String(sequence).padStart(3, '0')}`;
     const assignedAt = new Date().toISOString();
-    const estimatedWaitTime = this.calculateEstimatedWaitTime(counter.id, priorityScore);
 
     return {
       ticketId,
@@ -454,44 +355,52 @@ export class TakeNumberService {
       patientName: patientInfo.name,
       patientAge: patientInfo.age,
       patientGender: patientInfo.gender,
-      priorityScore,
-      priorityLevel,
       counterId: counter.id,
       counterCode: counter.counterCode,
       counterName: counter.counterName,
       queueNumber,
       sequence,
       assignedAt,
-      estimatedWaitTime,
+      isOnTime,
+      status: TicketStatus.WAITING,
+      callCount: 0,
       metadata: {
         isPregnant: request.isPregnant,
         isDisabled: request.isDisabled,
-        isElderly: request.isElderly,
-        isEmergency: request.isEmergency,
-        isVIP: request.isVIP,
-        notes: request.notes,
-        hasAppointment,
       },
     };
+  }
+
+  /**
+   * Tính toán xem bệnh nhân có đến đúng giờ không
+   */
+  private calculateIsOnTime(hasAppointment: boolean, appointmentDetails: any): boolean {
+    if (!hasAppointment || !appointmentDetails) {
+      return false; // Không có lịch hẹn thì không tính là đúng giờ
+    }
+
+    const checkInTime = new Date();
+    const [hours, minutes] = appointmentDetails.startTime.split(':');
+    const appointmentTime = new Date(appointmentDetails.date);
+    appointmentTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+    // Tính khoảng cách thời gian (tính bằng phút)
+    const timeDifferenceMinutes = Math.abs(
+      (checkInTime.getTime() - appointmentTime.getTime()) / (1000 * 60)
+    );
+
+    // Đúng giờ nếu trong khoảng ±20 phút
+    return timeDifferenceMinutes <= 20;
   }
 
   /**
    * Lấy sequence tiếp theo cho counter
    */
   private async getNextSequence(counterId: string): Promise<number> {
-    // Trong thực tế, có thể sử dụng Redis counter
-    return Math.floor(Math.random() * 1000) + 1;
+    // Sử dụng Redis counter thực tế
+    return await this.redis.getNextCounterSequence(counterId);
   }
 
-  /**
-   * Tính thời gian chờ ước tính
-   */
-  private calculateEstimatedWaitTime(counterId: string, priorityScore: number): number {
-    // Logic tính thời gian chờ dựa trên queue length và điểm ưu tiên
-    const baseWaitTime = 15; // 15 phút cơ bản
-    const priorityMultiplier = Math.max(0.5, 1 - (priorityScore / 100)); // Điểm cao = chờ ít hơn
-    return Math.round(baseWaitTime * priorityMultiplier);
-  }
 
   /**
    * Tính tuổi từ ngày sinh
