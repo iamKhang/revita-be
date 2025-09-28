@@ -24,6 +24,7 @@ export interface TakeNumberResult {
     isOnTime?: boolean;
     status: TicketStatus;
     callCount: number;
+    queuePriority: number;
   };
   patientInfo: {
     name: string;
@@ -130,6 +131,15 @@ export class TakeNumberService {
     const counter = await this.selectBestCounter();
     t = tlog('select counter', t);
 
+    // Tính toán priority score cho queue
+    const queuePriority = this.calculateQueuePriority(
+      patientInfo.age,
+      request.isDisabled || false,
+      request.isPregnant || false,
+      hasAppointment,
+      0, // Sẽ được cập nhật sau khi có sequence
+    );
+
     // Tạo ticket
     const ticket = await this.createTicket(
       patientInfo,
@@ -137,6 +147,7 @@ export class TakeNumberService {
       request,
       appointmentDetails,
       isOnTime,
+      queuePriority,
     );
     t = tlog('create ticket', t);
 
@@ -169,6 +180,7 @@ export class TakeNumberService {
         isOnTime: ticket.isOnTime,
         status: ticket.status,
         callCount: ticket.callCount,
+        queuePriority: ticket.queuePriority,
       },
       patientInfo: {
         name: patientInfo.name,
@@ -342,11 +354,21 @@ export class TakeNumberService {
     request: TakeNumberDto,
     appointmentDetails: any,
     isOnTime: boolean,
+    queuePriority: number,
   ): Promise<QueueTicket> {
     const ticketId = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const sequence = await this.getNextSequence(counter.id);
     const queueNumber = `${counter.counterCode}-${String(sequence).padStart(3, '0')}`;
     const assignedAt = new Date().toISOString();
+
+    // Tính lại priority score với sequence thực tế
+    const finalQueuePriority = this.calculateQueuePriority(
+      patientInfo.age,
+      request.isDisabled || false,
+      request.isPregnant || false,
+      !!appointmentDetails,
+      sequence,
+    );
 
     return {
       ticketId,
@@ -364,6 +386,7 @@ export class TakeNumberService {
       isOnTime,
       status: TicketStatus.WAITING,
       callCount: 0,
+      queuePriority: finalQueuePriority,
       metadata: {
         isPregnant: request.isPregnant,
         isDisabled: request.isDisabled,
@@ -391,6 +414,52 @@ export class TakeNumberService {
 
     // Đúng giờ nếu trong khoảng ±20 phút
     return timeDifferenceMinutes <= 20;
+  }
+
+  /**
+   * Tính toán priority score cho việc sắp xếp queue
+   * Thứ tự ưu tiên: 1. Đang phục vụ 2. Tiếp theo 3. Già (>75) 4. Trẻ em (<6) 5. Khuyết tật 6. Mang thai 7. Có lịch hẹn 8. Thường
+   */
+  private calculateQueuePriority(
+    patientAge: number,
+    isDisabled: boolean,
+    isPregnant: boolean,
+    hasAppointment: boolean,
+    sequence: number,
+  ): number {
+    let priorityScore = 0;
+
+    // 1. Đang phục vụ (SERVING) - ưu tiên cao nhất
+    // 2. Tiếp theo (NEXT) - ưu tiên cao thứ 2
+    // (Hai trường hợp này được xử lý riêng trong Redis)
+
+    // 3. Người già (>75 tuổi) - ưu tiên cao thứ 3
+    if (patientAge > 75) {
+      priorityScore = 1000000 - patientAge; // Người già hơn ưu tiên hơn
+    }
+    // 4. Trẻ em (<6 tuổi) - ưu tiên cao thứ 4
+    else if (patientAge < 6) {
+      priorityScore = 2000000 - patientAge; // Trẻ em nhỏ hơn ưu tiên hơn
+    }
+    // 5. Người khuyết tật - ưu tiên cao thứ 5
+    else if (isDisabled) {
+      priorityScore = 3000000;
+    }
+    // 6. Người mang thai - ưu tiên cao thứ 6
+    else if (isPregnant) {
+      priorityScore = 4000000;
+    }
+    // 7. Người có lịch hẹn - ưu tiên cao thứ 7
+    else if (hasAppointment) {
+      priorityScore = 5000000;
+    }
+    // 8. Người thường - ưu tiên thấp nhất
+    else {
+      priorityScore = 6000000;
+    }
+
+    // Trong cùng nhóm ưu tiên, ai đến trước (sequence nhỏ hơn) thì ưu tiên hơn
+    return priorityScore - sequence;
   }
 
   /**

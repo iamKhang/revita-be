@@ -153,7 +153,7 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
         const value = message[key];
 
         // Convert string numbers back to numbers
-        if (['patientAge', 'sequence', 'callCount'].includes(key)) {
+        if (['patientAge', 'sequence', 'callCount', 'queuePriority'].includes(key)) {
           data[key] = parseInt(value) || 0;
         } else if (['isPregnant', 'isDisabled', 'isOnTime'].includes(key)) {
           data[key] = value === 'true' || value === true;

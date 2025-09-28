@@ -25,6 +25,7 @@ export interface QueueTicket {
   isOnTime?: boolean;
   status: TicketStatus;
   callCount: number;
+  queuePriority: number;
   metadata: {
     isPregnant?: boolean;
     isDisabled?: boolean;
@@ -141,6 +142,7 @@ export class RedisStreamService {
       isOnTime: ticket.isOnTime?.toString() || 'false',
       status: ticket.status,
       callCount: ticket.callCount.toString(),
+      queuePriority: ticket.queuePriority.toString(),
       isPregnant: ticket.metadata.isPregnant?.toString() || 'false',
       isDisabled: ticket.metadata.isDisabled?.toString() || 'false',
     };

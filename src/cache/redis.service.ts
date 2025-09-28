@@ -146,10 +146,10 @@ export class RedisService implements OnModuleDestroy {
       }
     }
     
-    // Use sequence number for FIFO ordering (lower sequence = higher priority)
+    // Use queuePriority for intelligent ordering
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const sequenceNum = Number((item as any)?.sequence) || 0;
-    const score = -sequenceNum; // Negative so lower sequence numbers come first
+    const queuePriority = Number((item as any)?.queuePriority) || 0;
+    const score = -queuePriority; // Negative so higher priority comes first
     await this.redis.zadd(key, score, JSON.stringify(item));
   }
 

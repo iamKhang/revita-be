@@ -113,7 +113,7 @@ export class CounterAssignmentService {
 
 
   /**
-   * Cập nhật status của ticket
+   * Cập nhật status của ticket và sắp xếp lại queue
    */
   private async updateTicketStatus(
     counterId: string,
@@ -136,9 +136,26 @@ export class CounterAssignmentService {
               ticket.callCount = callCount;
             }
             
-            // Xóa ticket cũ và thêm ticket mới với status đã cập nhật
+            // Tính lại queuePriority dựa trên status mới
+            let newPriority = ticket.queuePriority;
+            
+            // Điều chỉnh priority dựa trên status
+            if (status === TicketStatus.SERVING) {
+              newPriority = 0; // Ưu tiên cao nhất
+            } else if (status === TicketStatus.NEXT) {
+              newPriority = 100000; // Ưu tiên cao thứ 2
+            } else if (status === TicketStatus.SKIPPED) {
+              // Giữ nguyên priority nhưng có thể điều chỉnh dựa trên callCount
+              newPriority = ticket.queuePriority;
+            } else if (status === TicketStatus.COMPLETED) {
+              newPriority = -1000000; // Ưu tiên thấp nhất (sẽ bị xóa)
+            }
+            
+            ticket.queuePriority = newPriority;
+            
+            // Xóa ticket cũ và thêm ticket mới với priority đã cập nhật
             await this.redis['redis'].zrem(queueKey, member);
-            await this.redis['redis'].zadd(queueKey, -ticket.sequence, JSON.stringify(ticket));
+            await this.redis['redis'].zadd(queueKey, -newPriority, JSON.stringify(ticket));
             break;
           }
         } catch (e) {
