@@ -60,6 +60,11 @@ export class WebSocketService {
    * Gửi thông báo ticket mới đến counter
    */
   async notifyNewTicket(counterId: string, ticket: QueueTicket) {
+    const metadata = ticket.metadata || {};
+    const isPregnant = Boolean(metadata.isPregnant);
+    const isDisabled = Boolean(metadata.isDisabled);
+    const isElderly = typeof ticket.patientAge === 'number' ? ticket.patientAge >= 75 : false;
+
     const message: WebSocketMessage = {
       type: 'NEW_TICKET',
       data: {
@@ -72,30 +77,19 @@ export class WebSocketService {
         queueNumber: ticket.queueNumber,
         sequence: ticket.sequence,
         isOnTime: ticket.isOnTime,
+        isPregnant,
+        isDisabled,
+        isElderly,
         status: ticket.status,
         callCount: ticket.callCount,
         queuePriority: ticket.queuePriority,
-        metadata: ticket.metadata,
+        metadata,
       },
       timestamp: new Date().toISOString(),
     };
 
-    // Gửi đến room của counter
+    // Chỉ gửi đến counter tương ứng
     this.server.to(`counter:${counterId}`).emit('new_ticket', message);
-
-    // Gửi đến tất cả counter để cập nhật danh sách
-    this.server.emit('ticket_added', {
-      type: 'TICKET_ADDED',
-      data: {
-        counterId,
-        counterCode: ticket.counterCode,
-        queueNumber: ticket.queueNumber,
-        status: ticket.status,
-        callCount: ticket.callCount,
-        queuePriority: ticket.queuePriority,
-      },
-      timestamp: new Date().toISOString(),
-    });
 
     console.log(`Notified counter ${counterId} about new ticket ${ticket.queueNumber}`);
   }
@@ -300,4 +294,3 @@ export class WebSocketService {
     }
   }
 }
-

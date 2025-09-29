@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { RedisStreamService, TicketStatus } from '../cache/redis-stream.service';
 import { RedisService } from '../cache/redis.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { WebSocketService } from '../websocket/websocket.service';
 
 @Injectable()
@@ -10,8 +11,34 @@ export class CounterAssignmentService {
   constructor(
     private readonly redisStream: RedisStreamService,
     private readonly redis: RedisService,
+    private readonly prisma: PrismaService,
     private readonly webSocket: WebSocketService,
   ) {}
+
+  async getCounters(): Promise<Array<{
+    counterId: string;
+    counterCode: string;
+    counterName: string;
+    location: string;
+  }>> {
+    const counters = await this.prisma.counter.findMany({
+      where: { isActive: true },
+      orderBy: { counterCode: 'asc' },
+      select: {
+        id: true,
+        counterCode: true,
+        counterName: true,
+        location: true,
+      },
+    });
+
+    return counters.map(({ id, counterCode, counterName, location }) => ({
+      counterId: id,
+      counterCode,
+      counterName,
+      location: location ?? '',
+    }));
+  }
 
 
   async skipCurrentPatient(counterId: string): Promise<{
@@ -87,10 +114,18 @@ export class CounterAssignmentService {
       const totalDuration = Date.now() - startTime;
       console.log(`[SKIP_PERF] Step 3 completed in ${step3Duration}ms`);
       console.log(`[SKIP_PERF] skipCurrentPatient completed in ${totalDuration}ms (patient removed after ${callCount} calls)`);
-      
+
+      const responsePatient = this.mapTicketForFrontend({
+        ...(result.patient as any),
+        status: TicketStatus.SKIPPED,
+        callCount,
+      });
+
       return {
         ok: true,
+        patient: responsePatient,
         message: `Patient removed from queue after ${callCount} calls`,
+        status: TicketStatus.SKIPPED,
         callCount,
       } as any;
     }
@@ -112,7 +147,7 @@ export class CounterAssignmentService {
       (result.patient as any).callCount = callCount;
     }
 
-    const status = (result.patient as any)?.status || 'SKIPPED';
+    const status = (result.patient as any)?.status || TicketStatus.SKIPPED;
     const message = result.message ||
       (callCount >= 3
         ? 'Current patient will be removed after next skip'
@@ -136,18 +171,15 @@ export class CounterAssignmentService {
     const totalDuration = Date.now() - startTime;
     console.log(`[SKIP_PERF] skipCurrentPatient completed in ${totalDuration}ms (patient: ${result.patient?.patientName || 'Unknown'})`);
 
-    const response: any = {
+    const responsePatient = this.mapTicketForFrontend(result.patient ? { ...(result.patient as any) } : null);
+
+    return {
       ok: true,
-      patient: result.patient,
+      patient: responsePatient,
       message,
+      status,
       callCount,
     };
-
-    if (status) {
-      response.status = status;
-    }
-
-    return response;
   }
 
 
@@ -322,6 +354,13 @@ export class CounterAssignmentService {
       changes.currentServing = newQueue.find(p => p.status === TicketStatus.SERVING);
       changes.currentNext = newQueue.find(p => p.status === TicketStatus.NEXT);
 
+      const mapFrontend = (ticket: any) => this.mapTicketForFrontend(ticket);
+      changes.newPatients = changes.newPatients.map(mapFrontend).filter(Boolean);
+      changes.movedPatients = changes.movedPatients.map(mapFrontend).filter(Boolean);
+      changes.removedPatients = changes.removedPatients.map(mapFrontend).filter(Boolean);
+      changes.currentServing = mapFrontend(changes.currentServing);
+      changes.currentNext = mapFrontend(changes.currentNext);
+
       // Gửi sự kiện WebSocket
       await this.webSocket.notifyQueuePositionChanges(counterId, eventType, changes);
       
@@ -491,7 +530,9 @@ export class CounterAssignmentService {
     const totalDuration = Date.now() - startTime;
     console.log(`[PERF] callNextPatient completed in ${totalDuration}ms (patient found: ${result.patient?.patientName || 'Unknown'})`);
     
-    return { ok: true, patient: result.patient };
+    const responsePatient = this.mapTicketForFrontend(result.patient);
+
+    return { ok: true, patient: responsePatient };
   }
 
   private async logQueueSnapshot(
@@ -500,22 +541,25 @@ export class CounterAssignmentService {
     context: string,
   ): Promise<void> {
     const snapshot = queue ?? await this.redis.getCounterQueueSnapshot(counterId);
-    const current = await this.redis.getCurrentPatient(counterId);
+    const currentRaw = await this.redis.getCurrentPatient(counterId);
+    const current = this.mapTicketForFrontend(
+      currentRaw
+        ? {
+            ...currentRaw,
+            status: (currentRaw as any).status || TicketStatus.SERVING,
+          }
+        : null,
+    );
 
-    const combined: any[] = [];
-    if (current) {
-      combined.push({
-        ...current,
-        status: TicketStatus.SERVING,
-      });
-    }
+    const waiting = (snapshot || [])
+      .filter((ticket) => !current || ticket.ticketId !== (current as any).ticketId)
+      .map((ticket) => this.mapTicketForFrontend({
+        ...ticket,
+        status: ticket.status || TicketStatus.WAITING,
+      }))
+      .filter(Boolean);
 
-    for (const ticket of snapshot || []) {
-      if (current && ticket.ticketId === (current as any).ticketId) {
-        continue;
-      }
-      combined.push(ticket);
-    }
+    const combined = current ? [current, ...waiting] : [...waiting];
 
     const rows = combined.map((ticket, index) => ({
       pos: index + 1,
@@ -530,9 +574,9 @@ export class CounterAssignmentService {
       prio: ticket.queuePriority,
       calls: ticket.callCount ?? 0,
       age: ticket.patientAge,
-      preg: ticket.metadata?.isPregnant ? 'Y' : '',
-      dis: ticket.metadata?.isDisabled ? 'Y' : '',
-      eld: ticket.patientAge > 75 ? 'Y' : '',
+      preg: ticket?.isPregnant ? 'Y' : '',
+      dis: ticket?.isDisabled ? 'Y' : '',
+      eld: ticket?.isElderly ? 'Y' : '',
     }));
 
     console.log(`[queue-debug] ${context} - counter ${counterId}`);
@@ -552,6 +596,7 @@ export class CounterAssignmentService {
           ...nextPatient,
           status: TicketStatus.SERVING,
           callCount: nextPatient.callCount ?? 0,
+          metadata: nextPatient.metadata || {},
         };
         await this.redis.setCurrentPatient(counterId, normalizedCurrent as any);
       } else {
@@ -560,6 +605,69 @@ export class CounterAssignmentService {
     } catch (error) {
       console.warn('Error promoting next patient to current:', error);
     }
+  }
+
+  private mapTicketForFrontend(ticket: any | null): any | null {
+    if (!ticket) {
+      return null;
+    }
+
+    const metadata = ticket.metadata && typeof ticket.metadata === 'object'
+      ? ticket.metadata
+      : {};
+
+    const age = typeof ticket.patientAge === 'number' ? ticket.patientAge : undefined;
+    const isElderly = typeof age === 'number' ? age >= 75 : false;
+
+    return {
+      ...ticket,
+      metadata,
+      isOnTime: Boolean(ticket.isOnTime),
+      isPregnant: Boolean(metadata.isPregnant),
+      isDisabled: Boolean(metadata.isDisabled),
+      isElderly,
+    };
+  }
+
+  async getQueueSnapshot(counterId: string): Promise<{
+    counterId: string;
+    current: any | null;
+    next: any | null;
+    queue: any[];
+    ordered: any[];
+  }> {
+    const [currentRaw, queueRaw] = await Promise.all([
+      this.redis.getCurrentPatient(counterId),
+      this.redis.getCounterQueueSnapshot(counterId),
+    ]);
+
+    const current = this.mapTicketForFrontend(
+      currentRaw
+        ? {
+            ...currentRaw,
+            status: (currentRaw as any).status || TicketStatus.SERVING,
+          }
+        : null,
+    );
+
+    const waiting = queueRaw
+      .filter((ticket) => !current || ticket.ticketId !== (current as any).ticketId)
+      .map((ticket) => this.mapTicketForFrontend({
+        ...ticket,
+        status: ticket.status || TicketStatus.WAITING,
+      }));
+
+    const next = waiting.find((ticket) => ticket?.status === TicketStatus.NEXT) || null;
+
+    const ordered = current ? [current, ...waiting] : [...waiting];
+
+    return {
+      counterId,
+      current,
+      next,
+      queue: waiting,
+      ordered,
+    };
   }
 
 }

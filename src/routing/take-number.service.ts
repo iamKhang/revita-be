@@ -22,9 +22,13 @@ export interface TakeNumberResult {
     patientAge: number;
     assignedAt: string;
     isOnTime?: boolean;
+    isPregnant?: boolean;
+    isDisabled?: boolean;
+    isElderly?: boolean;
     status: TicketStatus;
     callCount: number;
     queuePriority: number;
+    metadata?: Record<string, any>;
   };
   patientInfo: {
     name: string;
@@ -186,22 +190,11 @@ export class TakeNumberService {
     
     t = tlog('dispatch side-effects (fire-and-forget)', t);
 
+    const frontendTicket = this.enrichTicketForFrontend(ticket);
+
     return {
       success: true,
-      ticket: {
-        ticketId: ticket.ticketId,
-        queueNumber: ticket.queueNumber,
-        counterId: ticket.counterId,
-        counterCode: ticket.counterCode,
-        counterName: ticket.counterName,
-        patientName: ticket.patientName,
-        patientAge: ticket.patientAge,
-        assignedAt: ticket.assignedAt,
-        isOnTime: ticket.isOnTime,
-        status: ticket.status,
-        callCount: ticket.callCount,
-        queuePriority: ticket.queuePriority,
-      },
+      ticket: frontendTicket,
       patientInfo: {
         name: patientInfo.name,
         age: patientInfo.age,
@@ -645,5 +638,19 @@ export class TakeNumberService {
     }
 
     return age;
+  }
+
+  private enrichTicketForFrontend(ticket: QueueTicket): any {
+    const metadata = ticket.metadata || {};
+    const age = typeof ticket.patientAge === 'number' ? ticket.patientAge : undefined;
+
+    return {
+      ...ticket,
+      metadata,
+      isOnTime: Boolean(ticket.isOnTime),
+      isPregnant: Boolean(metadata.isPregnant),
+      isDisabled: Boolean(metadata.isDisabled),
+      isElderly: typeof age === 'number' ? age >= 75 : false,
+    };
   }
 }
