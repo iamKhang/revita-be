@@ -73,7 +73,8 @@ export class MedicalRecordController {
         },
         doctorId: {
           type: 'string',
-          description: 'ID của bác sĩ hoặc authId của bác sĩ (tùy chọn cho admin)',
+          description:
+            'ID của bác sĩ hoặc authId của bác sĩ (tùy chọn cho admin)',
         },
         appointmentId: {
           type: 'string',

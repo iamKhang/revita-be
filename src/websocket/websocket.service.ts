@@ -67,49 +67,39 @@ export class WebSocketService {
    * Gửi thông báo ticket mới đến counter
    */
   async notifyNewTicket(counterId: string, ticket: QueueTicket) {
+    const metadata = ticket.metadata || {};
+    const isPregnant = Boolean(metadata.isPregnant);
+    const isDisabled = Boolean(metadata.isDisabled);
+    const isElderly = typeof ticket.patientAge === 'number' ? ticket.patientAge >= 75 : false;
+
     const message: WebSocketMessage = {
       type: 'NEW_TICKET',
       data: {
         ticketId: ticket.ticketId,
         patientName: ticket.patientName,
         patientAge: ticket.patientAge,
-        priorityScore: ticket.priorityScore,
-        priorityLevel: ticket.priorityLevel,
         counterId: ticket.counterId,
         counterCode: ticket.counterCode,
         counterName: ticket.counterName,
         queueNumber: ticket.queueNumber,
         sequence: ticket.sequence,
-        estimatedWaitTime: ticket.estimatedWaitTime,
-        metadata: ticket.metadata,
+        isOnTime: ticket.isOnTime,
+        isPregnant,
+        isDisabled,
+        isElderly,
+        status: ticket.status,
+        callCount: ticket.callCount,
+        queuePriority: ticket.queuePriority,
+        metadata,
       },
       timestamp: new Date().toISOString(),
     };
 
-    console.log('🔔 [WebSocket] notifyNewTicket called');
-    console.log('🔔 [WebSocket] Counter ID:', counterId);
-    console.log('🔔 [WebSocket] Ticket:', ticket.queueNumber);
-    console.log('🔔 [WebSocket] Message:', JSON.stringify(message, null, 2));
-
-    // Gửi đến room của counter
+    // Chỉ gửi đến counter tương ứng
     this.server.to(`counter:${counterId}`).emit('new_ticket', message);
     console.log(`🔔 [WebSocket] Emitted 'new_ticket' to room: counter:${counterId}`);
 
-    // Gửi đến tất cả counter để cập nhật danh sách
-    const broadcastMessage = {
-      type: 'TICKET_ADDED',
-      data: {
-        counterId,
-        counterCode: ticket.counterCode,
-        queueNumber: ticket.queueNumber,
-        priorityLevel: ticket.priorityLevel,
-      },
-      timestamp: new Date().toISOString(),
-    };
-    this.server.emit('ticket_added', broadcastMessage);
-    console.log(`🔔 [WebSocket] Emitted 'ticket_added' to all clients`);
-
-    console.log(`✅ [WebSocket] Notified counter ${counterId} about new ticket ${ticket.queueNumber}`);
+    console.log(`Notified counter ${counterId} about new ticket ${ticket.queueNumber}`);
   }
 
   /**
@@ -238,197 +228,89 @@ export class WebSocketService {
     return sockets ? sockets.size : 0;
   }
 
-  // ========== BOOTH CONNECTION METHODS ==========
-
   /**
-   * Kết nối socket với booth
+   * Gửi sự kiện thay đổi vị trí queue
    */
-  connectToBooth(socket: Socket, boothId: string) {
-    // Lưu mapping socket -> booth
-    this.socketToBooth.set(socket.id, boothId);
+  async notifyQueuePositionChanges(
+    counterId: string,
+    eventType: 'NEXT_PATIENT' | 'SKIP_PATIENT' | 'NEW_TICKET',
+    changes: {
+      newPatients: any[];
+      movedPatients: any[];
+      removedPatients: any[];
+      currentServing?: any;
+      currentNext?: any;
+    },
+  ): Promise<void> {
+    try {
+      const eventData = {
+        type: eventType,
+        counterId,
+        timestamp: new Date().toISOString(),
+        changes: {
+          newPatients: changes.newPatients,
+          movedPatients: changes.movedPatients,
+          removedPatients: changes.removedPatients,
+          currentServing: changes.currentServing,
+          currentNext: changes.currentNext,
+        },
+      };
 
-    // Thêm socket vào danh sách booth
-    if (!this.boothConnections.has(boothId)) {
-      this.boothConnections.set(boothId, new Set());
+      await this.sendToCounter(counterId, 'queue_position_changes', eventData);
+      console.log(`[WebSocket] Sent queue position changes to counter ${counterId}:`, eventType);
+    } catch (error) {
+      console.error('Error sending queue position changes:', error);
     }
-    this.boothConnections.get(boothId)!.add(socket.id);
-
-    // Join room để dễ quản lý
-    socket.join(`booth:${boothId}`);
-
-    console.log(`Socket ${socket.id} connected to booth ${boothId}`);
   }
 
   /**
-   * Ngắt kết nối booth socket
+   * Gửi sự kiện cập nhật trạng thái bệnh nhân
    */
-  disconnectBooth(socket: Socket) {
-    const boothId = this.socketToBooth.get(socket.id);
-    if (boothId) {
-      const boothSockets = this.boothConnections.get(boothId);
-      if (boothSockets) {
-        boothSockets.delete(socket.id);
-        if (boothSockets.size === 0) {
-          this.boothConnections.delete(boothId);
-        }
-      }
-      this.socketToBooth.delete(socket.id);
+  async notifyPatientStatusUpdate(
+    counterId: string,
+    patientId: string,
+    oldStatus: string,
+    newStatus: string,
+    patientData: any,
+  ): Promise<void> {
+    try {
+      const eventData = {
+        type: 'PATIENT_STATUS_UPDATE',
+        counterId,
+        patientId,
+        oldStatus,
+        newStatus,
+        patientData,
+        timestamp: new Date().toISOString(),
+      };
+
+      await this.sendToCounter(counterId, 'patient_status_update', eventData);
+      console.log(`[WebSocket] Sent patient status update to counter ${counterId}: ${patientId} ${oldStatus} -> ${newStatus}`);
+    } catch (error) {
+      console.error('Error sending patient status update:', error);
     }
-
-    console.log(`Booth socket ${socket.id} disconnected`);
   }
 
   /**
-   * Gửi thông báo trạng thái booth
+   * Gửi sự kiện cập nhật toàn bộ queue
    */
-  async notifyBoothStatusUpdate(boothId: string, statusData: any) {
-    if (!this.boothServer) return;
+  async notifyQueueUpdate(
+    counterId: string,
+    queueData: any[],
+    eventType: 'FULL_QUEUE_UPDATE' | 'QUEUE_REFRESH',
+  ): Promise<void> {
+    try {
+      const eventData = {
+        type: eventType,
+        counterId,
+        queue: queueData,
+        timestamp: new Date().toISOString(),
+      };
 
-    const message = {
-      type: 'BOOTH_STATUS_UPDATE',
-      data: {
-        boothId,
-        ...statusData,
-      },
-      timestamp: new Date().toISOString(),
-    };
-
-    // Gửi đến room của booth
-    this.boothServer.to(`booth:${boothId}`).emit('booth_status_update', message);
-
-    // Gửi đến tất cả booth để cập nhật danh sách
-    this.boothServer.emit('booth_status_changed', message);
-
-    console.log(`Notified booth ${boothId} about status update`);
-  }
-
-  /**
-   * Gửi thông báo work session bắt đầu
-   */
-  async notifyWorkSessionStart(boothId: string, sessionData: any) {
-    if (!this.boothServer) return;
-
-    const message = {
-      type: 'WORK_SESSION_START',
-      data: {
-        boothId,
-        ...sessionData,
-      },
-      timestamp: new Date().toISOString(),
-    };
-
-    // Gửi đến room của booth
-    this.boothServer.to(`booth:${boothId}`).emit('work_session_start', message);
-
-    // Gửi đến tất cả booth
-    this.boothServer.emit('work_session_started', message);
-
-    console.log(`Notified booth ${boothId} about work session start`);
-  }
-
-  /**
-   * Gửi thông báo work session kết thúc
-   */
-  async notifyWorkSessionEnd(boothId: string, sessionData: any) {
-    if (!this.boothServer) return;
-
-    const message = {
-      type: 'WORK_SESSION_END',
-      data: {
-        boothId,
-        ...sessionData,
-      },
-      timestamp: new Date().toISOString(),
-    };
-
-    // Gửi đến room của booth
-    this.boothServer.to(`booth:${boothId}`).emit('work_session_end', message);
-
-    // Gửi đến tất cả booth
-    this.boothServer.emit('work_session_ended', message);
-
-    console.log(`Notified booth ${boothId} about work session end`);
-  }
-
-  /**
-   * Gửi thông báo đến booth cụ thể
-   */
-  async sendToBooth(boothId: string, event: string, data: any) {
-    if (!this.boothServer) return;
-    this.boothServer.to(`booth:${boothId}`).emit(event, data);
-  }
-
-  /**
-   * Lấy danh sách booth đang online
-   */
-  getOnlineBooths(): string[] {
-    return Array.from(this.boothConnections.keys());
-  }
-
-  /**
-   * Kiểm tra booth có đang online không
-   */
-  isBoothOnline(boothId: string): boolean {
-    const sockets = this.boothConnections.get(boothId);
-    return sockets ? sockets.size > 0 : false;
-  }
-
-  /**
-   * Lấy số lượng kết nối của booth
-   */
-  getBoothConnectionCount(boothId: string): number {
-    const sockets = this.boothConnections.get(boothId);
-    return sockets ? sockets.size : 0;
-  }
-
-  // ========== DOCTOR CONNECTION METHODS ==========
-
-  /**
-   * Gửi thông báo đến doctor cụ thể
-   */
-  async sendToDoctor(doctorId: string, event: string, data: any) {
-    if (!this.server) return;
-    this.server.to(`doctor:${doctorId}`).emit(event, data);
-  }
-
-  /**
-   * Gửi thông báo đến technician cụ thể
-   */
-  async sendToTechnician(technicianId: string, event: string, data: any) {
-    if (!this.server) return;
-    this.server.to(`technician:${technicianId}`).emit(event, data);
-  }
-
-  /**
-   * Gửi thông báo đến clinic room cụ thể
-   */
-  async sendToClinicRoom(clinicRoomId: string, event: string, data: any) {
-    if (!this.server) return;
-    this.server.to(`clinic_room:${clinicRoomId}`).emit(event, data);
-  }
-
-  /**
-   * Gửi thông báo đến tất cả doctor
-   */
-  async broadcastToAllDoctors(event: string, data: any) {
-    if (!this.server) return;
-    this.server.to('doctors').emit(event, data);
-  }
-
-  /**
-   * Gửi thông báo đến tất cả technician
-   */
-  async broadcastToAllTechnicians(event: string, data: any) {
-    if (!this.server) return;
-    this.server.to('technicians').emit(event, data);
-  }
-
-  /**
-   * Gửi thông báo đến tất cả clinic rooms
-   */
-  async broadcastToAllClinicRooms(event: string, data: any) {
-    if (!this.server) return;
-    this.server.to('clinic_rooms').emit(event, data);
+      await this.sendToCounter(counterId, 'queue_update', eventData);
+      console.log(`[WebSocket] Sent queue update to counter ${counterId}: ${queueData.length} patients`);
+    } catch (error) {
+      console.error('Error sending queue update:', error);
+    }
   }
 }
-

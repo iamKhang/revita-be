@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { RedisService } from './redis.service';
 
+export enum TicketStatus {
+  WAITING = 'WAITING',      // Đang chờ
+  SKIPPED = 'SKIPPED',      // Bỏ qua
+  NEXT = 'NEXT',           // Tiếp theo
+  SERVING = 'SERVING',     // Đang phục vụ
+  COMPLETED = 'COMPLETED'   // Hoàn thành
+}
+
 export interface QueueTicket {
   ticketId: string;
   patientProfileCode?: string;
@@ -8,22 +16,19 @@ export interface QueueTicket {
   patientName: string;
   patientAge: number;
   patientGender: string;
-  priorityScore: number;
-  priorityLevel: string;
   counterId: string;
   counterCode: string;
   counterName: string;
   queueNumber: string;
   sequence: number;
   assignedAt: string;
-  estimatedWaitTime: number;
+  isOnTime?: boolean;
+  status: TicketStatus;
+  callCount: number;
+  queuePriority: number;
   metadata: {
     isPregnant?: boolean;
     isDisabled?: boolean;
-    isElderly?: boolean;
-    isVIP?: boolean;
-    hasAppointment?: boolean;
-    notes?: string;
   };
 }
 
@@ -120,21 +125,18 @@ export class RedisStreamService {
       patientName: ticket.patientName,
       patientAge: ticket.patientAge.toString(),
       patientGender: ticket.patientGender,
-      priorityScore: ticket.priorityScore.toString(),
-      priorityLevel: ticket.priorityLevel,
       counterId: ticket.counterId,
       counterCode: ticket.counterCode,
       counterName: ticket.counterName,
       queueNumber: ticket.queueNumber,
       sequence: ticket.sequence.toString(),
       assignedAt: ticket.assignedAt,
-      estimatedWaitTime: ticket.estimatedWaitTime.toString(),
+      isOnTime: ticket.isOnTime?.toString() || 'false',
+      status: ticket.status,
+      callCount: ticket.callCount.toString(),
+      queuePriority: ticket.queuePriority.toString(),
       isPregnant: ticket.metadata.isPregnant?.toString() || 'false',
       isDisabled: ticket.metadata.isDisabled?.toString() || 'false',
-      isElderly: ticket.metadata.isElderly?.toString() || 'false',
-      isVIP: ticket.metadata.isVIP?.toString() || 'false',
-      hasAppointment: ticket.metadata.hasAppointment?.toString() || 'false',
-      notes: ticket.metadata.notes || '',
     };
 
     // Thêm vào main stream
