@@ -66,14 +66,15 @@ export class WebSocketService {
         ticketId: ticket.ticketId,
         patientName: ticket.patientName,
         patientAge: ticket.patientAge,
-        priorityScore: ticket.priorityScore,
-        priorityLevel: ticket.priorityLevel,
         counterId: ticket.counterId,
         counterCode: ticket.counterCode,
         counterName: ticket.counterName,
         queueNumber: ticket.queueNumber,
         sequence: ticket.sequence,
-        estimatedWaitTime: ticket.estimatedWaitTime,
+        isOnTime: ticket.isOnTime,
+        status: ticket.status,
+        callCount: ticket.callCount,
+        queuePriority: ticket.queuePriority,
         metadata: ticket.metadata,
       },
       timestamp: new Date().toISOString(),
@@ -89,7 +90,9 @@ export class WebSocketService {
         counterId,
         counterCode: ticket.counterCode,
         queueNumber: ticket.queueNumber,
-        priorityLevel: ticket.priorityLevel,
+        status: ticket.status,
+        callCount: ticket.callCount,
+        queuePriority: ticket.queuePriority,
       },
       timestamp: new Date().toISOString(),
     });
@@ -209,6 +212,92 @@ export class WebSocketService {
   getCounterConnectionCount(counterId: string): number {
     const sockets = this.counterConnections.get(counterId);
     return sockets ? sockets.size : 0;
+  }
+
+  /**
+   * Gửi sự kiện thay đổi vị trí queue
+   */
+  async notifyQueuePositionChanges(
+    counterId: string,
+    eventType: 'NEXT_PATIENT' | 'SKIP_PATIENT' | 'NEW_TICKET',
+    changes: {
+      newPatients: any[];
+      movedPatients: any[];
+      removedPatients: any[];
+      currentServing?: any;
+      currentNext?: any;
+    },
+  ): Promise<void> {
+    try {
+      const eventData = {
+        type: eventType,
+        counterId,
+        timestamp: new Date().toISOString(),
+        changes: {
+          newPatients: changes.newPatients,
+          movedPatients: changes.movedPatients,
+          removedPatients: changes.removedPatients,
+          currentServing: changes.currentServing,
+          currentNext: changes.currentNext,
+        },
+      };
+
+      await this.sendToCounter(counterId, 'queue_position_changes', eventData);
+      console.log(`[WebSocket] Sent queue position changes to counter ${counterId}:`, eventType);
+    } catch (error) {
+      console.error('Error sending queue position changes:', error);
+    }
+  }
+
+  /**
+   * Gửi sự kiện cập nhật trạng thái bệnh nhân
+   */
+  async notifyPatientStatusUpdate(
+    counterId: string,
+    patientId: string,
+    oldStatus: string,
+    newStatus: string,
+    patientData: any,
+  ): Promise<void> {
+    try {
+      const eventData = {
+        type: 'PATIENT_STATUS_UPDATE',
+        counterId,
+        patientId,
+        oldStatus,
+        newStatus,
+        patientData,
+        timestamp: new Date().toISOString(),
+      };
+
+      await this.sendToCounter(counterId, 'patient_status_update', eventData);
+      console.log(`[WebSocket] Sent patient status update to counter ${counterId}: ${patientId} ${oldStatus} -> ${newStatus}`);
+    } catch (error) {
+      console.error('Error sending patient status update:', error);
+    }
+  }
+
+  /**
+   * Gửi sự kiện cập nhật toàn bộ queue
+   */
+  async notifyQueueUpdate(
+    counterId: string,
+    queueData: any[],
+    eventType: 'FULL_QUEUE_UPDATE' | 'QUEUE_REFRESH',
+  ): Promise<void> {
+    try {
+      const eventData = {
+        type: eventType,
+        counterId,
+        queue: queueData,
+        timestamp: new Date().toISOString(),
+      };
+
+      await this.sendToCounter(counterId, 'queue_update', eventData);
+      console.log(`[WebSocket] Sent queue update to counter ${counterId}: ${queueData.length} patients`);
+    } catch (error) {
+      console.error('Error sending queue update:', error);
+    }
   }
 }
 

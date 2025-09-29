@@ -138,6 +138,8 @@ export class TakeNumberService {
       request.isPregnant || false,
       hasAppointment,
       0, // Sẽ được cập nhật sau khi có sequence
+      0, // callCount = 0 cho bệnh nhân mới
+      TicketStatus.WAITING, // status ban đầu
     );
 
     // Tạo ticket
@@ -157,6 +159,10 @@ export class TakeNumberService {
       status: 'READY',
       callCount: 0,
     };
+    
+    // Lấy queue trước khi thêm bệnh nhân mới
+    const oldQueue = await this.getCurrentQueue(counter.id);
+    
     // Thực thi nền để không chặn response nếu Redis/WebSocket chậm
     void this.redisStream.addTicketToStream(ticket)
       .catch((e) => console.warn('[take-number] addTicketToStream error', (e as Error).message));
@@ -164,6 +170,11 @@ export class TakeNumberService {
       .catch((e) => console.warn('[take-number] pushToCounterQueue error', (e as Error).message));
     void this.webSocket.notifyNewTicket(counter.id, ticket)
       .catch((e) => console.warn('[take-number] notifyNewTicket error', (e as Error).message));
+    
+    // Gửi sự kiện WebSocket về thay đổi queue
+    void this.notifyNewTicketQueueChanges(counter.id, oldQueue, ticket)
+      .catch((e) => console.warn('[take-number] notifyNewTicketQueueChanges error', (e as Error).message));
+    
     t = tlog('dispatch side-effects (fire-and-forget)', t);
 
     return {
@@ -368,6 +379,8 @@ export class TakeNumberService {
       request.isPregnant || false,
       !!appointmentDetails,
       sequence,
+      0, // callCount = 0 cho bệnh nhân mới
+      TicketStatus.WAITING, // status ban đầu
     );
 
     return {
@@ -418,7 +431,7 @@ export class TakeNumberService {
 
   /**
    * Tính toán priority score cho việc sắp xếp queue
-   * Thứ tự ưu tiên: 1. Đang phục vụ 2. Tiếp theo 3. Già (>75) 4. Trẻ em (<6) 5. Khuyết tật 6. Mang thai 7. Có lịch hẹn 8. Thường
+   * Thứ tự ưu tiên: 1. Đang phục vụ 2. Tiếp theo 3. Miss (1) 4. Miss (2) 5. Miss (3) ... 6. Già (>75) 7. Trẻ em (<6) 8. Khuyết tật 9. Mang thai 10. Có lịch hẹn 11. Thường
    */
   private calculateQueuePriority(
     patientAge: number,
@@ -426,36 +439,49 @@ export class TakeNumberService {
     isPregnant: boolean,
     hasAppointment: boolean,
     sequence: number,
+    callCount: number = 0,
+    status: TicketStatus = TicketStatus.WAITING,
   ): number {
     let priorityScore = 0;
 
     // 1. Đang phục vụ (SERVING) - ưu tiên cao nhất
+    if (status === TicketStatus.SERVING) {
+      return 0;
+    }
+    
     // 2. Tiếp theo (NEXT) - ưu tiên cao thứ 2
-    // (Hai trường hợp này được xử lý riêng trong Redis)
+    if (status === TicketStatus.NEXT) {
+      return 100000;
+    }
+    
+    // 3. Miss patients - ưu tiên theo callCount (ai gọi nhiều lần hơn thì trôi về sau)
+    if (status === TicketStatus.SKIPPED) {
+      return 200000 + (callCount * 10000); // callCount cao hơn = priority thấp hơn
+    }
 
-    // 3. Người già (>75 tuổi) - ưu tiên cao thứ 3
+    // 4. Người già (>75 tuổi) - ưu tiên cao thứ 4
     if (patientAge > 75) {
-      priorityScore = 1000000 - patientAge; // Người già hơn ưu tiên hơn
+      priorityScore = 10000000 - patientAge; // Người già hơn ưu tiên hơn
     }
-    // 4. Trẻ em (<6 tuổi) - ưu tiên cao thứ 4
+    // 5. Trẻ em (<6 tuổi) - ưu tiên cao thứ 5
     else if (patientAge < 6) {
-      priorityScore = 2000000 - patientAge; // Trẻ em nhỏ hơn ưu tiên hơn
+      priorityScore = 20000000 - patientAge; // Trẻ em nhỏ hơn ưu tiên hơn
     }
-    // 5. Người khuyết tật - ưu tiên cao thứ 5
+    // 6. Người khuyết tật - ưu tiên cao thứ 6
     else if (isDisabled) {
-      priorityScore = 3000000;
+      priorityScore = 30000000;
     }
-    // 6. Người mang thai - ưu tiên cao thứ 6
+    // 7. Người mang thai - ưu tiên cao thứ 7
     else if (isPregnant) {
-      priorityScore = 4000000;
+      priorityScore = 40000000;
     }
-    // 7. Người có lịch hẹn - ưu tiên cao thứ 7
+    // 8. Người có lịch hẹn - ưu tiên cao thứ 8
     else if (hasAppointment) {
-      priorityScore = 5000000;
+      priorityScore = 50000000;
     }
-    // 8. Người thường - ưu tiên thấp nhất
+    // 9. Người thường - ưu tiên thấp nhất
     else {
-      priorityScore = 6000000;
+      priorityScore = 60000000;
     }
 
     // Trong cùng nhóm ưu tiên, ai đến trước (sequence nhỏ hơn) thì ưu tiên hơn
@@ -470,6 +496,66 @@ export class TakeNumberService {
     return await this.redis.getNextCounterSequence(counterId);
   }
 
+
+  /**
+   * Lấy queue hiện tại
+   */
+  private async getCurrentQueue(counterId: string): Promise<any[]> {
+    try {
+      const queueKey = `counterQueueZ:${counterId}`;
+      const members = await this.redis['redis'].zrange(queueKey, 0, -1);
+      return members.map(member => {
+        try {
+          return JSON.parse(member);
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+    } catch (error) {
+      console.warn('Error getting current queue:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Gửi sự kiện WebSocket về thay đổi queue khi có bệnh nhân mới
+   */
+  private async notifyNewTicketQueueChanges(
+    counterId: string,
+    oldQueue: any[],
+    newTicket: any,
+  ): Promise<void> {
+    try {
+      // Đợi một chút để Redis được cập nhật
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const newQueue = await this.getCurrentQueue(counterId);
+      
+      const changes = {
+        newPatients: [newTicket] as any[],
+        movedPatients: [] as any[],
+        removedPatients: [] as any[],
+        currentServing: newQueue.find(p => p.status === 'SERVING') as any,
+        currentNext: newQueue.find(p => p.status === 'NEXT') as any,
+      };
+
+      // Tìm bệnh nhân bị chen lên (có priority thấp hơn bệnh nhân mới)
+      for (const patient of newQueue) {
+        if (patient.ticketId !== newTicket.ticketId && patient.queuePriority > newTicket.queuePriority) {
+          changes.movedPatients.push({
+            ...patient,
+            reason: 'pushed_down_by_new_patient',
+            newPatientTicketId: newTicket.ticketId,
+          } as any);
+        }
+      }
+
+      await this.webSocket.notifyQueuePositionChanges(counterId, 'NEW_TICKET', changes);
+      console.log(`[WebSocket] Sent new ticket queue changes to counter ${counterId}`);
+    } catch (error) {
+      console.warn('Error notifying new ticket queue changes:', error);
+    }
+  }
 
   /**
    * Tính tuổi từ ngày sinh
