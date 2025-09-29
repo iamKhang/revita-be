@@ -1,14 +1,13 @@
 import {
   IsString,
-  IsNotEmpty,
   IsOptional,
   IsBoolean,
+  IsInt,
   IsNumber,
-  IsDateString,
-  IsIn,
   Min,
   Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class TakeNumberDto {
   @IsString()
@@ -34,7 +33,12 @@ export class TakeNumberDto {
   @IsOptional()
   patientPhone?: string; // Số điện thoại (nếu không có mã)
 
-  patientGender?: string; // Giới tính bệnh nhân (MALE, FEMALE, OTHER, UNKNOWN)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1900)
+  @Max(new Date().getFullYear())
+  birthYear?: number; // Năm sinh (dùng khi nhập thủ công)
 
   @IsBoolean()
   @IsOptional()
@@ -43,17 +47,4 @@ export class TakeNumberDto {
   @IsBoolean()
   @IsOptional()
   isDisabled?: boolean; // Người khuyết tật
-
-  @IsBoolean()
-  @IsOptional()
-  isElderly?: boolean; // Người cao tuổi
-
-  @IsBoolean()
-  @IsOptional()
-  isVIP?: boolean; // Khám VIP
-
-  @IsString()
-  @IsOptional()
-  notes?: string; // Ghi chú thêm
 }
-

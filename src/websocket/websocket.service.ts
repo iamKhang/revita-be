@@ -60,39 +60,36 @@ export class WebSocketService {
    * Gửi thông báo ticket mới đến counter
    */
   async notifyNewTicket(counterId: string, ticket: QueueTicket) {
+    const metadata = ticket.metadata || {};
+    const isPregnant = Boolean(metadata.isPregnant);
+    const isDisabled = Boolean(metadata.isDisabled);
+    const isElderly = typeof ticket.patientAge === 'number' ? ticket.patientAge >= 75 : false;
+
     const message: WebSocketMessage = {
       type: 'NEW_TICKET',
       data: {
         ticketId: ticket.ticketId,
         patientName: ticket.patientName,
         patientAge: ticket.patientAge,
-        priorityScore: ticket.priorityScore,
-        priorityLevel: ticket.priorityLevel,
         counterId: ticket.counterId,
         counterCode: ticket.counterCode,
         counterName: ticket.counterName,
         queueNumber: ticket.queueNumber,
         sequence: ticket.sequence,
-        estimatedWaitTime: ticket.estimatedWaitTime,
-        metadata: ticket.metadata,
+        isOnTime: ticket.isOnTime,
+        isPregnant,
+        isDisabled,
+        isElderly,
+        status: ticket.status,
+        callCount: ticket.callCount,
+        queuePriority: ticket.queuePriority,
+        metadata,
       },
       timestamp: new Date().toISOString(),
     };
 
-    // Gửi đến room của counter
+    // Chỉ gửi đến counter tương ứng
     this.server.to(`counter:${counterId}`).emit('new_ticket', message);
-
-    // Gửi đến tất cả counter để cập nhật danh sách
-    this.server.emit('ticket_added', {
-      type: 'TICKET_ADDED',
-      data: {
-        counterId,
-        counterCode: ticket.counterCode,
-        queueNumber: ticket.queueNumber,
-        priorityLevel: ticket.priorityLevel,
-      },
-      timestamp: new Date().toISOString(),
-    });
 
     console.log(`Notified counter ${counterId} about new ticket ${ticket.queueNumber}`);
   }
@@ -210,5 +207,90 @@ export class WebSocketService {
     const sockets = this.counterConnections.get(counterId);
     return sockets ? sockets.size : 0;
   }
-}
 
+  /**
+   * Gửi sự kiện thay đổi vị trí queue
+   */
+  async notifyQueuePositionChanges(
+    counterId: string,
+    eventType: 'NEXT_PATIENT' | 'SKIP_PATIENT' | 'NEW_TICKET',
+    changes: {
+      newPatients: any[];
+      movedPatients: any[];
+      removedPatients: any[];
+      currentServing?: any;
+      currentNext?: any;
+    },
+  ): Promise<void> {
+    try {
+      const eventData = {
+        type: eventType,
+        counterId,
+        timestamp: new Date().toISOString(),
+        changes: {
+          newPatients: changes.newPatients,
+          movedPatients: changes.movedPatients,
+          removedPatients: changes.removedPatients,
+          currentServing: changes.currentServing,
+          currentNext: changes.currentNext,
+        },
+      };
+
+      await this.sendToCounter(counterId, 'queue_position_changes', eventData);
+      console.log(`[WebSocket] Sent queue position changes to counter ${counterId}:`, eventType);
+    } catch (error) {
+      console.error('Error sending queue position changes:', error);
+    }
+  }
+
+  /**
+   * Gửi sự kiện cập nhật trạng thái bệnh nhân
+   */
+  async notifyPatientStatusUpdate(
+    counterId: string,
+    patientId: string,
+    oldStatus: string,
+    newStatus: string,
+    patientData: any,
+  ): Promise<void> {
+    try {
+      const eventData = {
+        type: 'PATIENT_STATUS_UPDATE',
+        counterId,
+        patientId,
+        oldStatus,
+        newStatus,
+        patientData,
+        timestamp: new Date().toISOString(),
+      };
+
+      await this.sendToCounter(counterId, 'patient_status_update', eventData);
+      console.log(`[WebSocket] Sent patient status update to counter ${counterId}: ${patientId} ${oldStatus} -> ${newStatus}`);
+    } catch (error) {
+      console.error('Error sending patient status update:', error);
+    }
+  }
+
+  /**
+   * Gửi sự kiện cập nhật toàn bộ queue
+   */
+  async notifyQueueUpdate(
+    counterId: string,
+    queueData: any[],
+    eventType: 'FULL_QUEUE_UPDATE' | 'QUEUE_REFRESH',
+  ): Promise<void> {
+    try {
+      const eventData = {
+        type: eventType,
+        counterId,
+        queue: queueData,
+        timestamp: new Date().toISOString(),
+      };
+
+      await this.sendToCounter(counterId, 'queue_update', eventData);
+      console.log(`[WebSocket] Sent queue update to counter ${counterId}: ${queueData.length} patients`);
+    } catch (error) {
+      console.error('Error sending queue update:', error);
+    }
+  }
+}

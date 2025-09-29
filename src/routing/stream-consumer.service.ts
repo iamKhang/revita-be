@@ -147,9 +147,9 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
         const value = message[key];
 
         // Convert string numbers back to numbers
-        if (['patientAge', 'priorityScore', 'sequence', 'estimatedWaitTime'].includes(key)) {
+        if (['patientAge', 'sequence', 'callCount', 'queuePriority'].includes(key)) {
           data[key] = parseInt(value) || 0;
-        } else if (['isPregnant', 'isDisabled', 'isElderly', 'isVIP'].includes(key)) {
+        } else if (['isPregnant', 'isDisabled', 'isOnTime'].includes(key)) {
           data[key] = value === 'true' || value === true;
         } else if (key === 'metadata' && typeof value === 'string') {
           // Parse metadata JSON string nếu có
@@ -197,64 +197,34 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
    */
   private async notifyWebSocketClients(ticketData: any) {
     try {
-      console.log('🔔 [WebSocket] Processing event:', ticketData.type, 'for counter:', ticketData.counterId);
-      console.log('🔔 [WebSocket] Full ticketData:', JSON.stringify(ticketData, null, 2));
-      
-      // Xử lý các loại events khác nhau
-      switch (ticketData.type) {
-        case 'NEW_TICKET':
-        case 'TICKET_ASSIGNED':
-          await this.handleNewTicketEvent(ticketData);
-          break;
-          
-        case 'NEXT_PATIENT_CALLED':
-          await this.handleNextPatientEvent(ticketData);
-          break;
-          
-        case 'PATIENT_SKIPPED_AND_NEXT_CALLED':
-          await this.handleSkipPatientEvent(ticketData);
-          break;
-          
-        case 'PATIENT_PREPARING':
-          await this.handlePatientPreparingEvent(ticketData);
-          break;
-          
-        case 'PATIENT_SERVED':
-          await this.handlePatientServedEvent(ticketData);
-          break;
-          
-        default:
-          console.log('🔔 [WebSocket] Unknown event type, using legacy handler:', ticketData.type);
-          // Gửi thông báo đến counter cụ thể (legacy)
-          await this.webSocket.sendToCounter(
-            ticketData.counterId,
-            'ticket_processed',
-            {
-              type: 'TICKET_PROCESSED',
-              data: {
-                ticketId: ticketData.ticketId,
-                queueNumber: ticketData.queueNumber,
-                patientName: ticketData.patientName,
-                priorityLevel: ticketData.priorityLevel,
-                estimatedWaitTime: ticketData.estimatedWaitTime,
-              },
-              timestamp: new Date().toISOString(),
-            },
-          );
+      // Gửi thông báo đến counter cụ thể
+      await this.webSocket.sendToCounter(
+        ticketData.counterId,
+        'ticket_processed',
+        {
+          type: 'TICKET_PROCESSED',
+          data: {
+            ticketId: ticketData.ticketId,
+            queueNumber: ticketData.queueNumber,
+            patientName: ticketData.patientName,
+            isOnTime: ticketData.isOnTime,
+            status: ticketData.status,
+            callCount: ticketData.callCount,
+          },
+          timestamp: new Date().toISOString(),
+        },
+      );
 
-          // Gửi thông báo tổng quát đến tất cả counter
-          await this.webSocket.broadcastToAllCounters({
-            type: 'NEW_TICKET',
-            data: {
-              counterId: ticketData.counterId,
-              counterCode: ticketData.counterCode,
-              queueNumber: ticketData.queueNumber,
-              priorityLevel: ticketData.priorityLevel,
-            },
-            timestamp: new Date().toISOString(),
-          });
-          break;
-      }
+      // Gửi thông báo tổng quát đến tất cả counter
+      await this.webSocket.broadcastToAllCounters({
+        type: 'NEW_TICKET',
+        data: {
+          counterId: ticketData.counterId,
+          counterCode: ticketData.counterCode,
+          queueNumber: ticketData.queueNumber,
+        },
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
       console.error('Error sending WebSocket notification:', error);
     }
