@@ -1,4 +1,5 @@
-import { IsString, IsArray, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsArray, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+import { PaymentMethod } from '@prisma/client';
 
 export class CreatePaymentDto {
   @IsString()
@@ -13,11 +14,18 @@ export class CreatePaymentDto {
   @IsArray()
   selectedServiceCodes?: string[];
 
-  @IsString()
-  @IsNotEmpty()
-  paymentMethod: string; // CASH, CARD, TRANSFER, etc.
+  @IsEnum(PaymentMethod)
+  paymentMethod: PaymentMethod; // CASH, TRANSFER, etc.
 
   @IsOptional()
   @IsString()
   cashierId?: string; // Optional, can be extracted from JWT token
+
+  @IsOptional()
+  @IsString()
+  returnUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  cancelUrl?: string;
 }

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class ConfirmPaymentDto {
   @IsString()
@@ -7,4 +7,8 @@ export class ConfirmPaymentDto {
 
   @IsNotEmpty()
   cashierId: string;
+
+  @IsOptional()
+  @IsString()
+  transactionId?: string;
 }

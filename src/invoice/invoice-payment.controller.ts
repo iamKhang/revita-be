@@ -2,9 +2,9 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Post,
-  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -12,10 +12,12 @@ import { InvoicePaymentService } from './invoice-payment.service';
 import { ScanPrescriptionDto } from './dto/scan-prescription.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
+import { RefreshPaymentDto } from './dto/refresh-payment.dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
 import { Role } from '../rbac/roles.enum';
+import { Public } from '../rbac/public.decorator';
 
 @Controller('invoice-payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -59,6 +61,30 @@ export class InvoicePaymentController {
       ...dto,
       cashierId,
     });
+  }
+
+  @Post('invoice/:invoiceCode/refresh')
+  @Roles(Role.CASHIER, Role.PATIENT, Role.RECEPTIONIST)
+  async refreshPayment(
+    @Param('invoiceCode') invoiceCode: string,
+    @Body() dto: RefreshPaymentDto,
+    @Request() req: any,
+  ) {
+    return this.invoicePaymentService.refreshPaymentLink(invoiceCode, {
+      ...dto,
+      requesterId: req.user?.id,
+    });
+  }
+
+  @Post('payos/webhook')
+  @Public()
+  async handlePayOsWebhook(
+    @Body() payload: any,
+    @Headers('x-payos-signature') payosSignature?: string,
+    @Headers('x-signature') genericSignature?: string,
+  ) {
+    const signature = payosSignature || genericSignature;
+    return this.invoicePaymentService.handlePayOsWebhook(signature, payload);
   }
 
   @Get('history/:patientProfileId')

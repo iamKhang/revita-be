@@ -10,7 +10,14 @@ import { RedisStreamService } from '../cache/redis-stream.service';
 import { ScanPrescriptionDto } from './dto/scan-prescription.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
-import { PrescriptionStatus } from '@prisma/client';
+import {
+  Invoice,
+  PaymentMethod,
+  PaymentTransaction,
+  PaymentTransactionStatus,
+  PrescriptionStatus,
+} from '@prisma/client';
+import { PayOsService } from '../payos/payos.service';
 
 export type PrescriptionDetails = {
   id: string;
@@ -55,6 +62,20 @@ export type PaymentPreview = {
   patientName: string;
 };
 
+export type PaymentTransactionSummary = {
+  id: string;
+  status: PaymentTransactionStatus;
+  amount: number;
+  currency?: string | null;
+  paymentUrl?: string | null;
+  qrCode?: string | null;
+  providerTransactionId?: string | null;
+  orderCode?: string | null;
+  expiredAt?: Date | null;
+  paidAt?: Date | null;
+  isVerified?: boolean;
+};
+
 export type PaymentResult = {
   invoiceCode: string;
   totalAmount: number;
@@ -62,6 +83,8 @@ export type PaymentResult = {
   prescriptionId: string;
   patientProfileId: string;
   selectedServiceIds: string[];
+  paymentMethod: PaymentMethod;
+  transaction?: PaymentTransactionSummary;
   routingAssignments?: Array<{
     roomId: string;
     roomCode: string;
@@ -100,6 +123,7 @@ export class InvoicePaymentService {
     private readonly prescriptionService: PrescriptionService,
     private readonly routingService: RoutingService,
     private readonly redisStream: RedisStreamService,
+    private readonly payOsService: PayOsService,
   ) {}
 
   private async resolveCashierId(identifier?: string): Promise<string> {
@@ -142,6 +166,30 @@ export class InvoicePaymentService {
 
     if (prescription.status === PrescriptionStatus.CANCELLED) {
       throw new BadRequestException('Prescription has been cancelled');
+    }
+
+    return prescription as PrescriptionDetails;
+  }
+
+  private async getPrescriptionById(
+    prescriptionId: string,
+  ): Promise<PrescriptionDetails> {
+    const prescription = await this.prisma.prescription.findFirst({
+      where: { id: prescriptionId },
+      include: {
+        patientProfile: true,
+        doctor: {
+          include: { auth: true },
+        },
+        services: {
+          include: { service: true },
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found');
     }
 
     return prescription as PrescriptionDetails;
@@ -210,13 +258,14 @@ export class InvoicePaymentService {
     const preview = await this.createPaymentPreview(dto);
     const effectiveCashierId = await this.resolveCashierId(dto.cashierId);
     const prescription = preview.prescriptionDetails;
+    const selectedServiceIds = preview.selectedServices.map((s) => s.serviceId);
 
     // Check if there are available work sessions for the requested services
     const currentTime = new Date();
     const availableAssignments = await this.routingService.assignPatientToRooms(
       {
         patientProfileId: prescription.patientProfile.id,
-        serviceIds: preview.selectedServices.map((s) => s.serviceId),
+        serviceIds: selectedServiceIds,
         requestedTime: currentTime,
       },
     );
@@ -228,9 +277,11 @@ export class InvoicePaymentService {
     }
 
     // Generate invoice code
-    const invoiceCode = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const invoiceCode = `INV-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)
+      .toUpperCase()}`;
 
-    // Create invoice
     const invoice = await this.prisma.invoice.create({
       data: {
         invoiceCode,
@@ -252,8 +303,25 @@ export class InvoicePaymentService {
         invoiceDetails: {
           include: { service: true },
         },
+        patientProfile: true,
       },
     });
+
+    let transaction: PaymentTransaction | null = null;
+    if (dto.paymentMethod === PaymentMethod.TRANSFER) {
+      if (!this.payOsService.isEnabled()) {
+        throw new BadRequestException(
+          'Hệ thống chưa cấu hình PayOS. Vui lòng liên hệ quản trị viên.',
+        );
+      }
+
+      transaction = await this.createTransferTransaction({
+        invoice,
+        prescription,
+        returnUrl: dto.returnUrl,
+        cancelUrl: dto.cancelUrl,
+      });
+    }
 
     return {
       invoiceCode: invoice.invoiceCode,
@@ -261,16 +329,122 @@ export class InvoicePaymentService {
       paymentStatus: invoice.paymentStatus,
       prescriptionId: prescription.id,
       patientProfileId: prescription.patientProfile.id,
-      selectedServiceIds: preview.selectedServices.map((s) => s.serviceId),
+      selectedServiceIds,
+      paymentMethod: invoice.paymentMethod,
+      transaction: this.mapTransactionSummary(transaction ?? undefined),
     };
   }
 
-  async confirmPayment(
-    dto: ConfirmPaymentDto,
+  private async createTransferTransaction(params: {
+    invoice: Invoice & {
+      invoiceDetails: Array<{
+        serviceId: string;
+        price: number;
+        service: {
+          name: string;
+          serviceCode: string;
+        };
+      }>;
+      patientProfile: {
+        name: string;
+        phone?: string | null;
+      };
+    };
+    prescription: PrescriptionDetails;
+    returnUrl?: string;
+    cancelUrl?: string;
+  }): Promise<PaymentTransaction> {
+    const { invoice, prescription, returnUrl, cancelUrl } = params;
+
+    const items = invoice.invoiceDetails.map((detail) => ({
+      name: detail.service.name,
+      quantity: 1,
+      price: Math.round(detail.price),
+    }));
+
+    const paymentLink = await this.payOsService.createPaymentLink({
+      orderCode: invoice.invoiceCode,
+      amount: Math.round(invoice.totalAmount),
+      description: `Thanh toán hóa đơn ${invoice.invoiceCode}`,
+      returnUrl,
+      cancelUrl,
+      buyerName: invoice.patientProfile.name,
+      buyerPhone: invoice.patientProfile.phone ?? undefined,
+      items,
+      metadata: {
+        invoiceId: invoice.id,
+        invoiceCode: invoice.invoiceCode,
+        prescriptionId: prescription.id,
+      },
+    });
+
+    const status = this.mapPayOsStatus(paymentLink.status);
+    const expiredAt = this.toDate(paymentLink.expiredAt ?? null);
+    const paidAt =
+      status === PaymentTransactionStatus.SUCCEEDED
+        ? this.toDate(paymentLink.raw?.data?.paidAt ?? Date.now())
+        : null;
+
+    return this.prisma.paymentTransaction.create({
+      data: {
+        invoiceId: invoice.id,
+        amount: paymentLink.amount ?? invoice.totalAmount,
+        currency: paymentLink.currency ?? 'VND',
+        status: status === PaymentTransactionStatus.SUCCEEDED
+          ? PaymentTransactionStatus.SUCCEEDED
+          : PaymentTransactionStatus.PENDING,
+        providerTransactionId: paymentLink.transactionId,
+        orderCode: paymentLink.orderCode ?? invoice.invoiceCode,
+        paymentUrl: paymentLink.paymentUrl,
+        qrCode: paymentLink.qrCode,
+        expiredAt,
+        paidAt,
+        isVerified: false,
+        lastWebhookPayload: paymentLink.raw ?? undefined,
+        lastWebhookStatus: paymentLink.status ?? undefined,
+        lastWebhookAt: new Date(),
+      },
+    });
+  }
+
+  private async completeInvoicePayment(
+    invoice: Invoice & {
+      invoiceDetails: Array<{
+        serviceId: string;
+        price: number;
+        prescriptionId: string | null;
+        service: {
+          serviceCode: string;
+          name: string;
+        };
+      }>;
+      patientProfile: {
+        id: string;
+        name: string;
+        dateOfBirth: Date;
+        gender: string;
+      };
+    },
+    options: {
+      cashierId?: string;
+      transaction?: PaymentTransaction;
+      source: 'MANUAL' | 'WEBHOOK' | 'SYSTEM';
+    },
   ): Promise<PaymentResult & { routingAssignments: any[] }> {
-    // Find and update invoice
-    const invoice = await this.prisma.invoice.findFirst({
-      where: { invoiceCode: dto.invoiceCode },
+    const cashierId = options.cashierId ?? invoice.cashierId;
+    if (!cashierId) {
+      throw new BadRequestException('Cashier identifier is required');
+    }
+
+    const updatedInvoice = await this.prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        paymentStatus: 'PAID',
+        isPaid: true,
+        cashierId,
+        amountPaid: invoice.totalAmount,
+        changeAmount: 0,
+      },
       include: {
         invoiceDetails: {
           include: { service: true },
@@ -279,90 +453,43 @@ export class InvoicePaymentService {
       },
     });
 
-    if (!invoice) {
-      throw new NotFoundException('Invoice not found');
-    }
-
-    if (invoice.isPaid) {
-      throw new BadRequestException('Invoice has already been paid');
-    }
-
-    // Update invoice to paid
-    const effectiveCashierId = await this.resolveCashierId(
-      (dto as any).cashierId,
-    );
-    await this.prisma.invoice.update({
-      where: { id: invoice.id },
-      data: {
-        paymentStatus: 'PAID',
-        isPaid: true,
-        cashierId: effectiveCashierId,
-      },
-    });
-
-    // Get prescription details
-    const prescriptionId = invoice.invoiceDetails[0]?.prescriptionId;
+    const prescriptionId = updatedInvoice.invoiceDetails[0]?.prescriptionId;
     if (!prescriptionId) {
-      throw new NotFoundException(
-        'Prescription ID not found in invoice details',
-      );
+      throw new NotFoundException('Prescription ID not found in invoice details');
     }
 
-    const prescription = await this.prisma.prescription.findFirst({
-      where: { id: prescriptionId },
-      include: {
-        services: {
-          include: { service: true },
-          orderBy: { order: 'asc' },
-        },
-        doctor: {
-          include: { auth: true },
-        },
-      },
-    });
+    const prescription = await this.getPrescriptionById(prescriptionId);
 
-    if (!prescription) {
-      throw new NotFoundException('Prescription not found');
-    }
-
-    // Mark paid services in prescription
-    const selectedServiceIds = invoice.invoiceDetails.map(
+    const selectedServiceIds = updatedInvoice.invoiceDetails.map(
       (detail) => detail.serviceId,
     );
 
-    // Get all service IDs from the prescription
     const allPrescriptionServiceIds = prescription.services.map(
-      (s) => s.serviceId,
+      (service) => service.serviceId,
     );
 
-    // Find services that were in the prescription but not selected for payment in THIS invoice
     const unselectedServiceIds = allPrescriptionServiceIds.filter(
       (id) => !selectedServiceIds.includes(id),
     );
 
-    // Only cancel services that are still PENDING (not yet paid in previous invoices)
     const pendingUnselectedIds: string[] = [];
     for (const serviceId of unselectedServiceIds) {
-      const service = prescription.services.find(
-        (s) => s.serviceId === serviceId,
-      );
-      if (service && service.status === 'PENDING') {
+      const service = prescription.services.find((s) => s.serviceId === serviceId);
+      if (service && service.status === PrescriptionStatus.PENDING) {
         pendingUnselectedIds.push(serviceId);
       }
     }
 
-    // Cancel only pending unselected services
     if (pendingUnselectedIds.length > 0) {
       await this.prisma.prescriptionService.updateMany({
         where: {
           prescriptionId,
           serviceId: { in: pendingUnselectedIds },
         },
-        data: { status: 'CANCELLED' },
+        data: { status: PrescriptionStatus.CANCELLED },
       });
     }
 
-    // Mark selected services as paid (which will set the first one to WAITING if no active service)
     for (const serviceId of selectedServiceIds) {
       await this.prescriptionService.markServicePaid(
         prescription.id,
@@ -370,21 +497,18 @@ export class InvoicePaymentService {
       );
     }
 
-    // Route patient to appropriate rooms
     let routingAssignments: any[] = [];
     try {
       const routingResult = await this.routingService.assignPatientToRooms({
-        patientProfileId: invoice.patientProfileId,
+        patientProfileId: updatedInvoice.patientProfileId,
         serviceIds: selectedServiceIds,
         requestedTime: new Date(),
       });
       routingAssignments = routingResult || [];
     } catch (error) {
       console.warn('Routing failed:', error);
-      // Continue with payment even if routing fails
     }
 
-    // Get detailed routing information
     const detailedRoutingAssignments = routingAssignments.map((assignment) => ({
       roomId: assignment.roomId,
       roomCode: assignment.roomCode,
@@ -402,14 +526,13 @@ export class InvoicePaymentService {
       nextAvailableAt: assignment.nextAvailableAt,
     }));
 
-    // Publish patient assignment to Redis Stream for each room
     const streamKey = process.env.REDIS_STREAM_ASSIGNMENTS || 'clinic:assignments';
     try {
       for (const assignment of detailedRoutingAssignments) {
         await this.redisStream.publishEvent(streamKey, {
           type: 'PATIENT_ASSIGNED',
-          patientProfileId: invoice.patientProfileId,
-          patientName: invoice.patientProfile.name,
+          patientProfileId: updatedInvoice.patientProfileId,
+          patientName: updatedInvoice.patientProfile.name,
           status: 'WAITING',
           roomId: assignment.roomId,
           roomCode: assignment.roomCode,
@@ -436,32 +559,309 @@ export class InvoicePaymentService {
       );
     }
 
-
-
     return {
-      invoiceCode: invoice.invoiceCode,
-      totalAmount: invoice.totalAmount,
+      invoiceCode: updatedInvoice.invoiceCode,
+      totalAmount: updatedInvoice.totalAmount,
       paymentStatus: 'PAID',
       prescriptionId: prescription.id,
-      patientProfileId: invoice.patientProfileId,
+      patientProfileId: updatedInvoice.patientProfileId,
       selectedServiceIds,
+      paymentMethod: updatedInvoice.paymentMethod,
+      transaction: this.mapTransactionSummary(options.transaction),
       routingAssignments: detailedRoutingAssignments,
-      invoiceDetails: invoice.invoiceDetails.map((detail) => ({
+      invoiceDetails: updatedInvoice.invoiceDetails.map((detail) => ({
         serviceId: detail.serviceId,
         serviceCode: detail.service.serviceCode,
         serviceName: detail.service.name,
         price: detail.price,
       })),
       patientInfo: {
-        name: invoice.patientProfile.name,
-        dateOfBirth: invoice.patientProfile.dateOfBirth,
-        gender: invoice.patientProfile.gender,
+        name: updatedInvoice.patientProfile.name,
+        dateOfBirth: updatedInvoice.patientProfile.dateOfBirth,
+        gender: updatedInvoice.patientProfile.gender,
       },
       prescriptionInfo: {
         prescriptionCode: prescription.prescriptionCode,
         status: prescription.status,
         doctorName: prescription.doctor?.auth.name,
       },
+    };
+  }
+
+  async confirmPayment(
+    dto: ConfirmPaymentDto,
+  ): Promise<PaymentResult & { routingAssignments: any[] }> {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { invoiceCode: dto.invoiceCode },
+      include: {
+        invoiceDetails: {
+          include: { service: true },
+        },
+        patientProfile: true,
+      },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    if (invoice.isPaid) {
+      throw new BadRequestException('Invoice has already been paid');
+    }
+
+    const effectiveCashierId = await this.resolveCashierId(dto.cashierId);
+
+    let transactionRecord: PaymentTransaction | undefined;
+    if (invoice.paymentMethod === PaymentMethod.TRANSFER) {
+      const transactions = await this.prisma.paymentTransaction.findMany({
+        where: {
+          invoiceId: invoice.id,
+          ...(dto.transactionId
+            ? {
+                OR: [
+                  { providerTransactionId: dto.transactionId },
+                  { id: dto.transactionId },
+                ],
+              }
+            : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      });
+
+      const targetTransaction = transactions[0];
+      if (!targetTransaction) {
+        throw new BadRequestException(
+          'Không tìm thấy giao dịch chuyển khoản để xác nhận.',
+        );
+      }
+
+      transactionRecord = await this.prisma.paymentTransaction.update({
+        where: { id: targetTransaction.id },
+        data: {
+          status: PaymentTransactionStatus.SUCCEEDED,
+          paidAt: new Date(),
+          isVerified: false,
+          lastWebhookStatus: 'MANUAL_CONFIRM',
+          lastWebhookAt: new Date(),
+        },
+      });
+    }
+
+    return this.completeInvoicePayment(invoice, {
+      cashierId: effectiveCashierId,
+      transaction: transactionRecord,
+      source: 'MANUAL',
+    });
+  }
+
+  async refreshPaymentLink(
+    invoiceCode: string,
+    options: { returnUrl?: string; cancelUrl?: string; requesterId?: string },
+  ): Promise<PaymentResult> {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { invoiceCode },
+      include: {
+        invoiceDetails: {
+          include: { service: true },
+        },
+        patientProfile: true,
+        paymentTransactions: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    if (invoice.isPaid) {
+      throw new BadRequestException('Invoice has already been paid');
+    }
+
+    if (invoice.paymentMethod !== PaymentMethod.TRANSFER) {
+      throw new BadRequestException(
+        'Phiếu thu này không sử dụng phương thức chuyển khoản.',
+      );
+    }
+
+    const prescriptionId = invoice.invoiceDetails[0]?.prescriptionId;
+    if (!prescriptionId) {
+      throw new NotFoundException(
+        'Prescription ID not found in invoice details',
+      );
+    }
+
+    const prescription = await this.getPrescriptionById(prescriptionId);
+
+    const activeStatuses = new Set<PaymentTransactionStatus>([
+      PaymentTransactionStatus.PENDING,
+      PaymentTransactionStatus.PROCESSING,
+    ]);
+
+    const activeTransactions = invoice.paymentTransactions.filter((tx) =>
+      activeStatuses.has(tx.status),
+    );
+
+    if (activeTransactions.length > 0) {
+      await this.prisma.paymentTransaction.updateMany({
+        where: { id: { in: activeTransactions.map((tx) => tx.id) } },
+        data: {
+          status: PaymentTransactionStatus.CANCELLED,
+          lastWebhookStatus: 'MANUAL_REFRESH',
+          lastWebhookAt: new Date(),
+        },
+      });
+    }
+
+    const newTransaction = await this.createTransferTransaction({
+      invoice,
+      prescription,
+      returnUrl: options.returnUrl,
+      cancelUrl: options.cancelUrl,
+    });
+
+    const selectedServiceIds = invoice.invoiceDetails.map(
+      (detail) => detail.serviceId,
+    );
+
+    return {
+      invoiceCode: invoice.invoiceCode,
+      totalAmount: invoice.totalAmount,
+      paymentStatus: invoice.paymentStatus,
+      prescriptionId: prescription.id,
+      patientProfileId: invoice.patientProfileId,
+      selectedServiceIds,
+      paymentMethod: invoice.paymentMethod,
+      transaction: this.mapTransactionSummary(newTransaction),
+    };
+  }
+
+  async handlePayOsWebhook(
+    signature: string | undefined,
+    payload: any,
+  ): Promise<{ success: boolean; data?: any; status?: PaymentTransactionStatus; invoiceCode?: string }> {
+    if (!this.payOsService.isEnabled()) {
+      throw new BadRequestException('PayOS integration is not configured.');
+    }
+
+    if (!signature) {
+      return {
+        success: true,
+        status: PaymentTransactionStatus.PENDING,
+      };
+    }
+
+    const verified = this.payOsService.verifyWebhookSignature(signature, payload);
+    if (!verified) {
+      throw new BadRequestException('Invalid PayOS signature');
+    }
+
+    const normalized = this.payOsService.extractWebhookData(payload) ?? payload;
+    const transactionId =
+      normalized?.transactionId ??
+      normalized?.transaction_id ??
+      normalized?.data?.transactionId ??
+      normalized?.data?.transaction_id;
+    const orderCode =
+      normalized?.orderCode ??
+      normalized?.order_code ??
+      normalized?.data?.orderCode ??
+      normalized?.data?.order_code;
+
+    if (!transactionId && !orderCode) {
+      throw new BadRequestException(
+        'Webhook payload missing transaction reference.',
+      );
+    }
+
+    const transaction = await this.prisma.paymentTransaction.findFirst({
+      where: transactionId
+        ? { providerTransactionId: transactionId }
+        : { orderCode: orderCode ?? undefined },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        invoice: {
+          include: {
+            invoiceDetails: {
+              include: { service: true },
+            },
+            patientProfile: true,
+          },
+        },
+      },
+    });
+
+    if (!transaction || !transaction.invoice) {
+      throw new NotFoundException('Matching transaction not found');
+    }
+
+    const status = this.mapPayOsStatus(
+      normalized?.status ?? normalized?.data?.status,
+    );
+
+    const updatedTransaction = await this.prisma.paymentTransaction.update({
+      where: { id: transaction.id },
+      data: {
+        status,
+        providerTransactionId: transactionId ?? transaction.providerTransactionId,
+        orderCode: orderCode ?? transaction.orderCode,
+        paymentUrl:
+          normalized?.paymentUrl ??
+          normalized?.checkoutUrl ??
+          transaction.paymentUrl,
+        qrCode: normalized?.qrCode ?? transaction.qrCode,
+        amount:
+          normalized?.amount ??
+          normalized?.totalAmount ??
+          transaction.amount,
+        currency: normalized?.currency ?? transaction.currency,
+        expiredAt:
+          this.toDate(
+            normalized?.expiredAt ??
+              normalized?.expireAt ??
+              normalized?.expiresAt ??
+              normalized?.data?.expiredAt,
+          ) ?? transaction.expiredAt,
+        paidAt:
+          status === PaymentTransactionStatus.SUCCEEDED
+            ? this.toDate(normalized?.paidAt ?? normalized?.data?.paidAt ?? Date.now())
+            : null,
+        isVerified: true,
+        lastWebhookPayload: payload,
+        lastWebhookStatus: normalized?.status ?? normalized?.data?.status,
+        lastWebhookAt: new Date(),
+      },
+    });
+
+    if (status === PaymentTransactionStatus.SUCCEEDED) {
+      if (transaction.invoice.isPaid) {
+        return {
+          success: true,
+          status,
+          invoiceCode: transaction.invoice.invoiceCode,
+        };
+      }
+
+      const result = await this.completeInvoicePayment(transaction.invoice, {
+        cashierId: transaction.invoice.cashierId,
+        transaction: updatedTransaction,
+        source: 'WEBHOOK',
+      });
+
+      return {
+        success: true,
+        data: result,
+        status,
+        invoiceCode: transaction.invoice.invoiceCode,
+      };
+    }
+
+    return {
+      success: true,
+      status,
+      invoiceCode: transaction.invoice.invoiceCode,
     };
   }
 
@@ -535,5 +935,60 @@ export class InvoicePaymentService {
       })),
       note: prescription.note,
     };
+  }
+
+  private mapTransactionSummary(
+    transaction?: PaymentTransaction | null,
+  ): PaymentTransactionSummary | undefined {
+    if (!transaction) return undefined;
+    return {
+      id: transaction.id,
+      status: transaction.status,
+      amount: transaction.amount,
+      currency: transaction.currency,
+      paymentUrl: transaction.paymentUrl,
+      qrCode: transaction.qrCode,
+      providerTransactionId: transaction.providerTransactionId,
+      orderCode: transaction.orderCode,
+      expiredAt: transaction.expiredAt,
+      paidAt: transaction.paidAt,
+      isVerified: transaction.isVerified,
+    };
+  }
+
+  private toDate(value?: number | string | Date | null): Date | null {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value === 'number') {
+      return value > 0 && value < 10_000_000_000 ? new Date(value * 1000) : new Date(value);
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private mapPayOsStatus(status?: string): PaymentTransactionStatus {
+    const normalized = status?.toUpperCase();
+    switch (normalized) {
+      case 'PAID':
+      case 'SUCCESS':
+      case 'SUCCEEDED':
+      case 'COMPLETED':
+        return PaymentTransactionStatus.SUCCEEDED;
+      case 'PROCESSING':
+      case 'PROCESS':
+      case 'INPROGRESS':
+        return PaymentTransactionStatus.PROCESSING;
+      case 'FAILED':
+      case 'FAIL':
+      case 'ERROR':
+        return PaymentTransactionStatus.FAILED;
+      case 'CANCELLED':
+      case 'CANCELED':
+      case 'VOIDED':
+        return PaymentTransactionStatus.CANCELLED;
+      case 'PENDING':
+      default:
+        return PaymentTransactionStatus.PENDING;
+    }
   }
 }
