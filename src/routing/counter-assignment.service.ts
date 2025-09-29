@@ -18,11 +18,13 @@ export class CounterAssignmentService {
     ok: true;
     patient?: any;
     message?: string;
+    status?: string;
+    callCount?: number;
   }> {
     const startTime = Date.now();
     console.log(`[SKIP_PERF] skipCurrentPatient started for counter ${counterId} at ${new Date().toISOString()}`);
     
-    // Lấy queue trước khi thay đổi
+    // Lấy queue và current trước khi thay đổi
     const oldQueue = await this.getCurrentQueue(counterId);
     
     // Step 1: Skip patient using optimized Redis method
@@ -78,6 +80,9 @@ export class CounterAssignmentService {
     // Nếu callCount >= 4, xóa khỏi queue hoàn toàn
     if (callCount >= 4 && patientTicketId) {
       await this.removeTicketFromQueue(counterId, patientTicketId);
+      await this.promoteNextPatientAsCurrent(counterId);
+      await this.updateNextPatientInQueue(counterId);
+
       const step3Duration = Date.now() - step3Start;
       const totalDuration = Date.now() - startTime;
       console.log(`[SKIP_PERF] Step 3 completed in ${step3Duration}ms`);
@@ -92,16 +97,21 @@ export class CounterAssignmentService {
     
     // Nếu callCount <= 4, xử lý skip logic
     if (patientTicketId) {
-      // 1. Cập nhật bệnh nhân hiện tại thành SKIPPED và tăng callCount
-      await this.updateTicketStatus(counterId, patientTicketId, TicketStatus.SKIPPED, callCount + 1);
-      
-      // 2. Cập nhật bệnh nhân tiếp theo thành SERVING
-      await this.updateNextPatientToServing(counterId);
-      
+      // 1. Cập nhật bệnh nhân hiện tại thành SKIPPED với callCount mới
+      await this.updateTicketStatus(counterId, patientTicketId, TicketStatus.SKIPPED, callCount);
+
+      // 2. Thăng bệnh nhân ưu tiên tiếp theo lên phục vụ
+      await this.promoteNextPatientAsCurrent(counterId);
+
       // 3. Cập nhật bệnh nhân tiếp theo trong queue thành NEXT
       await this.updateNextPatientInQueue(counterId);
     }
     
+    if (result.patient) {
+      (result.patient as any).status = TicketStatus.SKIPPED;
+      (result.patient as any).callCount = callCount;
+    }
+
     const status = (result.patient as any)?.status || 'SKIPPED';
     const message = result.message ||
       (callCount >= 3
@@ -119,17 +129,25 @@ export class CounterAssignmentService {
     const step4Duration = Date.now() - step4Start;
     console.log(`[SKIP_PERF] Step 4 completed in ${step4Duration}ms`);
 
+    void this.logQueueSnapshot(counterId, newQueue, 'After skipCurrentPatient').catch((err) =>
+      console.warn('[queue-debug] Failed to log queue after skip:', (err as Error).message),
+    );
+
     const totalDuration = Date.now() - startTime;
     console.log(`[SKIP_PERF] skipCurrentPatient completed in ${totalDuration}ms (patient: ${result.patient?.patientName || 'Unknown'})`);
 
-    return {
+    const response: any = {
       ok: true,
       patient: result.patient,
       message,
-      // expose extended fields for client if needed
-      ...(status ? { status } : {}),
-      ...(callCount ? { callCount } : {}),
-    } as any;
+      callCount,
+    };
+
+    if (status) {
+      response.status = status;
+    }
+
+    return response;
   }
 
 
@@ -145,7 +163,7 @@ export class CounterAssignmentService {
     try {
       // Cập nhật trong Redis queue
       const queueKey = `counterQueueZ:${counterId}`;
-      const members = await this.redis['redis'].zrange(queueKey, 0, -1);
+      const members = await this.redis['redis'].zrevrange(queueKey, 0, -1);
       
       for (const member of members) {
         try {
@@ -212,51 +230,39 @@ export class CounterAssignmentService {
   }
 
   /**
-   * Cập nhật bệnh nhân tiếp theo thành SERVING
-   */
-  private async updateNextPatientToServing(counterId: string): Promise<void> {
-    try {
-      const queueKey = `counterQueueZ:${counterId}`;
-      const members = await this.redis['redis'].zrange(queueKey, 0, -1);
-      
-      // Tìm bệnh nhân có status NEXT
-      for (const member of members) {
-        try {
-          const ticket = JSON.parse(member);
-          if (ticket.status === TicketStatus.NEXT) {
-            await this.updateTicketStatus(counterId, ticket.ticketId, TicketStatus.SERVING);
-            console.log(`Updated next patient to serving: ${ticket.ticketId}`);
-            break;
-          }
-        } catch (e) {
-          console.warn('Error updating next patient to serving:', e);
-        }
-      }
-    } catch (error) {
-      console.warn('Error updating next patient to serving:', error);
-    }
-  }
-
-  /**
    * Cập nhật bệnh nhân tiếp theo trong queue thành NEXT
    */
   private async updateNextPatientInQueue(counterId: string): Promise<void> {
     try {
       const queueKey = `counterQueueZ:${counterId}`;
-      const members = await this.redis['redis'].zrange(queueKey, 0, -1);
-      
-      // Tìm bệnh nhân có priority cao nhất (không phải SERVING, NEXT, COMPLETED)
+      const members = await this.redis['redis'].zrevrange(queueKey, 0, -1);
+
+      const nextCandidates: string[] = [];
+      let nextTicketId: string | null = null;
+
       for (const member of members) {
         try {
           const ticket = JSON.parse(member);
-          if (ticket.status === TicketStatus.WAITING || ticket.status === TicketStatus.SKIPPED) {
-            await this.updateTicketStatus(counterId, ticket.ticketId, TicketStatus.NEXT);
-            console.log(`Updated next patient in queue: ${ticket.ticketId}`);
-            break;
+          if (ticket.status === TicketStatus.NEXT) {
+            nextCandidates.push(ticket.ticketId);
+          }
+          if (!nextTicketId && (ticket.status === TicketStatus.WAITING || ticket.status === TicketStatus.SKIPPED)) {
+            nextTicketId = ticket.ticketId;
           }
         } catch (e) {
-          console.warn('Error updating next patient in queue:', e);
+          console.warn('Error parsing ticket when normalizing NEXT:', e);
         }
+      }
+
+      for (const ticketId of nextCandidates) {
+        if (ticketId !== nextTicketId) {
+          await this.updateTicketStatus(counterId, ticketId, TicketStatus.WAITING);
+        }
+      }
+
+      if (nextTicketId) {
+        await this.updateTicketStatus(counterId, nextTicketId, TicketStatus.NEXT);
+        console.log(`Updated next patient in queue: ${nextTicketId}`);
       }
     } catch (error) {
       console.warn('Error updating next patient in queue:', error);
@@ -331,7 +337,7 @@ export class CounterAssignmentService {
   private async getCurrentQueue(counterId: string): Promise<any[]> {
     try {
       const queueKey = `counterQueueZ:${counterId}`;
-      const members = await this.redis['redis'].zrange(queueKey, 0, -1);
+      const members = await this.redis['redis'].zrevrange(queueKey, 0, -1);
       return members.map(member => {
         try {
           return JSON.parse(member);
@@ -354,7 +360,7 @@ export class CounterAssignmentService {
   ): Promise<void> {
     try {
       const queueKey = `counterQueueZ:${counterId}`;
-      const members = await this.redis['redis'].zrange(queueKey, 0, -1);
+      const members = await this.redis['redis'].zrevrange(queueKey, 0, -1);
       
       for (const member of members) {
         try {
@@ -381,6 +387,7 @@ export class CounterAssignmentService {
     
     // Lấy queue trước khi thay đổi
     const oldQueue = await this.getCurrentQueue(counterId);
+    const previousCurrent = await this.redis.getCurrentPatient(counterId);
     
     // Step 1: Call optimized Redis method
     const step1Start = Date.now();
@@ -412,20 +419,29 @@ export class CounterAssignmentService {
     
     // 1. Cập nhật bệnh nhân đang phục vụ thành COMPLETED (nếu có)
     const currentPatient = await this.redis.getCurrentPatient(counterId);
-    if (currentPatient) {
-      const currentTicketId = (currentPatient as any)?.ticketId;
-      if (currentTicketId) {
-        await this.updateTicketStatus(counterId, currentTicketId, TicketStatus.COMPLETED);
+
+    const previousTicketId = (previousCurrent as any)?.ticketId as string | undefined;
+    const currentTicketId = (currentPatient as any)?.ticketId as string | undefined;
+
+    if (previousTicketId && (!currentTicketId || previousTicketId !== currentTicketId)) {
+      try {
+        await this.redis.addPatientToHistory(counterId, previousCurrent as any);
+      } catch (err) {
+        console.warn('Error adding previous patient to history:', (err as Error).message);
       }
     }
-    
-    // 2. Cập nhật bệnh nhân tiếp theo thành SERVING
-    const nextPatientTicketId = (result.patient as any)?.ticketId;
-    if (nextPatientTicketId) {
-      await this.updateTicketStatus(counterId, nextPatientTicketId, TicketStatus.SERVING);
+
+    if (!currentTicketId) {
+      await this.promoteNextPatientAsCurrent(counterId);
+    } else if ((currentPatient as any)?.status !== TicketStatus.SERVING) {
+      const normalizedCurrent = {
+        ...(currentPatient as any),
+        status: TicketStatus.SERVING,
+      };
+      await this.redis.setCurrentPatient(counterId, normalizedCurrent);
     }
-    
-    // 3. Cập nhật bệnh nhân tiếp theo trong queue thành NEXT
+
+    // 2. Chuẩn hóa lại trạng thái NEXT trong queue và chọn bệnh nhân tiếp theo
     await this.updateNextPatientInQueue(counterId);
     
     const step3Duration = Date.now() - step3Start;
@@ -468,10 +484,82 @@ export class CounterAssignmentService {
     const step5Duration = Date.now() - step5Start;
     console.log(`[PERF] Step 5 completed in ${step5Duration}ms`);
 
+    void this.logQueueSnapshot(counterId, newQueue, 'After callNextPatient').catch((err) =>
+      console.warn('[queue-debug] Failed to log queue after next:', (err as Error).message),
+    );
+
     const totalDuration = Date.now() - startTime;
     console.log(`[PERF] callNextPatient completed in ${totalDuration}ms (patient found: ${result.patient?.patientName || 'Unknown'})`);
     
     return { ok: true, patient: result.patient };
+  }
+
+  private async logQueueSnapshot(
+    counterId: string,
+    queue: any[] | null,
+    context: string,
+  ): Promise<void> {
+    const snapshot = queue ?? await this.redis.getCounterQueueSnapshot(counterId);
+    const current = await this.redis.getCurrentPatient(counterId);
+
+    const combined: any[] = [];
+    if (current) {
+      combined.push({
+        ...current,
+        status: TicketStatus.SERVING,
+      });
+    }
+
+    for (const ticket of snapshot || []) {
+      if (current && ticket.ticketId === (current as any).ticketId) {
+        continue;
+      }
+      combined.push(ticket);
+    }
+
+    const rows = combined.map((ticket, index) => ({
+      pos: index + 1,
+      ticket: ticket.ticketId,
+      qNum: ticket.queueNumber,
+      name: ticket.patientName,
+      arr: typeof ticket.assignedAt === 'string'
+        ? (ticket.assignedAt.split('T')[1]?.slice(0, 8) || ticket.assignedAt)
+        : '',
+      st: ticket.status,
+      stLbl: ticket.statusText || ticket.statusLabel || '',
+      prio: ticket.queuePriority,
+      calls: ticket.callCount ?? 0,
+      age: ticket.patientAge,
+      preg: ticket.metadata?.isPregnant ? 'Y' : '',
+      dis: ticket.metadata?.isDisabled ? 'Y' : '',
+      eld: ticket.patientAge > 75 ? 'Y' : '',
+    }));
+
+    console.log(`[queue-debug] ${context} - counter ${counterId}`);
+    if (rows.length > 0) {
+      console.table(rows);
+    } else {
+      console.log('[queue-debug] Queue is currently empty');
+    }
+  }
+
+  private async promoteNextPatientAsCurrent(counterId: string): Promise<void> {
+    try {
+      const nextPatient = await this.redis.getNextPatientFromQueue(counterId);
+      if (nextPatient && nextPatient.ticketId) {
+        await this.removeTicketFromQueue(counterId, nextPatient.ticketId as string);
+        const normalizedCurrent = {
+          ...nextPatient,
+          status: TicketStatus.SERVING,
+          callCount: nextPatient.callCount ?? 0,
+        };
+        await this.redis.setCurrentPatient(counterId, normalizedCurrent as any);
+      } else {
+        await this.redis.setCurrentPatient(counterId, null as any);
+      }
+    } catch (error) {
+      console.warn('Error promoting next patient to current:', error);
+    }
   }
 
 }

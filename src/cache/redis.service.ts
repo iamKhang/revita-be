@@ -129,7 +129,7 @@ export class RedisService implements OnModuleDestroy {
     
     // First, remove any existing entries with the same unique identifier
     if (uniqueId) {
-      const existingMembers = await this.redis.zrange(key, 0, -1);
+    const existingMembers = await this.redis.zrevrange(key, 0, -1);
       for (const member of existingMembers) {
         try {
           const existingItem = JSON.parse(member) as Record<string, unknown>;
@@ -193,7 +193,7 @@ export class RedisService implements OnModuleDestroy {
     for (const s of due) {
       try {
         const patient = JSON.parse(s) as Record<string, unknown>;
-        (patient as any).status = 'READY';
+        (patient as any).status = 'WAITING';
         await this.pushToCounterQueue(counterId, patient);
         count++;
       } catch {
@@ -225,6 +225,20 @@ export class RedisService implements OnModuleDestroy {
     // Highest score first
     const items = await this.redis.zrevrange(key, 0, -1);
     return items.map((s) => JSON.parse(s) as Record<string, unknown>);
+  }
+
+  async getCounterQueueSnapshot(
+    counterId: string,
+  ): Promise<Record<string, unknown>[]> {
+    const key = `counterQueueZ:${counterId}`;
+    const items = await this.redis.zrevrange(key, 0, -1);
+    return items.map((s) => {
+      try {
+        return JSON.parse(s) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }).filter(Boolean) as Record<string, unknown>[];
   }
 
   async clearCounterQueue(counterId: string): Promise<void> {
@@ -360,7 +374,7 @@ export class RedisService implements OnModuleDestroy {
     const score = base - sequence;
 
     // Cập nhật trạng thái READY khi trả về queue
-    (patient as any).status = 'READY';
+    (patient as any).status = 'WAITING';
     // Thêm lại vào queue với score cao nhất
     await this.redis.zadd(key, 'XX', score, JSON.stringify(patient));
   }
@@ -798,15 +812,19 @@ export class RedisService implements OnModuleDestroy {
         return {0}  -- No patients in queue
       end
       
-      local patient = result[1]
+      local patientJson = result[1]
+      local patientData = cjson.decode(patientJson)
+      patientData.status = 'SERVING'
+      patientData.callCount = patientData.callCount or 0
+      local updatedPatient = cjson.encode(patientData)
       
       -- Set as current patient
-      redis.call('SET', currentKey, patient)
+      redis.call('SET', currentKey, updatedPatient)
       
       -- Increment turn counter
       redis.call('INCR', turnKey)
       
-      return {1, patient}
+      return {1, updatedPatient}
     `, 3, 
     `counterQueueZ:${counterId}`,
     `counterCurrent:${counterId}`,
@@ -881,7 +899,7 @@ export class RedisService implements OnModuleDestroy {
       -- Parse current patient to update callCount
       local patientData = cjson.decode(current)
       patientData.callCount = (patientData.callCount or 0) + 1
-      patientData.status = 'MISSED'
+      patientData.status = 'SKIPPED'
       local updatedCurrent = cjson.encode(patientData)
       
       -- Add to skipped list for tracking

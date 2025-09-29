@@ -115,11 +115,20 @@ export class TakeNumberService {
       if (!request.patientName) {
         throw new BadRequestException('Không tìm thấy thông tin bệnh nhân. Vui lòng cung cấp tên bệnh nhân.');
       }
+
+      const nowYear = new Date().getFullYear();
+      const birthYear = typeof request.birthYear === 'number'
+        ? Math.min(Math.max(request.birthYear, 1900), nowYear)
+        : undefined;
+      const fallbackBirthDate = birthYear
+        ? new Date(birthYear, 0, 1)
+        : new Date(1990, 0, 1);
+
       patientInfo = {
         name: request.patientName,
-        age: 30, // Tuổi mặc định
+        age: this.calculateAge(fallbackBirthDate),
         gender: 'UNKNOWN',
-        dateOfBirth: new Date(1990, 0, 1),
+        dateOfBirth: fallbackBirthDate,
       };
     }
 
@@ -156,7 +165,7 @@ export class TakeNumberService {
     // Thực hiện song song: lưu stream, enqueue ZSET, notify WS
     const enqueueItem: any = {
       ...ticket,
-      status: 'READY',
+      status: TicketStatus.WAITING,
       callCount: 0,
     };
     
@@ -338,12 +347,20 @@ export class TakeNumberService {
    */
   private async selectBestCounter(): Promise<any> {
     const counters = await this.prisma.counter.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        assignments: {
+          some: {
+            status: 'ACTIVE',
+            completedAt: null,
+          },
+        },
+      },
       select: { id: true, counterCode: true, counterName: true },
     });
 
     if (counters.length === 0) {
-      throw new NotFoundException('Không có counter nào khả dụng');
+      throw new NotFoundException('Không có counter nào đang hoạt động với nhân viên được phân công');
     }
 
     // Ưu tiên counter có ít người đợi nhất
@@ -485,7 +502,7 @@ export class TakeNumberService {
     }
 
     // Trong cùng nhóm ưu tiên, ai đến trước (sequence nhỏ hơn) thì ưu tiên hơn
-    return priorityScore - sequence;
+    return priorityScore + sequence;
   }
 
   /**
@@ -503,7 +520,7 @@ export class TakeNumberService {
   private async getCurrentQueue(counterId: string): Promise<any[]> {
     try {
       const queueKey = `counterQueueZ:${counterId}`;
-      const members = await this.redis['redis'].zrange(queueKey, 0, -1);
+      const members = await this.redis['redis'].zrevrange(queueKey, 0, -1);
       return members.map(member => {
         try {
           return JSON.parse(member);
@@ -530,6 +547,7 @@ export class TakeNumberService {
       await new Promise(resolve => setTimeout(resolve, 100));
       
       const newQueue = await this.getCurrentQueue(counterId);
+      await this.logQueueSnapshot(counterId, newQueue, 'After enqueue new ticket');
       
       const changes = {
         newPatients: [newTicket] as any[],
@@ -554,6 +572,59 @@ export class TakeNumberService {
       console.log(`[WebSocket] Sent new ticket queue changes to counter ${counterId}`);
     } catch (error) {
       console.warn('Error notifying new ticket queue changes:', error);
+    }
+  }
+
+  /**
+   * In thông tin queue hiện tại dạng bảng để debug khi test
+   */
+  private async logQueueSnapshot(counterId: string, queue: any[], context: string): Promise<void> {
+    if (!Array.isArray(queue)) {
+      console.log(`[queue-debug] ${context} - counter ${counterId}: queue unavailable`);
+      return;
+    }
+
+    const current = await this.redis.getCurrentPatient(counterId);
+    const combined = [] as any[];
+
+    if (current) {
+      const normalizedCurrent = {
+        ...current,
+        status: TicketStatus.SERVING,
+      };
+      combined.push(normalizedCurrent);
+    }
+
+    for (const ticket of queue) {
+      if (current && ticket.ticketId === (current as any).ticketId) {
+        continue;
+      }
+      combined.push(ticket);
+    }
+
+    const rows = combined.map((ticket, index) => ({
+      pos: index + 1,
+      ticket: ticket.ticketId,
+      qNum: ticket.queueNumber,
+      name: ticket.patientName,
+      arr: typeof ticket.assignedAt === 'string'
+        ? (ticket.assignedAt.split('T')[1]?.slice(0, 8) || ticket.assignedAt)
+        : '',
+      st: ticket.status,
+      stLbl: ticket.statusText || ticket.statusLabel || '',
+      prio: ticket.queuePriority,
+      calls: ticket.callCount ?? 0,
+      age: ticket.patientAge,
+      preg: ticket.metadata?.isPregnant ? 'Y' : '',
+      dis: ticket.metadata?.isDisabled ? 'Y' : '',
+      eld: ticket.patientAge > 75 ? 'Y' : '',
+    }));
+
+    console.log(`[queue-debug] ${context} - counter ${counterId}`);
+    if (rows.length > 0) {
+      console.table(rows);
+    } else {
+      console.log('[queue-debug] Queue is currently empty');
     }
   }
 

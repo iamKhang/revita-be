@@ -1,0 +1,1207 @@
+{
+  "info": {
+    "_postman_id": "273db235-3cbe-4bc6-9017-7cbc05a9a373",
+    "name": "Revita Take Number and Counter Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Bộ sưu tập Postman kiểm thử endpoint bốc số và quầy với dữ liệu cập nhật."
+  },
+  "item": [
+    {
+      "name": "Take Number",
+      "description": "20 kịch bản bốc số cập nhật theo DTO mới.",
+      "item": [
+        {
+          "name": "Take Number - PR-0008 via Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientProfileCode\": \"PR-0008\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Bốc số bằng mã hồ sơ PR-0008."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - PR-0009-1 Pregnant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientProfileCode\": \"PR-0009-1\",\n  \"isPregnant\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Bốc số cho PR-0009-1, đánh dấu mang thai."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - PR-0009-2 Disabled",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientProfileCode\": \"PR-0009-2\",\n  \"isDisabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Bốc số cho PR-0009-2, đánh dấu khuyết tật."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - PR-0010-1 Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientProfileCode\": \"PR-0010-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Bốc số bằng mã hồ sơ PR-0010-1."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - PR-0010-2 Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientProfileCode\": \"PR-0010-2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Bốc số bằng mã hồ sơ PR-0010-2."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - PP_01 Pregnant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientProfileCode\": \"PP_01\",\n  \"isPregnant\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Bốc số cho PP_01, gắn cờ mang thai."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - PP_02 Disabled",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientProfileCode\": \"PP_02\",\n  \"isDisabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Bốc số cho PP_02, gắn cờ khuyết tật."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - PP_03 Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientProfileCode\": \"PP_03\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Bốc số cho PP_03 chỉ dùng mã hồ sơ."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Elder Nguyen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Nguyen Van Luan\",\n  \"patientPhone\": \"0901000001\",\n  \"birthYear\": 1940\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in cao tuổi, nhập năm sinh 1940."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Pregnant Tran",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Tran Thi Minh\",\n  \"patientPhone\": \"0901000002\",\n  \"birthYear\": 1994,\n  \"isPregnant\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in mang thai Tran Thi Minh."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Disabled Le",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Le Van Hung\",\n  \"patientPhone\": \"0901000003\",\n  \"birthYear\": 1985,\n  \"isDisabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in người khuyết tật Le Van Hung."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Pregnant & Disabled",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Hoang Thi Lan\",\n  \"patientPhone\": \"0901000006\",\n  \"birthYear\": 1988,\n  \"isPregnant\": true,\n  \"isDisabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in vừa mang thai vừa khuyết tật."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Senior No Phone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Pham Thi Ba\",\n  \"birthYear\": 1938\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in cao tuổi không cung cấp số điện thoại."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Middle Age",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Tran Van Phu\",\n  \"patientPhone\": \"0901000009\",\n  \"birthYear\": 1978\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in trung niên Tran Van Phu."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Young Adult",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Le Thi Bich\",\n  \"patientPhone\": \"0901000010\",\n  \"birthYear\": 1996\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in người trưởng thành trẻ."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Pediatric",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Be Tran Gia Han\",\n  \"birthYear\": 2018\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in trẻ em Tran Gia Han."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Teen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Nguyen Bao Long\",\n  \"birthYear\": 2008\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in thiếu niên Nguyen Bao Long."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Follow-up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Dang Quoc Khanh\",\n  \"patientPhone\": \"0901000011\",\n  \"birthYear\": 1982\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in tái khám Dang Quoc Khanh."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in General Consult",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Vo Minh Tuan\",\n  \"patientPhone\": \"0901000012\",\n  \"birthYear\": 1990\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in tư vấn tổng quát Vo Minh Tuan."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Without Phone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Pham Thi Hoa\",\n  \"birthYear\": 1975\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in không cung cấp số điện thoại."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Take Number - Walk-in Evening Slot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Le Quang Huy\",\n  \"patientPhone\": \"0901000013\",\n  \"birthYear\": 1989\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/take-number/take",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "take-number",
+                "take"
+              ]
+            },
+            "description": "Walk-in dịch vụ buổi tối Le Quang Huy."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response has success flag\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"success\", true);",
+                  "  pm.expect(json.ticket).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Counter Assignment",
+      "description": "Các thao tác NEXT và SKIP cho quầy mặc định.",
+      "item": [
+        {
+          "name": "Counter - Call Next Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/next-patient/2e7f1f80-c063-4bbd-9092-777a82926e25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "counter-assignment",
+                "next-patient",
+                "2e7f1f80-c063-4bbd-9092-777a82926e25"
+              ]
+            },
+            "description": "Gọi bệnh nhân tiếp theo cho quầy 2e7f1f80-c063-4bbd-9092-777a82926e25."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response ok flag present\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"ok\", true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Counter - Skip Current Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/counter-assignment/skip-current/2e7f1f80-c063-4bbd-9092-777a82926e25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "counter-assignment",
+                "skip-current",
+                "2e7f1f80-c063-4bbd-9092-777a82926e25"
+              ]
+            },
+            "description": "Bỏ qua bệnh nhân hiện tại tại quầy 2e7f1f80-c063-4bbd-9092-777a82926e25."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200/201\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Response ok flag present\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property(\"ok\", true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}
