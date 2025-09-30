@@ -76,28 +76,34 @@ export class PayOsService {
       throw new Error('PayOS credentials are not configured.');
     }
 
-    const returnUrl = payload.returnUrl ?? this.returnUrl;
-    const cancelUrl = payload.cancelUrl ?? this.cancelUrl;
-
-    if (!returnUrl || !cancelUrl) {
-      throw new Error('Thiếu cấu hình returnUrl/cancelUrl cho PayOS.');
-    }
-
     const normalizedOrderCode = this.normalizeOrderCode(payload.orderCode);
 
     try {
-      const response = await this.payosClient.paymentRequests.create({
+      const requestBody: Record<string, any> = {
         orderCode: normalizedOrderCode as any,
         amount: payload.amount,
         description: payload.description,
-        returnUrl,
-        cancelUrl,
         items: payload.items,
         buyerName: payload.buyerName,
         buyerEmail: payload.buyerEmail,
         buyerPhone: payload.buyerPhone,
         expiredAt: payload.expiredAt,
-      } as any);
+      };
+
+      const returnUrl = payload.returnUrl ?? this.returnUrl;
+      const cancelUrl = payload.cancelUrl ?? this.cancelUrl;
+
+      if (returnUrl) {
+        requestBody.returnUrl = returnUrl;
+      }
+
+      if (cancelUrl) {
+        requestBody.cancelUrl = cancelUrl;
+      }
+
+      const response = await this.payosClient.paymentRequests.create(
+        requestBody as any,
+      );
 
       return this.mapPaymentLinkResponse(response, {
         fallbackOrderCode: normalizedOrderCode,

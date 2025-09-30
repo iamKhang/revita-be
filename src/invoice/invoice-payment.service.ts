@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrescriptionService } from '../prescription/prescription.service';
@@ -118,6 +119,8 @@ export type PaymentResult = {
 
 @Injectable()
 export class InvoicePaymentService {
+  private readonly logger = new Logger(InvoicePaymentService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly prescriptionService: PrescriptionService,
@@ -748,20 +751,65 @@ export class InvoicePaymentService {
       throw new BadRequestException('PayOS integration is not configured.');
     }
 
-    if (!signature) {
+    this.logger.debug(
+      `Webhook received. Signature present=${Boolean(signature)} payloadType=${typeof payload}`,
+    );
+
+    let parsedPayload: any = payload;
+    if (typeof payload === 'string') {
+      try {
+        parsedPayload = JSON.parse(payload);
+      } catch (error) {
+        this.logger.warn('Webhook payload could not be parsed as JSON for signature extraction');
+        parsedPayload = null;
+      }
+    }
+
+    let effectiveSignature = signature;
+    if (!effectiveSignature && parsedPayload && typeof parsedPayload.signature === 'string') {
+      effectiveSignature = parsedPayload.signature;
+      this.logger.debug('Using signature field from payload body');
+    }
+
+    if (
+      !effectiveSignature &&
+      parsedPayload &&
+      parsedPayload.data &&
+      typeof parsedPayload.data.signature === 'string'
+    ) {
+      effectiveSignature = parsedPayload.data.signature;
+      this.logger.debug('Using signature field from payload.data');
+    }
+
+    if (!effectiveSignature) {
+      try {
+        const printable = parsedPayload ?? payload;
+        this.logger.warn(
+          `Webhook missing signature. Raw payload=${JSON.stringify(printable)}`,
+        );
+      } catch (error) {
+        this.logger.warn('Webhook missing signature. Payload could not be stringified');
+      }
       return {
         success: true,
         status: PaymentTransactionStatus.PENDING,
       };
     }
 
-    const verified = await this.payOsService.verifyWebhook(signature, payload);
+    const verified = await this.payOsService.verifyWebhook(
+      effectiveSignature,
+      payload,
+    );
     if (!verified) {
       throw new BadRequestException('Invalid PayOS signature');
     }
 
     const rawPayload =
       verified.raw ?? (typeof payload === 'string' ? JSON.parse(payload) : payload);
+
+    this.logger.debug(
+      `Webhook verified. Keys=${Object.keys(rawPayload ?? {}).join(', ')}`,
+    );
 
     const transactionId =
       (verified.transactionId && verified.transactionId !== 'unknown'
@@ -777,16 +825,20 @@ export class InvoicePaymentService {
       rawPayload?.orderCode ??
       rawPayload?.paymentLinkId;
 
+    this.logger.debug(
+      `Resolved identifiers transactionId=${transactionId ?? 'N/A'} orderCode=${orderCode ?? 'N/A'} metadata.invoiceCode=${rawPayload?.data?.metadata?.invoiceCode ?? rawPayload?.metadata?.invoiceCode ?? 'N/A'}`,
+    );
+
     if (!transactionId && !orderCode) {
       throw new BadRequestException(
         'Webhook payload missing transaction reference.',
       );
     }
 
-    const transaction = await this.prisma.paymentTransaction.findFirst({
+    let transaction = await this.prisma.paymentTransaction.findFirst({
       where: transactionId
         ? { providerTransactionId: transactionId }
-        : { orderCode: orderCode ?? undefined },
+        : { orderCode: orderCode ? String(orderCode) : undefined },
       orderBy: { createdAt: 'desc' },
       include: {
         invoice: {
@@ -800,7 +852,30 @@ export class InvoicePaymentService {
       },
     });
 
+    if (!transaction && orderCode) {
+      this.logger.debug(
+        `Primary lookup failed, retrying by orderCode=${orderCode}`,
+      );
+      transaction = await this.prisma.paymentTransaction.findFirst({
+        where: { orderCode: String(orderCode) },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          invoice: {
+            include: {
+              invoiceDetails: {
+                include: { service: true },
+              },
+              patientProfile: true,
+            },
+          },
+        },
+      });
+    }
+
     if (!transaction || !transaction.invoice) {
+      this.logger.warn(
+        `Webhook transaction not found. transactionId=${transactionId ?? 'N/A'} orderCode=${orderCode ?? 'N/A'} verifiedTransactionId=${verified.transactionId} verifiedOrderCode=${verified.orderCode}`,
+      );
       throw new NotFoundException('Matching transaction not found');
     }
 
