@@ -362,10 +362,12 @@ export class InvoicePaymentService {
       price: Math.round(detail.price),
     }));
 
+    const description = this.buildPayOsDescription(invoice.invoiceCode);
+
     const paymentLink = await this.payOsService.createPaymentLink({
       orderCode: invoice.invoiceCode,
       amount: Math.round(invoice.totalAmount),
-      description: `Thanh toán hóa đơn ${invoice.invoiceCode}`,
+      description,
       returnUrl,
       cancelUrl,
       buyerName: invoice.patientProfile.name,
@@ -753,22 +755,27 @@ export class InvoicePaymentService {
       };
     }
 
-    const verified = this.payOsService.verifyWebhookSignature(signature, payload);
+    const verified = await this.payOsService.verifyWebhook(signature, payload);
     if (!verified) {
       throw new BadRequestException('Invalid PayOS signature');
     }
 
-    const normalized = this.payOsService.extractWebhookData(payload) ?? payload;
+    const rawPayload =
+      verified.raw ?? (typeof payload === 'string' ? JSON.parse(payload) : payload);
+
     const transactionId =
-      normalized?.transactionId ??
-      normalized?.transaction_id ??
-      normalized?.data?.transactionId ??
-      normalized?.data?.transaction_id;
+      (verified.transactionId && verified.transactionId !== 'unknown'
+        ? verified.transactionId
+        : undefined) ??
+      rawPayload?.data?.transactionId ??
+      rawPayload?.data?.paymentLinkId ??
+      rawPayload?.transactionId;
+
     const orderCode =
-      normalized?.orderCode ??
-      normalized?.order_code ??
-      normalized?.data?.orderCode ??
-      normalized?.data?.order_code;
+      verified.orderCode ??
+      rawPayload?.data?.orderCode ??
+      rawPayload?.orderCode ??
+      rawPayload?.paymentLinkId;
 
     if (!transactionId && !orderCode) {
       throw new BadRequestException(
@@ -798,7 +805,10 @@ export class InvoicePaymentService {
     }
 
     const status = this.mapPayOsStatus(
-      normalized?.status ?? normalized?.data?.status,
+      verified.status ??
+        rawPayload?.data?.status ??
+        rawPayload?.status ??
+        rawPayload?.data?.code,
     );
 
     const updatedTransaction = await this.prisma.paymentTransaction.update({
@@ -806,31 +816,40 @@ export class InvoicePaymentService {
       data: {
         status,
         providerTransactionId: transactionId ?? transaction.providerTransactionId,
-        orderCode: orderCode ?? transaction.orderCode,
+        orderCode: orderCode ? String(orderCode) : transaction.orderCode,
         paymentUrl:
-          normalized?.paymentUrl ??
-          normalized?.checkoutUrl ??
+          verified.paymentUrl ??
+          rawPayload?.checkoutUrl ??
+          rawPayload?.data?.paymentUrl ??
           transaction.paymentUrl,
-        qrCode: normalized?.qrCode ?? transaction.qrCode,
+        qrCode: verified.qrCode ?? rawPayload?.data?.qrCode ?? transaction.qrCode,
         amount:
-          normalized?.amount ??
-          normalized?.totalAmount ??
+          verified.amount ??
+          rawPayload?.data?.amount ??
+          rawPayload?.data?.totalAmount ??
           transaction.amount,
-        currency: normalized?.currency ?? transaction.currency,
+        currency: verified.currency ?? rawPayload?.data?.currency ?? transaction.currency,
         expiredAt:
           this.toDate(
-            normalized?.expiredAt ??
-              normalized?.expireAt ??
-              normalized?.expiresAt ??
-              normalized?.data?.expiredAt,
+            verified.expiredAt ??
+              rawPayload?.expiredAt ??
+              rawPayload?.data?.expiredAt ??
+              rawPayload?.data?.expireAt ??
+              rawPayload?.data?.expiresAt,
           ) ?? transaction.expiredAt,
         paidAt:
           status === PaymentTransactionStatus.SUCCEEDED
-            ? this.toDate(normalized?.paidAt ?? normalized?.data?.paidAt ?? Date.now())
+            ? this.toDate(
+                rawPayload?.paidAt ??
+                  rawPayload?.data?.paidAt ??
+                  rawPayload?.data?.completedAt ??
+                  Date.now(),
+              )
             : null,
         isVerified: true,
-        lastWebhookPayload: payload,
-        lastWebhookStatus: normalized?.status ?? normalized?.data?.status,
+        lastWebhookPayload: rawPayload,
+        lastWebhookStatus:
+          verified.status ?? rawPayload?.data?.status ?? rawPayload?.data?.code,
         lastWebhookAt: new Date(),
       },
     });
@@ -973,6 +992,7 @@ export class InvoicePaymentService {
       case 'SUCCESS':
       case 'SUCCEEDED':
       case 'COMPLETED':
+      case '00':
         return PaymentTransactionStatus.SUCCEEDED;
       case 'PROCESSING':
       case 'PROCESS':
@@ -981,6 +1001,7 @@ export class InvoicePaymentService {
       case 'FAILED':
       case 'FAIL':
       case 'ERROR':
+      case '201':
         return PaymentTransactionStatus.FAILED;
       case 'CANCELLED':
       case 'CANCELED':
@@ -990,5 +1011,18 @@ export class InvoicePaymentService {
       default:
         return PaymentTransactionStatus.PENDING;
     }
+  }
+
+  private buildPayOsDescription(invoiceCode: string): string {
+    const maxLength = 25;
+    const prefix = 'TT ';
+    const normalizedCode = invoiceCode?.trim() ?? '';
+    const available = Math.max(maxLength - prefix.length, 0);
+    const fallback = 'INVOICE';
+    const codeSegment = (normalizedCode || fallback).slice(-available);
+    const description = `${prefix}${codeSegment}`;
+    return description.length <= maxLength
+      ? description
+      : description.slice(0, maxLength);
   }
 }

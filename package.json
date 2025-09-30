@@ -42,6 +42,7 @@
     "@nestjs/platform-socket.io": "^11.1.6",
     "@nestjs/swagger": "^11.2.0",
     "@nestjs/websockets": "^11.1.6",
+    "@payos/node": "^2.0.3",
     "@prisma/client": "^6.10.0",
     "@supabase/supabase-js": "^2.57.0",
     "@types/bcrypt": "^6.0.0",
