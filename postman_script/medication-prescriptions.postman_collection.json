@@ -1,0 +1,228 @@
+{
+  "info": {
+    "name": "Medication Prescriptions API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "f2d9bd0e-53a7-4d4e-8f0a-5c7af6b7d001"
+  },
+  "item": [
+    {
+      "name": "Public - Search Drugs (OpenFDA)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/drugs/search/{{query}}?limit={{limit}}&skip={{skip}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "drugs",
+            "search",
+            "{{query}}"
+          ],
+          "query": [
+            { "key": "limit", "value": "{{limit}}" },
+            { "key": "skip", "value": "{{skip}}" }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Public - Get Drug by NDC (OpenFDA)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/drugs/ndc/{{ndc}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "drugs",
+            "ndc",
+            "{{ndc}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Doctor - Create Medication Prescription",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 201 or 200', function() {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('mp_id', json.id);",
+              "pm.collectionVariables.set('mp_code', json.code);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "{{doctorJwt}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"medicalRecordId\": {{medicalRecordId}},\n  \"note\": \"Ghi chú\",\n  \"status\": \"DRAFT\",\n  \"items\": [\n    {\n      \"name\": \"Paracetamol 500mg\",\n      \"ndc\": \"12345-6789\",\n      \"strength\": \"500 mg\",\n      \"dosageForm\": \"tablet\",\n      \"route\": \"oral\",\n      \"dose\": 1,\n      \"doseUnit\": \"tablet\",\n      \"frequency\": \"2 times/day\",\n      \"durationDays\": 5,\n      \"quantity\": 10,\n      \"quantityUnit\": \"tablet\",\n      \"instructions\": \"Sau ăn\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Doctor/Patient - Get Medication Prescription by Code",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "{{doctorJwt}}", "disabled": false }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/{{mp_code}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "{{mp_code}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Doctor - Update Medication Prescription",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "{{doctorJwt}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"note\": \"Cap nhat\",\n  \"status\": \"SIGNED\",\n  \"items\": [\n    {\n      \"name\": \"Paracetamol 500mg\",\n      \"ndc\": \"12345-6789\",\n      \"strength\": \"500 mg\",\n      \"dosageForm\": \"tablet\",\n      \"route\": \"oral\",\n      \"dose\": 1,\n      \"doseUnit\": \"tablet\",\n      \"frequency\": \"2 times/day\",\n      \"durationDays\": 5,\n      \"quantity\": 10,\n      \"quantityUnit\": \"tablet\",\n      \"instructions\": \"Sau ăn\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/{{mp_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "{{mp_id}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Doctor - Delete Medication Prescription",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "{{doctorJwt}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/{{mp_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "{{mp_id}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Services Prescription - Create (Doctor)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 201 or 200', function() { pm.expect(pm.response.code).to.be.oneOf([200,201]); });",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('svc_presc_code', json.prescriptionCode || json.prescription_code || json.code);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "{{doctorJwt}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"patientProfileId\": \"{{patientProfileId}}\",\n  \"note\": \"note\",\n  \"services\": [{\"serviceCode\": \"{{serviceCode}}\"}]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/prescriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "prescriptions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Services Prescription - Get by Code",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "{{doctorJwt}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/prescriptions/{{svc_presc_code}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "prescriptions",
+            "{{svc_presc_code}}"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "doctorJwt", "value": "Bearer <doctor-token>" },
+    { "key": "patientProfileId", "value": "<pp_id>" },
+    { "key": "medicalRecordId", "value": "null" },
+    { "key": "serviceCode", "value": "<service_code>" },
+    { "key": "query", "value": "amoxicillin" },
+    { "key": "ndc", "value": "12345-6789" },
+    { "key": "limit", "value": "10" },
+    { "key": "skip", "value": "0" }
+  ]
+}
+
+

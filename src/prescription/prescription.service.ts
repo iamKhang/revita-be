@@ -160,6 +160,7 @@ export class PrescriptionService {
             note: s.note ?? null,
           })),
         },
+        // no medications here; managed by medication-prescription module
       },
       include: {
         services: {
@@ -187,6 +188,24 @@ export class PrescriptionService {
 
     if (!prescription) {
       throw new NotFoundException('Prescription not found');
+    }
+    return prescription;
+  }
+
+  async findByCodeForUser(code: string, user: JwtUserPayload) {
+    const prescription = await this.findByCode(code);
+    // Patients can only access their own profile's prescriptions
+    if (user.role === 'PATIENT') {
+      const patient = (await this.prisma.patient.findUnique({
+        where: { id: user.patient?.id as string },
+        select: { id: true, patientProfiles: { select: { id: true } } },
+      })) as any;
+      const profileIds = new Set(
+        (patient?.patientProfiles || []).map((p: any) => p.id),
+      );
+      if (!profileIds.has(prescription.patientProfileId)) {
+        throw new NotFoundException('Prescription not found');
+      }
     }
     return prescription;
   }
@@ -455,6 +474,72 @@ export class PrescriptionService {
 
     return prescriptions;
   }
+
+  async getPrescriptionsByMedicalRecordForUser(
+    medicalRecordId: string,
+    user: JwtUserPayload,
+  ) {
+    const list = await this.getPrescriptionsByMedicalRecord(medicalRecordId);
+    if (user.role === 'PATIENT') {
+      // Ensure the medical record belongs to this patient's profile(s)
+      const mr = await this.prisma.medicalRecord.findUnique({
+        where: { id: medicalRecordId },
+        select: { patientProfileId: true },
+      });
+      if (!mr) throw new NotFoundException('Medical record not found');
+      const patient = (await this.prisma.patient.findUnique({
+        where: { id: user.patient?.id as string },
+        select: { id: true, patientProfiles: { select: { id: true } } },
+      })) as any;
+      const profileIds = new Set(
+        (patient?.patientProfiles || []).map((p: any) => p.id),
+      );
+      if (!profileIds.has(mr.patientProfileId)) {
+        throw new NotFoundException('Medical record not found');
+      }
+      return list;
+    }
+    return list;
+  }
+
+  async getMyPrescriptionsByProfile(
+    patientProfileId: string,
+    user: JwtUserPayload,
+  ) {
+    // Check the profile belongs to current patient
+    const patient = (await this.prisma.patient.findUnique({
+      where: { id: user.patient?.id as string },
+      select: { id: true, patientProfiles: { select: { id: true } } },
+    })) as any;
+    const profileIds = new Set(
+      (patient?.patientProfiles || []).map((p: any) => p.id),
+    );
+    if (!profileIds.has(patientProfileId)) {
+      throw new NotFoundException('Patient profile not found');
+    }
+    return this.prisma.prescription.findMany({
+      where: { patientProfileId },
+      include: {
+        services: { include: { service: true }, orderBy: { order: 'asc' } },
+        patientProfile: true,
+        doctor: true,
+      },
+      orderBy: { id: 'desc' },
+    });
+  }
+
+  // // OpenFDA integration (public drug info)
+  // async searchDrugsOpenFda(query: string) {
+  //   const url = `https://api.fda.gov/drug/label.json?search=${encodeURIComponent(query)}&limit=10`;
+  //   const res = await axios.get(url);
+  //   return res.data;
+  // }
+
+  // async getDrugByNdcOpenFda(ndc: string) {
+  //   const url = `https://api.fda.gov/drug/ndc.json?search=product_ndc:${encodeURIComponent(ndc)}&limit=1`;
+  //   const res = await axios.get(url);
+  //   return res.data;
+  // }
 
   private async _startFirstPendingServiceIfNoActive(prescriptionId: string) {
     const psList = await this.prisma.prescriptionService.findMany({

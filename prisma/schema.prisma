@@ -81,6 +81,7 @@ model Doctor {
   prescriptions   Prescription[]
   workSessions WorkSession[]
   prescriptionServices PrescriptionService[]
+  medicationPrescriptions MedicationPrescription[]
 
   @@map("doctors")
 }
@@ -119,6 +120,7 @@ model PatientProfile {
   medicalRecords    MedicalRecord[]
   prescriptions   Prescription[]
   invoices        Invoice[]
+  medicationPrescriptions MedicationPrescription[]
   @@map("patient_profiles")
 }
 
@@ -365,6 +367,7 @@ model MedicalRecord {
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
   appointment Appointment? @relation(fields: [appointmentId], references: [id])
   prescriptions Prescription[]
+  medicationPrescriptions MedicationPrescription[]
 
   @@map("medical_records")
 }
@@ -400,6 +403,75 @@ model Prescription {
   medicalRecord   MedicalRecord? @relation(fields: [medicalRecordId], references: [id])
 
   @@map("prescriptions")
+}
+
+// Đơn thuốc (Medication Prescription) độc lập với phiếu chỉ định dịch vụ
+model MedicationPrescription {
+  id               String   @id @default(uuid())
+  code             String   @unique @map("code")
+  doctorId         String   @map("doctor_id")
+  doctor           Doctor   @relation(fields: [doctorId], references: [id])
+  patientProfileId String   @map("patient_profile_id")
+  patientProfile   PatientProfile @relation(fields: [patientProfileId], references: [id])
+  medicalRecordId  String?  @map("medical_record_id")
+  medicalRecord    MedicalRecord? @relation(fields: [medicalRecordId], references: [id])
+  note             String?
+  status           MedicationPrescriptionStatus @default(DRAFT)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  items            MedicationPrescriptionItem[]
+
+  @@map("medication_prescriptions")
+}
+
+enum MedicationPrescriptionStatus {
+  DRAFT
+  SIGNED
+  DISPENSED
+  CANCELLED
+}
+
+model Drug {
+  id          String  @id @default(uuid())
+  name        String
+  ndc         String? @unique
+  strength    String?
+  dosageForm  String? @map("dosage_form")
+  route       String?
+  unit        String?
+  source      Json?
+
+  items       MedicationPrescriptionItem[]
+
+  @@map("drugs")
+}
+
+model MedicationPrescriptionItem {
+  id               String  @id @default(uuid())
+  prescriptionId   String  @map("prescription_id")
+  prescription     MedicationPrescription @relation(fields: [prescriptionId], references: [id])
+
+  drugId           String?
+  drug             Drug?   @relation(fields: [drugId], references: [id])
+
+  name             String
+  ndc              String?
+  strength         String?
+  dosageForm       String? @map("dosage_form")
+  route            String?
+  dose             Float?  @map("dose")
+  doseUnit         String? @map("dose_unit")
+  frequency        String?
+  durationDays     Int?    @map("duration_days")
+  quantity         Float?
+  quantityUnit     String? @map("quantity_unit")
+  instructions     String?
+
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("medication_prescription_items")
 }
 
 // Bảng trung gian PrescriptionService cho quan hệ nhiều-nhiều giữa Phiếu chỉ định và Dịch vụ

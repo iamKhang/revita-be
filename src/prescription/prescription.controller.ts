@@ -25,34 +25,77 @@ export class PrescriptionController {
 
   @Post()
   @Roles(Role.DOCTOR)
-  async create(@Body() dto: CreatePrescriptionDto, @Request() req: { user: JwtUserPayload }) {
+  async create(
+    @Body() dto: CreatePrescriptionDto,
+    @Request() req: { user: JwtUserPayload },
+  ) {
     const user = req.user;
     return this.prescriptionService.create(dto, user);
   }
 
   @Get(':code')
   @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST, Role.CASHIER)
-  async findByCode(@Param('code') code: string) {
-    return this.prescriptionService.findByCode(code);
+  async findByCode(
+    @Param('code') code: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return this.prescriptionService.findByCodeForUser(code, req.user);
   }
 
   @Get('medical-record/:medicalRecordId')
   @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST, Role.CASHIER)
-  async getByMedicalRecord(@Param('medicalRecordId') medicalRecordId: string) {
-    return this.prescriptionService.getPrescriptionsByMedicalRecord(
+  async getByMedicalRecord(
+    @Param('medicalRecordId') medicalRecordId: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return this.prescriptionService.getPrescriptionsByMedicalRecordForUser(
       medicalRecordId,
+      req.user,
     );
   }
 
+  // Patients can query their own prescriptions by patient profile
+  @Get('my/profile/:patientProfileId')
+  @Roles(Role.PATIENT)
+  async getMyPrescriptionsByProfile(
+    @Param('patientProfileId') patientProfileId: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return this.prescriptionService.getMyPrescriptionsByProfile(
+      patientProfileId,
+      req.user,
+    );
+  }
+
+  // // OpenFDA proxy endpoints for drug lookup
+  // @Get('drugs/search/:query')
+  // @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST)
+  // async searchDrugs(@Param('query') query: string) {
+  //   return this.prescriptionService.searchDrugsOpenFda(query);
+  // }
+
+  // @Get('drugs/ndc/:ndc')
+  // @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST)
+  // async getDrugByNdc(@Param('ndc') ndc: string) {
+  //   return this.prescriptionService.getDrugByNdcOpenFda(ndc);
+  // }
+
   @Patch(':id')
   @Roles(Role.DOCTOR)
-  async update(@Param('id') id: string, @Body() dto: UpdatePrescriptionDto, @Request() req: { user: JwtUserPayload }) {
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdatePrescriptionDto,
+    @Request() req: { user: JwtUserPayload },
+  ) {
     return this.prescriptionService.update(id, dto, req.user);
   }
 
   @Delete(':id')
   @Roles(Role.DOCTOR)
-  async cancel(@Param('id') id: string, @Request() req: { user: JwtUserPayload }) {
+  async cancel(
+    @Param('id') id: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
     return this.prescriptionService.cancel(id, req.user);
   }
 
@@ -65,7 +108,11 @@ export class PrescriptionController {
     @Request() req: { user: JwtUserPayload },
   ) {
     const prescription = await this.prescriptionService.findByCode(code);
-    await this.prescriptionService.markServiceServing(prescription.id, serviceId, req.user);
+    await this.prescriptionService.markServiceServing(
+      prescription.id,
+      serviceId,
+      req.user,
+    );
     return { ok: true };
   }
 
@@ -77,7 +124,11 @@ export class PrescriptionController {
     @Request() req: { user: JwtUserPayload },
   ) {
     const prescription = await this.prescriptionService.findByCode(code);
-    await this.prescriptionService.markServiceWaitingResult(prescription.id, serviceId, req.user);
+    await this.prescriptionService.markServiceWaitingResult(
+      prescription.id,
+      serviceId,
+      req.user,
+    );
     return { ok: true };
   }
 
@@ -89,7 +140,11 @@ export class PrescriptionController {
     @Request() req: { user: JwtUserPayload },
   ) {
     const prescription = await this.prescriptionService.findByCode(code);
-    await this.prescriptionService.markServiceCompleted(prescription.id, serviceId, req.user);
+    await this.prescriptionService.markServiceCompleted(
+      prescription.id,
+      serviceId,
+      req.user,
+    );
     return { ok: true };
   }
 }
