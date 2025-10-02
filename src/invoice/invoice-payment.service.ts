@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PrescriptionService } from '../prescription/prescription.service';
 import { RoutingService } from '../routing/routing.service';
 import { RedisStreamService } from '../cache/redis-stream.service';
+import { WebSocketService } from '../websocket/websocket.service';
 import { ScanPrescriptionDto } from './dto/scan-prescription.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
@@ -127,6 +128,7 @@ export class InvoicePaymentService {
     private readonly routingService: RoutingService,
     private readonly redisStream: RedisStreamService,
     private readonly payOsService: PayOsService,
+    private readonly webSocketService: WebSocketService,
   ) {}
 
   private async resolveCashierId(identifier?: string): Promise<string> {
@@ -591,6 +593,9 @@ export class InvoicePaymentService {
         doctorName: prescription.doctor?.auth.name,
       },
     };
+
+    // Gửi socket notification về thanh toán thành công
+    await this.notifyInvoicePaymentSuccess(updatedInvoice);
   }
 
   async confirmPayment(
@@ -931,6 +936,8 @@ export class InvoicePaymentService {
 
     if (status === PaymentTransactionStatus.SUCCEEDED) {
       if (transaction.invoice.isPaid) {
+        // Gửi socket notification ngay cả khi hóa đơn đã được thanh toán trước đó
+        await this.notifyInvoicePaymentSuccess(transaction.invoice);
         return {
           success: true,
           status,
@@ -1099,5 +1106,30 @@ export class InvoicePaymentService {
     return description.length <= maxLength
       ? description
       : description.slice(0, maxLength);
+  }
+
+  /**
+   * Gửi thông báo socket khi thanh toán thành công đến cashier cụ thể
+   */
+  private async notifyInvoicePaymentSuccess(invoice: any): Promise<void> {
+    try {
+      const cashierId = invoice.cashierId;
+      if (!cashierId) {
+        this.logger.warn(`No cashierId found for invoice ${invoice.invoiceCode}, skipping notification`);
+        return;
+      }
+
+      // Kiểm tra cashier có online không
+      const isCashierOnline = this.webSocketService.isCashierOnline(cashierId);
+      if (!isCashierOnline) {
+        this.logger.debug(`Cashier ${cashierId} is not online, skipping notification for invoice ${invoice.invoiceCode}`);
+        return;
+      }
+
+      await this.webSocketService.notifyCashierInvoicePaymentSuccess(cashierId, invoice);
+      this.logger.debug(`Sent invoice payment success notification to cashier ${cashierId} for invoice: ${invoice.invoiceCode}`);
+    } catch (error) {
+      this.logger.error(`Failed to send invoice payment success notification: ${error.message}`, error.stack);
+    }
   }
 }

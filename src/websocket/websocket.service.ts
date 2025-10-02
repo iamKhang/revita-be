@@ -3,7 +3,7 @@ import { Server, Socket } from 'socket.io';
 import { QueueTicket } from '../cache/redis-stream.service';
 
 export interface WebSocketMessage {
-  type: 'NEW_TICKET' | 'TICKET_CALLED' | 'TICKET_COMPLETED' | 'COUNTER_STATUS' | 'NEXT_PATIENT_CALLED' | 'PATIENT_SKIPPED_AND_NEXT_CALLED' | 'PATIENT_PREPARING' | 'PATIENT_SERVED';
+  type: 'NEW_TICKET' | 'TICKET_CALLED' | 'TICKET_COMPLETED' | 'COUNTER_STATUS' | 'NEXT_PATIENT_CALLED' | 'PATIENT_SKIPPED_AND_NEXT_CALLED' | 'PATIENT_PREPARING' | 'PATIENT_SERVED' | 'INVOICE_PAYMENT_SUCCESS';
   data: any;
   timestamp: string;
 }
@@ -13,6 +13,8 @@ export class WebSocketService {
   private server: Server;
   private counterConnections: Map<string, Set<string>> = new Map(); // counterId -> Set<socketId>
   private socketToCounter: Map<string, string> = new Map(); // socketId -> counterId
+  private cashierConnections: Map<string, Set<string>> = new Map(); // cashierId -> Set<socketId>
+  private socketToCashier: Map<string, string> = new Map(); // socketId -> cashierId
 
   setServer(server: Server) {
     this.server = server;
@@ -38,6 +40,25 @@ export class WebSocketService {
   }
 
   /**
+   * Kết nối socket với cashier
+   */
+  connectToCashier(socket: Socket, cashierId: string) {
+    // Lưu mapping socket -> cashier
+    this.socketToCashier.set(socket.id, cashierId);
+
+    // Thêm socket vào danh sách cashier
+    if (!this.cashierConnections.has(cashierId)) {
+      this.cashierConnections.set(cashierId, new Set());
+    }
+    this.cashierConnections.get(cashierId)!.add(socket.id);
+
+    // Join room để dễ quản lý
+    socket.join(`cashier:${cashierId}`);
+
+    console.log(`Socket ${socket.id} connected to cashier ${cashierId}`);
+  }
+
+  /**
    * Ngắt kết nối socket
    */
   disconnect(socket: Socket) {
@@ -51,6 +72,18 @@ export class WebSocketService {
         }
       }
       this.socketToCounter.delete(socket.id);
+    }
+
+    const cashierId = this.socketToCashier.get(socket.id);
+    if (cashierId) {
+      const cashierSockets = this.cashierConnections.get(cashierId);
+      if (cashierSockets) {
+        cashierSockets.delete(socket.id);
+        if (cashierSockets.size === 0) {
+          this.cashierConnections.delete(cashierId);
+        }
+      }
+      this.socketToCashier.delete(socket.id);
     }
 
     console.log(`Socket ${socket.id} disconnected`);
@@ -186,6 +219,13 @@ export class WebSocketService {
   }
 
   /**
+   * Gửi thông báo đến cashier cụ thể
+   */
+  async sendToCashier(cashierId: string, event: string, data: any) {
+    this.server.to(`cashier:${cashierId}`).emit(event, data);
+  }
+
+  /**
    * Lấy danh sách counter đang online
    */
   getOnlineCounters(): string[] {
@@ -205,6 +245,29 @@ export class WebSocketService {
    */
   getCounterConnectionCount(counterId: string): number {
     const sockets = this.counterConnections.get(counterId);
+    return sockets ? sockets.size : 0;
+  }
+
+  /**
+   * Lấy danh sách cashier đang online
+   */
+  getOnlineCashiers(): string[] {
+    return Array.from(this.cashierConnections.keys());
+  }
+
+  /**
+   * Kiểm tra cashier có đang online không
+   */
+  isCashierOnline(cashierId: string): boolean {
+    const sockets = this.cashierConnections.get(cashierId);
+    return sockets ? sockets.size > 0 : false;
+  }
+
+  /**
+   * Lấy số lượng kết nối của cashier
+   */
+  getCashierConnectionCount(cashierId: string): number {
+    const sockets = this.cashierConnections.get(cashierId);
     return sockets ? sockets.size : 0;
   }
 
@@ -291,6 +354,37 @@ export class WebSocketService {
       console.log(`[WebSocket] Sent queue update to counter ${counterId}: ${queueData.length} patients`);
     } catch (error) {
       console.error('Error sending queue update:', error);
+    }
+  }
+
+  /**
+   * Gửi thông báo hóa đơn thanh toán thành công đến cashier cụ thể
+   */
+  async notifyCashierInvoicePaymentSuccess(cashierId: string, invoiceData: any): Promise<void> {
+    try {
+      const message: WebSocketMessage = {
+        type: 'INVOICE_PAYMENT_SUCCESS',
+        data: {
+          invoiceId: invoiceData.id,
+          invoiceCode: invoiceData.invoiceCode,
+          totalAmount: invoiceData.totalAmount,
+          amountPaid: invoiceData.amountPaid,
+          changeAmount: invoiceData.changeAmount,
+          paymentMethod: invoiceData.paymentMethod,
+          paymentStatus: invoiceData.paymentStatus,
+          paidAt: invoiceData.paidAt || new Date(),
+          patientProfile: invoiceData.patientProfile,
+          invoiceDetails: invoiceData.invoiceDetails,
+          cashierId: invoiceData.cashierId,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      // Gửi đến cashier cụ thể
+      await this.sendToCashier(cashierId, 'invoice_payment_success', message);
+      console.log(`[WebSocket] Sent invoice payment success notification to cashier ${cashierId}: ${invoiceData.invoiceCode}`);
+    } catch (error) {
+      console.error('Error sending invoice payment success notification to cashier:', error);
     }
   }
 }
