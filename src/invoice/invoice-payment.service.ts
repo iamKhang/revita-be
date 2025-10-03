@@ -369,8 +369,11 @@ export class InvoicePaymentService {
 
     const description = this.buildPayOsDescription(invoice.invoiceCode);
 
+    // Generate a stable, unique, numeric order code that PayOS echoes back in webhooks
+    const generatedOrderCode = this.generateNumericOrderCode();
+
     const paymentLink = await this.payOsService.createPaymentLink({
-      orderCode: invoice.invoiceCode,
+      orderCode: generatedOrderCode,
       amount: Math.round(invoice.totalAmount),
       description,
       returnUrl,
@@ -401,7 +404,8 @@ export class InvoicePaymentService {
           ? PaymentTransactionStatus.SUCCEEDED
           : PaymentTransactionStatus.PENDING,
         providerTransactionId: paymentLink.transactionId,
-        orderCode: paymentLink.orderCode ?? invoice.invoiceCode,
+        // Persist the exact orderCode we used or PayOS returned
+        orderCode: paymentLink.orderCode ?? String(generatedOrderCode),
         paymentUrl: paymentLink.paymentUrl,
         qrCode: paymentLink.qrCode,
         expiredAt,
@@ -412,6 +416,17 @@ export class InvoicePaymentService {
         lastWebhookAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Create a safe integer order code that is unique enough for short windows and stays within JS safe integer range.
+   * Example: 13-digit timestamp + 3 random digits => up to ~1.8e15 < 9e15 (Number.MAX_SAFE_INTEGER)
+   */
+  private generateNumericOrderCode(): number {
+    const ts = Date.now();
+    const rand = Math.floor(100 + Math.random() * 900); // 3 digits
+    const code = Number(`${ts}${rand}`);
+    return Number.isSafeInteger(code) ? code : ts;
   }
 
   private async completeInvoicePayment(
@@ -566,7 +581,7 @@ export class InvoicePaymentService {
       );
     }
 
-    return {
+    const result = {
       invoiceCode: updatedInvoice.invoiceCode,
       totalAmount: updatedInvoice.totalAmount,
       paymentStatus: 'PAID',
@@ -594,8 +609,10 @@ export class InvoicePaymentService {
       },
     };
 
-    // Gửi socket notification về thanh toán thành công
+    // Gửi socket notification về thanh toán thành công trước khi trả kết quả
     await this.notifyInvoicePaymentSuccess(updatedInvoice);
+
+    return result;
   }
 
   async confirmPayment(
@@ -762,11 +779,34 @@ export class InvoicePaymentService {
 
     let parsedPayload: any = payload;
     if (typeof payload === 'string') {
+      // Try JSON parse first
       try {
         parsedPayload = JSON.parse(payload);
-      } catch (error) {
-        this.logger.warn('Webhook payload could not be parsed as JSON for signature extraction');
-        parsedPayload = null;
+      } catch {
+        // Fallback: attempt to parse application/x-www-form-urlencoded body
+        try {
+          const params = new URLSearchParams(payload);
+          const obj: Record<string, any> = {};
+          params.forEach((value, key) => {
+            obj[key] = value;
+          });
+          parsedPayload = Object.keys(obj).length > 0 ? obj : null;
+        } catch {
+          parsedPayload = null;
+        }
+        if (!parsedPayload) {
+          this.logger.warn('Webhook payload could not be parsed as JSON or form-encoded');
+        }
+      }
+    }
+
+    // If payload is object but nested data is stringified JSON, parse it
+    if (parsedPayload && typeof parsedPayload === 'object' && typeof parsedPayload.data === 'string') {
+      try {
+        parsedPayload.data = JSON.parse(parsedPayload.data);
+        this.logger.debug('Parsed nested payload.data JSON string');
+      } catch {
+        // ignore if not JSON
       }
     }
 
@@ -803,14 +843,14 @@ export class InvoicePaymentService {
 
     const verified = await this.payOsService.verifyWebhook(
       effectiveSignature,
-      payload,
+      parsedPayload ?? payload,
     );
     if (!verified) {
       throw new BadRequestException('Invalid PayOS signature');
     }
 
     const rawPayload =
-      verified.raw ?? (typeof payload === 'string' ? JSON.parse(payload) : payload);
+      verified.raw ?? (parsedPayload ?? (typeof payload === 'string' ? (() => { try { return JSON.parse(payload); } catch { return undefined; } })() : payload));
 
     this.logger.debug(
       `Webhook verified. Keys=${Object.keys(rawPayload ?? {}).join(', ')}`,
@@ -879,9 +919,49 @@ export class InvoicePaymentService {
 
     if (!transaction || !transaction.invoice) {
       this.logger.warn(
-        `Webhook transaction not found. transactionId=${transactionId ?? 'N/A'} orderCode=${orderCode ?? 'N/A'} verifiedTransactionId=${verified.transactionId} verifiedOrderCode=${verified.orderCode}`,
+        `Primary lookup failed. Trying fallback by amount/time window. transactionId=${transactionId ?? 'N/A'} orderCode=${orderCode ?? 'N/A'}`,
       );
-      throw new NotFoundException('Matching transaction not found');
+
+      const amount =
+        verified.amount ??
+        rawPayload?.data?.amount ??
+        rawPayload?.data?.totalAmount ??
+        undefined;
+
+      // Fallback: find the most recent pending/processing transaction with the same amount, not yet paid, within last 30 minutes
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+      const candidates = await this.prisma.paymentTransaction.findMany({
+        where: {
+          status: { in: [PaymentTransactionStatus.PENDING, PaymentTransactionStatus.PROCESSING] },
+          ...(amount ? { amount: amount } : {}),
+          invoice: { isPaid: false, createdAt: { gte: thirtyMinutesAgo } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 2,
+        include: {
+          invoice: {
+            include: {
+              invoiceDetails: { include: { service: true } },
+              patientProfile: true,
+            },
+          },
+        },
+      });
+
+      if (candidates.length === 1) {
+        transaction = candidates[0];
+        this.logger.warn(
+          `Using fallback transaction id=${transaction.id} for webhook processing.`,
+        );
+      } else {
+        this.logger.warn(
+          `Webhook transaction not found. transactionId=${transactionId ?? 'N/A'} orderCode=${orderCode ?? 'N/A'} verifiedTransactionId=${verified.transactionId} verifiedOrderCode=${verified.orderCode}`,
+        );
+        return {
+          success: true,
+          status: PaymentTransactionStatus.PENDING,
+        };
+      }
     }
 
     const status = this.mapPayOsStatus(

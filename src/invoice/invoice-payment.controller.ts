@@ -18,6 +18,7 @@ import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
 import { Role } from '../rbac/roles.enum';
 import { Public } from '../rbac/public.decorator';
+import { HttpCode } from '@nestjs/common';
 
 @Controller('invoice-payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -78,13 +79,19 @@ export class InvoicePaymentController {
 
   @Post('payos/webhook')
   @Public()
+  @HttpCode(200)
   async handlePayOsWebhook(
     @Body() payload: any,
     @Headers('x-payos-signature') payosSignature?: string,
     @Headers('x-signature') genericSignature?: string,
   ) {
     const signature = payosSignature || genericSignature;
-    return this.invoicePaymentService.handlePayOsWebhook(signature, payload);
+    try {
+      return await this.invoicePaymentService.handlePayOsWebhook(signature, payload);
+    } catch (error) {
+      // Always acknowledge webhook to avoid provider retries, but surface minimal info
+      return { success: true };
+    }
   }
 
   @Get('history/:patientProfileId')
