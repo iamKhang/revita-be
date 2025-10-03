@@ -97,6 +97,7 @@ export class WebSocketService {
     const isPregnant = Boolean(metadata.isPregnant);
     const isDisabled = Boolean(metadata.isDisabled);
     const isElderly = typeof ticket.patientAge === 'number' ? ticket.patientAge >= 75 : false;
+    const isChild = typeof ticket.patientAge === 'number' ? ticket.patientAge < 6 : Boolean((metadata as any)?.isChild) || false;
 
     const message: WebSocketMessage = {
       type: 'NEW_TICKET',
@@ -113,6 +114,7 @@ export class WebSocketService {
         isPregnant,
         isDisabled,
         isElderly,
+        isChild,
         status: ticket.status,
         callCount: ticket.callCount,
         queuePriority: ticket.queuePriority,
