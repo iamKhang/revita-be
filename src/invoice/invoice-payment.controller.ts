@@ -108,4 +108,10 @@ export class InvoicePaymentController {
     // For now, return a placeholder
     return { message: 'Invoice details endpoint - to be implemented' };
   }
+
+  @Get('invoice-by-id/:invoiceId')
+  @Roles(Role.CASHIER, Role.PATIENT, Role.RECEPTIONIST)
+  async getInvoiceById(@Param('invoiceId') invoiceId: string) {
+    return this.invoicePaymentService.getInvoiceById(invoiceId);
+  }
 }

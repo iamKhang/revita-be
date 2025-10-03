@@ -5,3 +5,4 @@ export class CheckoutCounterDto {
   @IsNotEmpty()
   counterId: string;
 }
+

@@ -1132,4 +1132,114 @@ export class InvoicePaymentService {
       this.logger.error(`Failed to send invoice payment success notification: ${error.message}`, error.stack);
     }
   }
+
+  /**
+   * Lấy thông tin chi tiết hóa đơn theo invoice ID
+   */
+  async getInvoiceById(invoiceId: string) {
+    try {
+      const invoice = await this.prisma.invoice.findUnique({
+        where: {
+          id: invoiceId,
+        },
+        include: {
+          patientProfile: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              dateOfBirth: true,
+              gender: true,
+            },
+          },
+          cashier: {
+            select: {
+              id: true,
+              auth: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+          invoiceDetails: {
+            include: {
+              service: {
+                select: {
+                  id: true,
+                  serviceCode: true,
+                  name: true,
+                  price: true,
+                  description: true,
+                },
+              },
+              prescription: {
+                select: {
+                  id: true,
+                  prescriptionCode: true,
+                  note: true,
+                  status: true,
+                  doctor: {
+                    select: {
+                      id: true,
+                      doctorCode: true,
+                      auth: {
+                        select: {
+                          name: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          paymentTransactions: {
+            select: {
+              id: true,
+              amount: true,
+              currency: true,
+              status: true,
+              orderCode: true,
+              paymentUrl: true,
+              qrCode: true,
+              expiredAt: true,
+              paidAt: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+        },
+      });
+
+      if (!invoice) {
+        throw new NotFoundException('Invoice not found');
+      }
+
+      return {
+        success: true,
+        data: {
+          id: invoice.id,
+          invoiceCode: invoice.invoiceCode,
+          totalAmount: invoice.totalAmount,
+          amountPaid: invoice.amountPaid,
+          changeAmount: invoice.changeAmount,
+          paymentMethod: invoice.paymentMethod,
+          paymentStatus: invoice.paymentStatus,
+          isPaid: invoice.isPaid,
+          createdAt: invoice.createdAt,
+          patientProfile: invoice.patientProfile,
+          cashier: invoice.cashier,
+          invoiceDetails: invoice.invoiceDetails,
+          paymentTransactions: invoice.paymentTransactions,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get invoice by ID ${invoiceId}: ${error.message}`, error.stack);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException('Failed to retrieve invoice details');
+    }
+  }
 }
