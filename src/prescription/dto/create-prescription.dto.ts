@@ -51,6 +51,8 @@ export class CreatePrescriptionDto {
   @IsString()
   note?: string;
 
+  // medications removed from this DTO; moved to medication-prescription module
+
   @IsArray()
   @ArrayNotEmpty()
   @ValidateNested({ each: true })

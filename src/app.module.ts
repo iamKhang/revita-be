@@ -17,6 +17,7 @@ import { WorkSessionModule } from './work-session/work-session.module';
 import { AppointmentBookingModule } from './appointment-booking/appointment-booking.module';
 import { AiChatbotModule } from './ai-chatbot/ai-chatbot.module';
 import { WebSocketModule } from './websocket/websocket.module';
+import { MedicationPrescriptionModule } from './medication-prescription/medication-prescription.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { WebSocketModule } from './websocket/websocket.module';
     AppointmentBookingModule,
     AiChatbotModule,
     WebSocketModule,
+    MedicationPrescriptionModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],

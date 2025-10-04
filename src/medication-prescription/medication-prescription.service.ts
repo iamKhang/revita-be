@@ -1,0 +1,387 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import axios from 'axios';
+import { MedicationPrescriptionStatus } from '@prisma/client';
+
+@Injectable()
+export class MedicationPrescriptionService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(data: {
+    code?: string;
+    doctorId: string;
+    patientProfileId: string;
+    medicalRecordId?: string | null;
+    note?: string | null;
+    status?: MedicationPrescriptionStatus;
+    items: Array<{
+      drugId?: string;
+      name: string;
+      ndc?: string;
+      strength?: string;
+      dosageForm?: string;
+      route?: string;
+      dose?: number;
+      doseUnit?: string;
+      frequency?: string;
+      durationDays?: number;
+      quantity?: number;
+      quantityUnit?: string;
+      instructions?: string;
+    }>;
+  }): Promise<unknown> {
+    if (!data.items || data.items.length === 0) {
+      throw new BadRequestException('items must not be empty');
+    }
+
+    return await this.prisma.medicationPrescription.create({
+      data: {
+        code: data.code ?? `MP-${Date.now()}`,
+        doctorId: data.doctorId,
+        patientProfileId: data.patientProfileId,
+        medicalRecordId: data.medicalRecordId ?? null,
+        note: data.note ?? null,
+        status: data.status ?? MedicationPrescriptionStatus.DRAFT,
+        items: {
+          create: data.items.map((i) => ({
+            drugId: i.drugId ?? null,
+            name: i.name,
+            ndc: i.ndc ?? null,
+            strength: i.strength ?? null,
+            dosageForm: i.dosageForm ?? null,
+            route: i.route ?? null,
+            dose: i.dose ?? null,
+            doseUnit: i.doseUnit ?? null,
+            frequency: i.frequency ?? null,
+            durationDays: i.durationDays ?? null,
+            quantity: i.quantity ?? null,
+            quantityUnit: i.quantityUnit ?? null,
+            instructions: i.instructions ?? null,
+          })),
+        },
+      },
+      include: {
+        patientProfile: true,
+        doctor: true,
+        medicalRecord: true,
+        items: { include: { drug: true } },
+      },
+    });
+  }
+
+  async findByCode(code: string): Promise<unknown> {
+    const mp = await this.prisma.medicationPrescription.findUnique({
+      where: { code },
+      include: {
+        patientProfile: true,
+        doctor: true,
+        medicalRecord: true,
+        items: { include: { drug: true } },
+      },
+    });
+    if (!mp) throw new NotFoundException('Medication prescription not found');
+    return mp;
+  }
+
+  async update(
+    id: string,
+    data: Partial<{
+      note: string | null;
+      status: MedicationPrescriptionStatus;
+      items: Array<{
+        drugId?: string;
+        name: string;
+        ndc?: string;
+        strength?: string;
+        dosageForm?: string;
+        route?: string;
+        dose?: number;
+        doseUnit?: string;
+        frequency?: string;
+        durationDays?: number;
+        quantity?: number;
+        quantityUnit?: string;
+        instructions?: string;
+      }>;
+    }>,
+  ): Promise<unknown> {
+    const existing = await this.prisma.medicationPrescription.findUnique({
+      where: { id },
+    });
+    if (!existing)
+      throw new NotFoundException('Medication prescription not found');
+
+    await this.prisma.medicationPrescription.update({
+      where: { id },
+      data: {
+        note: data.note ?? existing.note,
+        status: data.status ?? existing['status'],
+      },
+    });
+
+    if (data.items) {
+      await this.prisma.medicationPrescriptionItem.deleteMany({
+        where: { prescriptionId: id },
+      });
+      if (data.items.length > 0) {
+        await this.prisma.medicationPrescriptionItem.createMany({
+          data: data.items.map((i) => ({
+            prescriptionId: id,
+            drugId: i.drugId ?? null,
+            name: i.name,
+            ndc: i.ndc ?? null,
+            strength: i.strength ?? null,
+            dosageForm: i.dosageForm ?? null,
+            route: i.route ?? null,
+            dose: i.dose ?? null,
+            doseUnit: i.doseUnit ?? null,
+            frequency: i.frequency ?? null,
+            durationDays: i.durationDays ?? null,
+            quantity: i.quantity ?? null,
+            quantityUnit: i.quantityUnit ?? null,
+            instructions: i.instructions ?? null,
+          })),
+        });
+      }
+    }
+
+    return this.findByCode(existing.code);
+  }
+
+  async delete(id: string): Promise<{ id: string; deleted: boolean }> {
+    await this.prisma.medicationPrescription.delete({ where: { id } });
+    return { id, deleted: true };
+  }
+
+  async listByDoctor(
+    doctorId: string,
+    limit = 10,
+    skip = 0,
+  ): Promise<{
+    results: unknown[];
+    total: number;
+    skip: number;
+    limit: number;
+  }> {
+    const safeLimit = Math.max(1, Math.min(50, Number(limit) || 10));
+    const safeSkip = Math.max(0, Number(skip) || 0);
+
+    const [results, total] = await this.prisma.$transaction([
+      this.prisma.medicationPrescription.findMany({
+        where: { doctorId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          patientProfile: true,
+          doctor: true,
+          medicalRecord: true,
+          items: { include: { drug: true } },
+        },
+        take: safeLimit,
+        skip: safeSkip,
+      }),
+      this.prisma.medicationPrescription.count({ where: { doctorId } }),
+    ]);
+
+    return { results, total, skip: safeSkip, limit: safeLimit };
+  }
+
+  async listByPatientProfile(
+    patientId: string,
+    patientProfileId: string,
+    limit = 10,
+    skip = 0,
+  ): Promise<{
+    results: unknown[];
+    total: number;
+    skip: number;
+    limit: number;
+  }> {
+    // Validate ownership: the specified profile must belong to the authenticated patient
+    const profile = await this.prisma.patientProfile.findUnique({
+      where: { id: patientProfileId },
+      select: { id: true, patientId: true },
+    });
+    if (!profile || (profile.patientId && profile.patientId !== patientId)) {
+      throw new BadRequestException('Invalid patient profile');
+    }
+
+    const safeLimit = Math.max(1, Math.min(50, Number(limit) || 10));
+    const safeSkip = Math.max(0, Number(skip) || 0);
+
+    const [results, total] = await this.prisma.$transaction([
+      this.prisma.medicationPrescription.findMany({
+        where: { patientProfileId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          patientProfile: true,
+          doctor: true,
+          medicalRecord: true,
+          items: { include: { drug: true } },
+        },
+        take: safeLimit,
+        skip: safeSkip,
+      }),
+      this.prisma.medicationPrescription.count({ where: { patientProfileId } }),
+    ]);
+
+    return { results, total, skip: safeSkip, limit: safeLimit };
+  }
+
+  // OpenFDA helpers
+  async searchDrugs(query: string, limit = 10, skip = 0): Promise<unknown> {
+    const safeLimit = Math.max(1, Math.min(50, Number(limit) || 10));
+    const safeSkip = Math.max(0, Number(skip) || 0);
+
+    // Build comprehensive search query with all relevant fields
+    const searchFields = [
+      `openfda.brand_name:"${query}"`,
+      `openfda.generic_name:"${query}"`,
+      `openfda.substance_name:"${query}"`,
+      `indications_and_usage:"${query}"`,
+      `openfda.manufacturer_name:"${query}"`,
+      `openfda.route:"${query}"`,
+      `pharmacological_class:"${query}"`,
+      `contraindications:"${query}"`,
+      `warnings:"${query}"`,
+      `drug_interactions:"${query}"`,
+      `openfda.dosage_form:"${query}"`,
+      `openfda.application_number:"${query}"`,
+    ].join(' OR ');
+
+    const url = `https://api.fda.gov/drug/label.json?search=${encodeURIComponent(
+      searchFields,
+    )}&limit=${safeLimit}&skip=${safeSkip}`;
+
+    const res = await axios.get(url);
+
+    if (!res.data.results) {
+      return { results: [], total: 0 };
+    }
+
+    // Format response with comprehensive information
+    const formattedResults = res.data.results.map((drug: any) =>
+      this.formatDrugResponse(drug),
+    );
+    const filteredResults = formattedResults.filter(
+      (d: any) => d.openfda?.brand_name || d.openfda?.generic_name,
+    );
+
+    return {
+      results: filteredResults,
+      total: filteredResults.length,
+      skip: safeSkip,
+      limit: safeLimit,
+    };
+  }
+
+  private formatDrugResponse(drug: any): any {
+    return {
+      id: drug.set_id,
+
+      // Tên thuốc
+      openfda: {
+        brand_name: drug.openfda?.brand_name?.[0] || null, // tên thương mại
+        generic_name: drug.openfda?.generic_name?.[0] || null, // tên gốc/hoạt chất chính
+        route: drug.openfda?.route?.[0] || null, // đường dùng: uống, tiêm, nhỏ mắt…
+        dosage_form: drug.openfda?.dosage_form?.[0] || null, // dạng bào chế: viên nén, siro, tiêm…
+        manufacturer_name: drug.openfda?.manufacturer_name?.[0] || null, // nhà sản xuất
+      },
+
+      // Công dụng
+      indications_and_usage: drug.indications_and_usage?.[0] || null, // chỉ định, thuốc dùng để chữa gì
+
+      // Liều dùng
+      dosage_and_administration: drug.dosage_and_administration?.[0] || null, // liều dùng & cách dùng cơ bản
+
+      // Cảnh báo & chống chỉ định
+      warnings: drug.warnings?.[0] || null, // cảnh báo quan trọng, tóm gọn
+      contraindications: drug.contraindications?.[0] || null, // những trường hợp không được dùng
+
+      // Tác dụng phụ
+      adverse_reactions: drug.adverse_reactions?.[0] || null, // các phản ứng phụ thường gặp
+    };
+  }
+
+  async searchDrugsByField(
+    field: string,
+    value: string,
+    limit = 10,
+    skip = 0,
+  ): Promise<unknown> {
+    const safeLimit = Math.max(1, Math.min(50, Number(limit) || 10));
+    const safeSkip = Math.max(0, Number(skip) || 0);
+
+    const searchQuery = `${field}:"${value}"`;
+    const url = `https://api.fda.gov/drug/label.json?search=${encodeURIComponent(
+      searchQuery,
+    )}&limit=${safeLimit}&skip=${safeSkip}`;
+
+    const res = await axios.get(url);
+
+    if (!res.data.results) {
+      return { results: [], total: 0 };
+    }
+
+    const formattedResults = res.data.results.map((drug: any) =>
+      this.formatDrugResponse(drug),
+    );
+    const filteredResults = formattedResults.filter(
+      (d: any) => d.openfda?.brand_name || d.openfda?.generic_name,
+    );
+
+    return {
+      results: filteredResults,
+      total: filteredResults.length,
+      skip: safeSkip,
+      limit: safeLimit,
+      field,
+      searchValue: value,
+    };
+  }
+
+  async getDrugByNdc(ndc: string): Promise<unknown> {
+    const url = `https://api.fda.gov/drug/ndc.json?search=product_ndc:${encodeURIComponent(ndc)}&limit=1`;
+    const res = await axios.get(url);
+    return res.data;
+  }
+
+  async listByMedicalRecord(
+    medicalRecordId: string,
+    limit = 10,
+    skip = 0,
+  ): Promise<{
+    results: unknown[];
+    total: number;
+    skip: number;
+    limit: number;
+  }> {
+    const safeLimit = Math.max(1, Math.min(50, Number(limit) || 10));
+    const safeSkip = Math.max(0, Number(skip) || 0);
+
+    const [results, total] = await this.prisma.$transaction([
+      this.prisma.medicationPrescription.findMany({
+        where: { medicalRecordId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          patientProfile: true,
+          doctor: true,
+          medicalRecord: true,
+          items: { include: { drug: true } },
+        },
+        take: safeLimit,
+        skip: safeSkip,
+      }),
+      this.prisma.medicationPrescription.count({ where: { medicalRecordId } }),
+    ]);
+
+    return { results, total, skip: safeSkip, limit: safeLimit };
+  }
+}

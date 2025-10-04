@@ -47,4 +47,6 @@ export class UpdatePrescriptionDto {
   @ValidateNested({ each: true })
   @Type(() => UpdatePrescriptionServiceItemDto)
   services?: UpdatePrescriptionServiceItemDto[];
+
+  // medications removed from this DTO; moved to medication-prescription module
 }

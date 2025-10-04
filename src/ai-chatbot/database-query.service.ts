@@ -250,12 +250,8 @@ export class DatabaseQueryService {
       errors.push('Query phải chứa await this.prismaService');
     }
 
-    // Cho phép dấu ; trong query (có thể có nhiều dòng code)
-    // Chỉ kiểm tra nếu có dấu ; ở giữa query mà không phải cuối
-    const semicolonCount = (queryString.match(/;/g) || []).length;
-    if (semicolonCount > 1) {
-      errors.push('Query không được có quá nhiều dấu ;');
-    }
+    // Cho phép nhiều dấu ; vì AI có thể tạo nhiều câu lệnh (khai báo biến, tính toán, ...)
+    // Không giới hạn số lượng ; miễn là có ít nhất một Prisma call hợp lệ ở cuối cùng
 
     // (b) Kiểm tra bảng & method
     const tableMatch = queryString.match(
@@ -420,6 +416,14 @@ QUAN TRỌNG:
 - Cấm truy vấn "full scan" không where trên bảng nhạy cảm (personal tables)
 - Nếu thiếu where, tự động thêm scope cá nhân
 
+ LUẬT RÀNG BUỘC VỀ TRƯỜNG (bắt buộc tuân thủ):
+ - WorkSession: KHÔNG có trường "date". Dùng startTime/endTime để filter/order theo thời gian. Các trường chính: id, doctorId, technicianId, startTime, endTime, nextAvailableAt, status, createdAt, updatedAt; có thể select doctor{ auth{ name } }.
+ - Appointment: có trường date, startTime, endTime, status, patientProfileId, doctorId, specialtyId, createdAt, updatedAt.
+ - Doctor: có auth{name}, doctorCode, yearsExperience, rating; KHÔNG có trường "date".
+ - Nếu field không tồn tại trong model, TUYỆT ĐỐI không sử dụng trong where/orderBy/select.
+ - Khi cần tên bác sĩ từ WorkSession, dùng: select { doctor: { select: { id: true, auth: { select: { name: true } } } } }.
+ - Tránh chèn comment trong object trả về. Hãy trả về object JSON hợp lệ cho Prisma.
+
 VÍ DỤ CHI TIẾT:
 - "Có bao nhiêu bác sĩ?" → await this.prismaService.doctor.count()
  - "Danh sách tất cả bác sĩ" → await this.prismaService.doctor.findMany({ select: { id: true, doctorCode: true, yearsExperience: true, rating: true, workHistory: true, description: true, auth: { select: { id: true, name: true, avatar: true } } } })
@@ -432,6 +436,7 @@ VÍ DỤ CHI TIẾT:
  - "Hồ sơ của tôi" (authId = 45) → await this.prismaService.patientProfile.findMany({where: {patient: {authId: 45}}})
  - "Tất cả lịch hẹn của tôi" (lấy tất cả lịch hẹn của tất cả hồ sơ) → await this.prismaService.appointment.findMany({ include: { patientProfile: { select: { id: true, name: true } }, doctor: { select: { id: true, auth: { select: { name: true } } } }, specialty: { select: { id: true, name: true } } } })
  - "Lịch hẹn của bác sĩ Kiên tuần này" (doctorId = 9) → await this.prismaService.appointment.findMany({where: {doctorId: 9, date: {gte: new Date(new Date().setDate(new Date().getDate()-new Date().getDay()+1)).setHours(0,0,0,0)}}, select: { id: true, date: true, startTime: true, endTime: true, specialty: { select: { name: true } }, patientProfile: { select: { id: true, name: true } } }})
+ - "Lịch làm việc bác sĩ trong tuần này" (WorkSession) → await this.prismaService.workSession.findMany({ where: { startTime: { gte: new Date(new Date().setDate(new Date().getDate()-new Date().getDay()+1)), lt: new Date(new Date().setDate(new Date().getDate()-new Date().getDay()+8)) } }, select: { id: true, startTime: true, endTime: true, doctor: { select: { id: true, auth: { select: { name: true } } } } }, orderBy: [{ startTime: 'asc' }], take: 50, skip: 0 })
  - "Bác sĩ Kiên thuộc chuyên khoa gì" → await this.prismaService.appointment.findMany({ where: { doctor: { auth: { name: { contains: "Kiên", mode: "insensitive" } } } }, select: { specialty: { select: { id: true, name: true } } }, distinct: ["specialtyId"] })
  - "Bệnh viện có bao nhiêu chuyên khoa?, liệt kê ra" → await this.prismaService.specialty.findMany({ select: { id: true, specialtyCode: true, name: true } })
 
@@ -439,7 +444,8 @@ QUERY:`;
 
     try {
       const result = await this.model.generateContent(prompt);
-      const query = result.response.text().trim();
+      const raw = result.response.text().trim();
+      const query = this.cleanGeneratedQuery(raw);
 
       // Validate query format và bảo mật
       const validation = this.validateQueryFormat(query);
@@ -465,6 +471,50 @@ QUERY:`;
       this.logger.error('Error generating Prisma query:', error);
       return null;
     }
+  }
+
+  private cleanGeneratedQuery(input: string): string {
+    // Remove Markdown code fences and language hints
+    let text = input;
+    // If fenced block, extract inner content
+    const fenceStart = text.indexOf('```');
+    if (fenceStart !== -1) {
+      const fenceEnd = text.indexOf('```', fenceStart + 3);
+      if (fenceEnd !== -1) {
+        // Slice out the content inside the first fenced block
+        const inner = text.slice(fenceStart + 3, fenceEnd);
+        // Drop optional language tag at the start of the fence content (e.g., javascript)
+        const lines = inner.split('\n');
+        if (lines.length > 0 && /^\s*[a-zA-Z]+\s*$/.test(lines[0])) {
+          lines.shift();
+        }
+        text = lines.join('\n');
+      } else {
+        // If unmatched fence, remove all backticks just in case
+        text = text.replace(/```/g, '');
+      }
+    }
+
+    // Trim whitespace
+    text = text.trim();
+
+    // If the entire output is quoted, unquote it
+    if (
+      (text.startsWith('"') && text.endsWith('"')) ||
+      (text.startsWith("'") && text.endsWith("'"))
+    ) {
+      text = text.slice(1, -1);
+    }
+
+    // Remove stray backticks wrapping a template literal with no interpolations
+    if (text.startsWith('`') && text.endsWith('`') && !/\$\{/.test(text)) {
+      text = text.slice(1, -1);
+    }
+
+    // Remove leading/trailing zero-width/formatting characters
+    text = text.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+
+    return text;
   }
 
   private async executePrismaQuery(queryString: string): Promise<unknown> {
