@@ -6,7 +6,7 @@
   },
   "item": [
     {
-      "name": "Public - Search Drugs (OpenFDA)",
+      "name": "Search Drugs (Public)",
       "request": {
         "method": "GET",
         "header": [],
@@ -24,6 +24,214 @@
           "query": [
             { "key": "limit", "value": "{{limit}}" },
             { "key": "skip", "value": "{{skip}}" }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Search Drugs by Field (Public)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/drugs/search/by-field/{{field}}/{{fieldValue}}?limit={{limit}}&skip={{skip}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "drugs",
+            "search",
+            "by-field",
+            "{{field}}",
+            "{{fieldValue}}"
+          ],
+          "query": [
+            { "key": "limit", "value": "{{limit}}" },
+            { "key": "skip", "value": "{{skip}}" }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Examples - Search by Brand Name",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/drugs/search/by-field/openfda.brand_name/Advil?limit=5&skip=0",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "drugs",
+            "search",
+            "by-field",
+            "openfda.brand_name",
+            "Advil"
+          ],
+          "query": [
+            { "key": "limit", "value": "5" },
+            { "key": "skip", "value": "0" }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Examples - Search by Generic Name",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/drugs/search/by-field/openfda.generic_name/Ibuprofen?limit=5&skip=0",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "drugs",
+            "search",
+            "by-field",
+            "openfda.generic_name",
+            "Ibuprofen"
+          ],
+          "query": [
+            { "key": "limit", "value": "5" },
+            { "key": "skip", "value": "0" }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Examples - Search by Indications",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/drugs/search/by-field/indications_and_usage/pain?limit=5&skip=0",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "drugs",
+            "search",
+            "by-field",
+            "indications_and_usage",
+            "pain"
+          ],
+          "query": [
+            { "key": "limit", "value": "5" },
+            { "key": "skip", "value": "0" }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Examples - Search by Manufacturer",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/drugs/search/by-field/openfda.manufacturer_name/Pfizer?limit=5&skip=0",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "drugs",
+            "search",
+            "by-field",
+            "openfda.manufacturer_name",
+            "Pfizer"
+          ],
+          "query": [
+            { "key": "limit", "value": "5" },
+            { "key": "skip", "value": "0" }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Examples - Search by Route",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/drugs/search/by-field/openfda.route/oral?limit=5&skip=0",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "drugs",
+            "search",
+            "by-field",
+            "openfda.route",
+            "oral"
+          ],
+          "query": [
+            { "key": "limit", "value": "5" },
+            { "key": "skip", "value": "0" }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Examples - Search by Dosage Form",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/drugs/search/by-field/openfda.dosage_form/tablet?limit=5&skip=0",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "drugs",
+            "search",
+            "by-field",
+            "openfda.dosage_form",
+            "tablet"
+          ],
+          "query": [
+            { "key": "limit", "value": "5" },
+            { "key": "skip", "value": "0" }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Examples - Search by Pharmacological Class",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/medication-prescriptions/drugs/search/by-field/pharmacological_class/NSAID?limit=5&skip=0",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medication-prescriptions",
+            "drugs",
+            "search",
+            "by-field",
+            "pharmacological_class",
+            "NSAID"
+          ],
+          "query": [
+            { "key": "limit", "value": "5" },
+            { "key": "skip", "value": "0" }
           ]
         }
       },
@@ -221,7 +429,9 @@
     { "key": "query", "value": "amoxicillin" },
     { "key": "ndc", "value": "12345-6789" },
     { "key": "limit", "value": "10" },
-    { "key": "skip", "value": "0" }
+    { "key": "skip", "value": "0" },
+    { "key": "field", "value": "openfda.brand_name", "description": "Field to search by: openfda.brand_name, openfda.generic_name, openfda.substance_name, indications_and_usage, openfda.manufacturer_name, openfda.route, openfda.dosage_form, pharmacological_class, contraindications, warnings, drug_interactions, openfda.application_number" },
+    { "key": "fieldValue", "value": "Advil", "description": "Value to search for in the specified field" }
   ]
 }
 

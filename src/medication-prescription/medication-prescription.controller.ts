@@ -40,6 +40,40 @@ type ItemInput = {
 export class MedicationPrescriptionController {
   constructor(private readonly service: MedicationPrescriptionService) {}
 
+  @Get('mine')
+  @Roles(Role.DOCTOR)
+  async listMine(
+    @Req() req: { user: JwtUserPayload },
+    @Query('limit') limit?: string,
+    @Query('skip') skip?: string,
+  ): Promise<unknown> {
+    const doctorId = req.user.doctor?.id;
+    if (!doctorId) {
+      throw new Error('Doctor not found in token');
+    }
+    return this.service.listByDoctor(doctorId, Number(limit), Number(skip));
+  }
+
+  @Get('mine/profiles/:patientProfileId')
+  @Roles(Role.PATIENT)
+  async listMineByProfile(
+    @Param('patientProfileId') patientProfileId: string,
+    @Req() req: { user: JwtUserPayload },
+    @Query('limit') limit?: string,
+    @Query('skip') skip?: string,
+  ): Promise<unknown> {
+    const patientId = req.user.patient?.id;
+    if (!patientId) {
+      throw new Error('Patient not found in token');
+    }
+    return this.service.listByPatientProfile(
+      patientId,
+      patientProfileId,
+      Number(limit),
+      Number(skip),
+    );
+  }
+
   @Post()
   @Roles(Role.DOCTOR)
   async create(
@@ -71,7 +105,6 @@ export class MedicationPrescriptionController {
       patientProfileId: body.patientProfileId,
       medicalRecordId: body.medicalRecordId,
       note: body.note ?? null,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       status: body.status,
       items,
     });
@@ -108,7 +141,6 @@ export class MedicationPrescriptionController {
       : undefined;
     return this.service.update(id, {
       note: body.note ?? null,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       status: body.status,
       items,
     });
@@ -130,9 +162,39 @@ export class MedicationPrescriptionController {
     return this.service.searchDrugs(query, Number(limit), Number(skip));
   }
 
+  @Get('drugs/search/by-field/:field/:value')
+  @Public()
+  async searchByField(
+    @Param('field') field: string,
+    @Param('value') value: string,
+    @Query('limit') limit?: string,
+    @Query('skip') skip?: string,
+  ): Promise<unknown> {
+    return this.service.searchDrugsByField(
+      field,
+      value,
+      Number(limit),
+      Number(skip),
+    );
+  }
+
   @Get('drugs/ndc/:ndc')
   @Public()
   async getByNdc(@Param('ndc') ndc: string): Promise<unknown> {
     return this.service.getDrugByNdc(ndc);
+  }
+
+  @Get('medical-record/:medicalRecordId')
+  @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST)
+  async getByMedicalRecord(
+    @Param('medicalRecordId') medicalRecordId: string,
+    @Query('limit') limit?: string,
+    @Query('skip') skip?: string,
+  ): Promise<unknown> {
+    return this.service.listByMedicalRecord(
+      medicalRecordId,
+      Number(limit),
+      Number(skip),
+    );
   }
 }
