@@ -199,6 +199,8 @@ model Specialty {
   clinicRooms ClinicRoom[]
   appointments Appointment[]
   templates   Template[]
+  services    Service[]
+  packages    Package[]
 
   @@map("specialties")
 }
@@ -231,31 +233,97 @@ model ClinicRoomService {
   @@unique([clinicRoomId, serviceId])
   @@map("clinic_room_services")
 }
-
+// Dịch vụ nguyên tử (bán lẻ được)
 model Service {
-  id          String      @id @default(uuid())
-  serviceCode String      @unique @map("service_code")
-  name        String      @map("name")
-  price       Float?        @map("price")
-  description String       @map("description")
-  timePerPatient Int?       @default(15) @map("time_per_patient") @db.SmallInt
-  isAllowed Boolean        @default(false) @map("is_allowed")
+  id              String      @id @default(uuid())
+  serviceCode     String      @unique @map("service_code")
+  name            String      @map("name")
+  price           Float?      @map("price")
+  description     String?     @map("description")
+  durationMinutes Int?        @default(15) @map("duration_minutes") @db.SmallInt
+  isActive        Boolean     @default(true) @map("is_active")
+  isInsurance     Boolean     @default(false) @map("is_insurance")
+  unit            String?     @map("unit")
+  currency        String?     @default("VND") @map("currency")
 
-  // Quan hệ cha–con
-  parentId   String?       @map("parent_id")
-  parent     Service?      @relation("ServiceHierarchy", fields: [parentId], references: [id])
-  children   Service[]     @relation("ServiceHierarchy")
+  // phân loại & khoa (tùy chọn)
+  categoryId      String?     @map("category_id")
+  category        ServiceCategory? @relation(fields: [categoryId], references: [id])
+  departmentId    String?     @map("department_id")
+  specialty      Specialty? @relation(fields: [departmentId], references: [id])
 
-  // Các quan hệ hiện có
-  clinicRoomServices ClinicRoomService[]
-  prescriptions PrescriptionService[]
-  invoiceDetails InvoiceDetail[]
+  // Liên kết tới các gói
+  packageItems    PackageItem[]
+
+  // Quan hệ khác của hệ thống (giữ nguyên)
+  clinicRoomServices  ClinicRoomService[]
+  prescriptions       PrescriptionService[]
+  invoiceDetails      InvoiceDetail[]
   workSessionServices WorkSessionService[]
   appointmentServices AppointmentService[]
-  appointments Appointment[]
+  appointments        Appointment[]
+
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
 
   @@map("services")
 }
+
+// Gói dịch vụ (combo)
+model Package {
+  id          String       @id @default(uuid())
+  code        String       @unique @map("package_code")
+  name        String       @map("name")
+  description String?      @map("description")
+  // Giá gói: có thể để null để tính = tổng các item (hoặc set giá riêng)
+  price       Float?       @map("price")
+  isActive    Boolean      @default(true) @map("is_active")
+
+  // phân loại & khoa (nếu muốn thống kê theo nhóm giống Service)
+  categoryId  String?      @map("category_id")
+  category    ServiceCategory? @relation(fields: [categoryId], references: [id])
+  specialtyId String?     @map("specialty_id")
+  specialty   Specialty? @relation(fields: [specialtyId], references: [id])
+
+  items       PackageItem[]
+
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("packages")
+}
+
+// Thành phần gói: liên kết N-N giữa Package và Service, kèm thuộc tính
+model PackageItem {
+  id            String   @id @default(uuid())
+  packageId     String   @map("package_id")
+  serviceId     String   @map("service_id")
+  quantity      Int      @default(1) @map("quantity")
+  priceOverride Float?   @map("price_override") // nếu giá trong gói khác giá lẻ
+  required      Boolean  @default(true) @map("required") // bắt buộc hay tuỳ chọn
+  sortOrder     Int?     @map("sort_order")
+  notes         String?  @map("notes")
+
+  package       Package  @relation(fields: [packageId], references: [id])
+  service       Service  @relation(fields: [serviceId], references: [id])
+
+  @@unique([packageId, serviceId])
+  @@index([packageId])
+  @@index([serviceId])
+  @@map("package_items")
+}
+
+model ServiceCategory {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  services    Service[]
+  packages    Package[]
+
+  @@map("service_categories")
+}
+
 
 // Bảng Appointment cho lịch hẹn
 model Appointment {
@@ -423,6 +491,8 @@ model MedicalRecordHistory {
   changedAt       DateTime @default(now())
   changes         Json     // Nội dung thay đổi (có thể lưu diff hoặc toàn bộ snapshot)
   medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id])
+
+  @@map("medical_record_histories")
 }
 
 // Bảng Phiếu chỉ định => Bác sĩ chỉ định dịch vụ cho bệnh nhân
@@ -470,28 +540,10 @@ enum MedicationPrescriptionStatus {
   CANCELLED
 }
 
-model Drug {
-  id          String  @id @default(uuid())
-  name        String
-  ndc         String? @unique
-  strength    String?
-  dosageForm  String? @map("dosage_form")
-  route       String?
-  unit        String?
-  source      Json?
-
-  items       MedicationPrescriptionItem[]
-
-  @@map("drugs")
-}
-
 model MedicationPrescriptionItem {
   id               String  @id @default(uuid())
   prescriptionId   String  @map("prescription_id")
   prescription     MedicationPrescription @relation(fields: [prescriptionId], references: [id])
-
-  drugId           String?
-  drug             Drug?   @relation(fields: [drugId], references: [id])
 
   name             String
   ndc              String?
@@ -544,10 +596,6 @@ enum PrescriptionStatus {
   DELAYED
   CANCELLED
   SKIPPED
-  RECALL_FIRST
-  RECALL_SECOND
-  RECALL_THIRD
-  RECALL_BACK
 }
 
 model Booth {
@@ -562,6 +610,8 @@ model Booth {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   workSessions WorkSession[]
+
+  @@map("booths")
 }
 
 model WorkSession {
