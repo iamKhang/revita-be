@@ -20,6 +20,11 @@ export class CounterAssignmentService {
     counterCode: string;
     counterName: string;
     location: string;
+    status: 'BUSY' | 'AVAILABLE';
+    assignedReceptionist?: {
+      id: string;
+      name: string;
+    };
   }>> {
     const counters = await this.prisma.counter.findMany({
       where: { isActive: true },
@@ -29,17 +34,287 @@ export class CounterAssignmentService {
         counterCode: true,
         counterName: true,
         location: true,
+        assignments: {
+          where: {
+            status: 'ACTIVE'
+          },
+          select: {
+            id: true,
+            receptionist: {
+              select: {
+                id: true,
+                auth: {
+                  select: {
+                    name: true
+                  }
+                }
+              }
+            }
+          },
+          take: 1
+        }
       },
     });
 
-    return counters.map(({ id, counterCode, counterName, location }) => ({
-      counterId: id,
-      counterCode,
-      counterName,
-      location: location ?? '',
-    }));
+    return counters.map(({ id, counterCode, counterName, location, assignments }) => {
+      const activeAssignment = assignments[0];
+      const isBusy = activeAssignment !== undefined;
+      
+      return {
+        counterId: id,
+        counterCode,
+        counterName,
+        location: location ?? '',
+        status: isBusy ? 'BUSY' : 'AVAILABLE',
+        assignedReceptionist: isBusy ? {
+          id: activeAssignment.receptionist.id,
+          name: activeAssignment.receptionist.auth.name
+        } : undefined,
+      };
+    });
   }
 
+  async findReceptionistByAuthId(authId: string): Promise<{ id: string } | null> {
+    try {
+      const receptionist = await this.prisma.receptionist.findFirst({
+        where: {
+          authId: authId,
+        },
+        select: {
+          id: true,
+        },
+      });
+      return receptionist;
+    } catch (error) {
+      console.error('Error finding receptionist by authId:', error);
+      return null;
+    }
+  }
+
+  async assignReceptionistToCounter(
+    counterId: string,
+    authId: string,
+    notes?: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    assignment?: {
+      id: string;
+      counterId: string;
+      receptionistId: string;
+      assignedAt: Date;
+      status: string;
+      notes?: string;
+    };
+  }> {
+    try {
+      // Kiểm tra counter có tồn tại và active không
+      const counter = await this.prisma.counter.findFirst({
+        where: {
+          id: counterId,
+          isActive: true,
+        },
+      });
+
+      if (!counter) {
+        return {
+          success: false,
+          message: 'Counter not found or inactive',
+        };
+      }
+
+      // Kiểm tra receptionist có tồn tại không (tìm bằng authId)
+      const receptionist = await this.prisma.receptionist.findFirst({
+        where: {
+          authId: authId,
+        },
+        include: {
+          auth: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (!receptionist) {
+        return {
+          success: false,
+          message: 'Receptionist not found',
+        };
+      }
+
+      // Tìm tất cả assignments ACTIVE của counter này
+      const activeAssignments = await this.prisma.counterAssignment.findMany({
+        where: {
+          counterId: counterId,
+          status: 'ACTIVE',
+        },
+      });
+
+      // Cập nhật tất cả assignments ACTIVE thành COMPLETED
+      if (activeAssignments.length > 0) {
+        await this.prisma.counterAssignment.updateMany({
+          where: {
+            counterId: counterId,
+            status: 'ACTIVE',
+          },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+          },
+        });
+
+        console.log(`Updated ${activeAssignments.length} active assignments to COMPLETED for counter ${counterId}`);
+      }
+
+      // Tạo assignment mới với status ACTIVE
+      const newAssignment = await this.prisma.counterAssignment.create({
+        data: {
+          counterId: counterId,
+          receptionistId: receptionist.id,
+          status: 'ACTIVE',
+          notes: notes,
+          assignedAt: new Date(),
+        },
+      });
+
+      // Cập nhật counter với receptionist mới
+      await this.prisma.counter.update({
+        where: {
+          id: counterId,
+        },
+        data: {
+          receptionistId: receptionist.id,
+        },
+      });
+
+      console.log(`Successfully assigned receptionist ${receptionist.auth.name} to counter ${counter.counterName}`);
+
+      return {
+        success: true,
+        message: `Successfully assigned ${receptionist.auth.name} to ${counter.counterName}`,
+        assignment: {
+          id: newAssignment.id,
+          counterId: newAssignment.counterId,
+          receptionistId: newAssignment.receptionistId,
+          assignedAt: newAssignment.assignedAt,
+          status: newAssignment.status,
+          notes: newAssignment.notes || undefined,
+        },
+      };
+    } catch (error) {
+      console.error('Error assigning receptionist to counter:', error);
+      return {
+        success: false,
+        message: 'Failed to assign receptionist to counter',
+      };
+    }
+  }
+
+  async checkoutReceptionistFromCounter(
+    counterId: string,
+    authId: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    assignment?: {
+      id: string;
+      counterId: string;
+      receptionistId: string;
+      completedAt: Date;
+      status: string;
+    };
+  }> {
+    try {
+      // Tìm receptionist từ authId trước
+      const receptionist = await this.prisma.receptionist.findFirst({
+        where: {
+          authId: authId,
+        },
+      });
+
+      if (!receptionist) {
+        return {
+          success: false,
+          message: 'Receptionist not found',
+        };
+      }
+
+      // Tìm assignment ACTIVE của receptionist này với counter cụ thể
+      const activeAssignment = await this.prisma.counterAssignment.findFirst({
+        where: {
+          counterId: counterId,
+          receptionistId: receptionist.id,
+          status: 'ACTIVE',
+        },
+        include: {
+          counter: {
+            select: {
+              counterName: true,
+            },
+          },
+          receptionist: {
+            select: {
+              auth: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!activeAssignment) {
+        return {
+          success: false,
+          message: 'No active assignment found for this receptionist at the specified counter',
+        };
+      }
+
+      // Cập nhật assignment thành COMPLETED
+      const updatedAssignment = await this.prisma.counterAssignment.update({
+        where: {
+          id: activeAssignment.id,
+        },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+        },
+      });
+
+      // Cập nhật counter để loại bỏ receptionist
+      await this.prisma.counter.update({
+        where: {
+          id: activeAssignment.counterId,
+        },
+        data: {
+          receptionistId: null,
+        },
+      });
+
+      console.log(`Successfully checked out receptionist ${activeAssignment.receptionist.auth.name} from counter ${activeAssignment.counter.counterName}`);
+
+      return {
+        success: true,
+        message: `Successfully checked out ${activeAssignment.receptionist.auth.name} from ${activeAssignment.counter.counterName}`,
+        assignment: {
+          id: updatedAssignment.id,
+          counterId: updatedAssignment.counterId,
+          receptionistId: updatedAssignment.receptionistId,
+          completedAt: updatedAssignment.completedAt!,
+          status: updatedAssignment.status,
+        },
+      };
+    } catch (error) {
+      console.error('Error checking out receptionist from counter:', error);
+      return {
+        success: false,
+        message: 'Failed to checkout receptionist from counter',
+      };
+    }
+  }
 
   async skipCurrentPatient(counterId: string): Promise<{
     ok: true;

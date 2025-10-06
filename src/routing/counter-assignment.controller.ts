@@ -3,18 +3,29 @@ import {
   Get,
   Param,
   Post,
+  Body,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
+import { Roles } from '../rbac/roles.decorator';
+import { Role } from '../rbac/roles.enum';
 import { Public } from '../rbac/public.decorator';
 import { CounterAssignmentService } from './counter-assignment.service';
+import { AssignCounterDto } from './dto/assign-counter.dto';
+import { CheckoutCounterDto } from './dto/checkout-counter.dto';
 
 export interface Counter {
   counterId: string;
   counterCode: string;
   counterName: string;
   location: string;
+  status: 'BUSY' | 'AVAILABLE';
+  assignedReceptionist?: {
+    id: string;
+    name: string;
+  };
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -108,5 +119,65 @@ export class CounterAssignmentController {
   @Get('queue/:counterId')
   async getQueueSnapshot(@Param('counterId') counterId: string) {
     return this.counterAssignmentService.getQueueSnapshot(counterId);
+  }
+
+  @Post('assign')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.RECEPTIONIST)
+  async assignReceptionistToCounter(
+    @Body() assignCounterDto: AssignCounterDto,
+    @Req() req: any,
+  ) {
+    console.log('\n=== ASSIGN RECEPTIONIST TO COUNTER CALLED ===');
+    console.log('Counter ID:', assignCounterDto.counterId);
+    console.log('Notes:', assignCounterDto.notes);
+    console.log('Auth ID (authId):', req.user.id);
+    console.log('Role from token:', req.user.role);
+    console.log('=====================================\n');
+
+    // Lấy authId từ JWT token (chính là req.user.id)
+    const authId = req.user.id;
+    
+    if (!authId) {
+      return {
+        success: false,
+        message: 'User ID not found in token',
+      };
+    }
+
+    return this.counterAssignmentService.assignReceptionistToCounter(
+      assignCounterDto.counterId,
+      authId,
+      assignCounterDto.notes,
+    );
+  }
+
+  @Post('checkout')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.RECEPTIONIST)
+  async checkoutReceptionistFromCounter(
+    @Body() checkoutCounterDto: CheckoutCounterDto,
+    @Req() req: any,
+  ) {
+    console.log('\n=== CHECKOUT RECEPTIONIST FROM COUNTER CALLED ===');
+    console.log('Counter ID:', checkoutCounterDto.counterId);
+    console.log('Auth ID (authId):', req.user.id);
+    console.log('Role from token:', req.user.role);
+    console.log('=====================================\n');
+
+    // Lấy authId từ JWT token (chính là req.user.id)
+    const authId = req.user.id;
+    
+    if (!authId) {
+      return {
+        success: false,
+        message: 'User ID not found in token',
+      };
+    }
+
+    return this.counterAssignmentService.checkoutReceptionistFromCounter(
+      checkoutCounterDto.counterId,
+      authId,
+    );
   }
 }

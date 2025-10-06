@@ -302,7 +302,7 @@ model Invoice {
   amountPaid      Float       @default(0) @map("amount_paid") // Số tiền bệnh nhân đã đưa
   changeAmount    Float       @default(0) @map("change_amount") // Tiền thối lại cho bệnh nhân
 
-  paymentMethod   String      @map("payment_method")          // Tiền mặt, thẻ, chuyển khoản...
+  paymentMethod   PaymentMethod @default(CASH)      @map("payment_method")          // Tiền mặt, thẻ, chuyển khoản...
   paymentStatus   String      @map("payment_status")           // Pending, Paid, Refunded...
   createdAt       DateTime    @default(now()) @map("created_at")
   isPaid           Boolean     @default(false) @map("is_paid")
@@ -313,8 +313,46 @@ model Invoice {
   cashier             Cashier @relation(fields: [cashierId], references: [id])
 
   invoiceDetails      InvoiceDetail[]
+  paymentTransactions PaymentTransaction[]
 
   @@map("invoices")
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+}
+
+// Bảng giao dịch thanh toán từ cổng PayOS
+model PaymentTransaction {
+  id                    String                     @id @default(uuid())
+  invoiceId             String                     @map("invoice_id")
+  invoice               Invoice                    @relation(fields: [invoiceId], references: [id])
+  amount                Float                      @map("amount")                     // Số tiền yêu cầu thanh toán
+  currency              String?                    @map("currency")                   // VND, USD...
+  status                PaymentTransactionStatus   @default(PENDING) @map("status")
+  providerTransactionId String?                    @map("provider_transaction_id")    // Mã giao dịch từ PayOS
+  orderCode             String?                    @map("order_code")                 // Mã đơn hàng để đối chiếu
+  paymentUrl            String?                    @map("payment_url")
+  qrCode                String?                    @map("qr_code")
+  expiredAt             DateTime?                  @map("expired_at")                 // Thời điểm hết hạn thanh toán
+  paidAt                DateTime?                  @map("paid_at")                    // Thời điểm PayOS xác nhận đã thanh toán
+  lastWebhookPayload    Json?                      @map("last_webhook_payload")       // Lưu raw payload lần webhook gần nhất
+  lastWebhookStatus     String?                    @map("last_webhook_status")        // Kết quả xử lý webhook gần nhất
+  lastWebhookAt         DateTime?                  @map("last_webhook_at")
+  isVerified            Boolean                    @default(false) @map("is_verified") // Đã đối chiếu chữ ký/ checksum chưa
+  createdAt             DateTime                   @default(now()) @map("created_at")
+  updatedAt             DateTime                   @updatedAt @map("updated_at")
+
+  @@map("payment_transactions")
+}
+
+enum PaymentTransactionStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
 }
 
 

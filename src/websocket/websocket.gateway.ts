@@ -61,6 +61,30 @@ export class CounterWebSocketGateway implements OnGatewayConnection, OnGatewayDi
     client.emit('left_counter', { message: 'Left counter' });
   }
 
+  @SubscribeMessage('join_cashier')
+  handleJoinCashier(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { cashierId: string },
+  ) {
+    if (!data.cashierId) {
+      client.emit('error', { message: 'Cashier ID is required' });
+      return;
+    }
+    console.log('join_cashier', data);
+
+    this.webSocketService.connectToCashier(client, data.cashierId);
+    client.emit('joined_cashier', { 
+      cashierId: data.cashierId,
+      message: `Connected to cashier ${data.cashierId}` 
+    });
+  }
+
+  @SubscribeMessage('leave_cashier')
+  handleLeaveCashier(@ConnectedSocket() client: Socket) {
+    this.webSocketService.disconnect(client);
+    client.emit('left_cashier', { message: 'Left cashier' });
+  }
+
   @SubscribeMessage('ping')
   handlePing(@ConnectedSocket() client: Socket) {
     client.emit('pong', { timestamp: new Date().toISOString() });

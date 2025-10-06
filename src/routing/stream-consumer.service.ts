@@ -149,7 +149,7 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
         // Convert string numbers back to numbers
         if (['patientAge', 'sequence', 'callCount', 'queuePriority'].includes(key)) {
           data[key] = parseInt(value) || 0;
-        } else if (['isPregnant', 'isDisabled', 'isOnTime'].includes(key)) {
+        } else if (['isPregnant', 'isDisabled', 'isOnTime', 'isChild'].includes(key)) {
           data[key] = value === 'true' || value === true;
         } else if (key === 'metadata' && typeof value === 'string') {
           // Parse metadata JSON string nếu có
@@ -208,6 +208,7 @@ export class StreamConsumerService implements OnModuleInit, OnModuleDestroy {
             queueNumber: ticketData.queueNumber,
             patientName: ticketData.patientName,
             isOnTime: ticketData.isOnTime,
+            isChild: ticketData.isChild === true || (ticketData.patientAge != null && Number(ticketData.patientAge) < 6),
             status: ticketData.status,
             callCount: ticketData.callCount,
           },

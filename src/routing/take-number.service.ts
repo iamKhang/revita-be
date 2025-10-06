@@ -25,6 +25,7 @@ export interface TakeNumberResult {
     isPregnant?: boolean;
     isDisabled?: boolean;
     isElderly?: boolean;
+    isChild?: boolean;
     status: TicketStatus;
     callCount: number;
     queuePriority: number;
@@ -401,6 +402,7 @@ export class TakeNumberService {
       metadata: {
         isPregnant: request.isPregnant,
         isDisabled: request.isDisabled,
+        isChild: typeof patientInfo.age === 'number' ? patientInfo.age < 6 : false,
       },
     };
   }
@@ -599,6 +601,7 @@ export class TakeNumberService {
       preg: ticket.metadata?.isPregnant ? 'Y' : '',
       dis: ticket.metadata?.isDisabled ? 'Y' : '',
       eld: ticket.patientAge > 75 ? 'Y' : '',
+      chd: (ticket.patientAge < 6 || ticket.metadata?.isChild) ? 'Y' : '',
     }));
 
     console.log(`[queue-debug] ${context} - counter ${counterId}`);
@@ -639,6 +642,7 @@ export class TakeNumberService {
       isPregnant: Boolean(metadata.isPregnant),
       isDisabled: Boolean(metadata.isDisabled),
       isElderly: typeof age === 'number' ? age >= 75 : false,
+      isChild: typeof age === 'number' ? age < 6 : Boolean(metadata.isChild),
     };
   }
 }

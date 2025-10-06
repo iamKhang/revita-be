@@ -29,6 +29,7 @@ export interface QueueTicket {
   metadata: {
     isPregnant?: boolean;
     isDisabled?: boolean;
+    isChild?: boolean;
   };
 }
 
@@ -137,6 +138,7 @@ export class RedisStreamService {
       queuePriority: ticket.queuePriority.toString(),
       isPregnant: ticket.metadata.isPregnant?.toString() || 'false',
       isDisabled: ticket.metadata.isDisabled?.toString() || 'false',
+      isChild: ticket.metadata.isChild?.toString() || 'false',
     };
 
     // Thêm vào main stream

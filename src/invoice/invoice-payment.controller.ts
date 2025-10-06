@@ -2,9 +2,9 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Post,
-  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -12,10 +12,13 @@ import { InvoicePaymentService } from './invoice-payment.service';
 import { ScanPrescriptionDto } from './dto/scan-prescription.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
+import { RefreshPaymentDto } from './dto/refresh-payment.dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
 import { Role } from '../rbac/roles.enum';
+import { Public } from '../rbac/public.decorator';
+import { HttpCode } from '@nestjs/common';
 
 @Controller('invoice-payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -61,6 +64,36 @@ export class InvoicePaymentController {
     });
   }
 
+  @Post('invoice/:invoiceCode/refresh')
+  @Roles(Role.CASHIER, Role.PATIENT, Role.RECEPTIONIST)
+  async refreshPayment(
+    @Param('invoiceCode') invoiceCode: string,
+    @Body() dto: RefreshPaymentDto,
+    @Request() req: any,
+  ) {
+    return this.invoicePaymentService.refreshPaymentLink(invoiceCode, {
+      ...dto,
+      requesterId: req.user?.id,
+    });
+  }
+
+  @Post('payos/webhook')
+  @Public()
+  @HttpCode(200)
+  async handlePayOsWebhook(
+    @Body() payload: any,
+    @Headers('x-payos-signature') payosSignature?: string,
+    @Headers('x-signature') genericSignature?: string,
+  ) {
+    const signature = payosSignature || genericSignature;
+    try {
+      return await this.invoicePaymentService.handlePayOsWebhook(signature, payload);
+    } catch (error) {
+      // Always acknowledge webhook to avoid provider retries, but surface minimal info
+      return { success: true };
+    }
+  }
+
   @Get('history/:patientProfileId')
   @Roles(Role.CASHIER, Role.PATIENT)
   async getPaymentHistory(@Param('patientProfileId') patientProfileId: string) {
@@ -81,5 +114,11 @@ export class InvoicePaymentController {
     // This would be implemented to get detailed invoice information
     // For now, return a placeholder
     return { message: 'Invoice details endpoint - to be implemented' };
+  }
+
+  @Get('invoice-by-id/:invoiceId')
+  @Roles(Role.CASHIER, Role.PATIENT, Role.RECEPTIONIST)
+  async getInvoiceById(@Param('invoiceId') invoiceId: string) {
+    return this.invoicePaymentService.getInvoiceById(invoiceId);
   }
 }
