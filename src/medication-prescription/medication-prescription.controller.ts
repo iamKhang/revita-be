@@ -162,27 +162,17 @@ export class MedicationPrescriptionController {
     return this.service.searchDrugs(query, Number(limit), Number(skip));
   }
 
-  @Get('drugs/search/by-field/:field/:value')
+  @Get('drugs/search-partial/:query')
   @Public()
-  async searchByField(
-    @Param('field') field: string,
-    @Param('value') value: string,
+  async searchPartial(
+    @Param('query') query: string,
     @Query('limit') limit?: string,
     @Query('skip') skip?: string,
   ): Promise<unknown> {
-    return this.service.searchDrugsByField(
-      field,
-      value,
-      Number(limit),
-      Number(skip),
-    );
+    return this.service.searchDrugsPartial(query, Number(limit), Number(skip));
   }
 
-  @Get('drugs/ndc/:ndc')
-  @Public()
-  async getByNdc(@Param('ndc') ndc: string): Promise<unknown> {
-    return this.service.getDrugByNdc(ndc);
-  }
+  // Removed field-based and NDC endpoints; use full-text search only
 
   @Get('medical-record/:medicalRecordId')
   @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST)

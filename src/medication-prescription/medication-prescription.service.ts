@@ -1,19 +1,18 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import axios from 'axios';
+import { DrugCatalogService } from '../drug-catalog/drug-catalog.service';
 import { MedicationPrescriptionStatus } from '@prisma/client';
 
 @Injectable()
 export class MedicationPrescriptionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly drugCatalog: DrugCatalogService,
+  ) {}
 
   async create(data: {
     code?: string;
@@ -235,123 +234,48 @@ export class MedicationPrescriptionService {
     return { results, total, skip: safeSkip, limit: safeLimit };
   }
 
-  // OpenFDA helpers
+  // Drug catalog helpers (MongoDB)
   async searchDrugs(query: string, limit = 10, skip = 0): Promise<unknown> {
-    const safeLimit = Math.max(1, Math.min(50, Number(limit) || 10));
-    const safeSkip = Math.max(0, Number(skip) || 0);
-
-    // Build comprehensive search query with all relevant fields
-    const searchFields = [
-      `openfda.brand_name:"${query}"`,
-      `openfda.generic_name:"${query}"`,
-      `openfda.substance_name:"${query}"`,
-      `indications_and_usage:"${query}"`,
-      `openfda.manufacturer_name:"${query}"`,
-      `openfda.route:"${query}"`,
-      `pharmacological_class:"${query}"`,
-      `contraindications:"${query}"`,
-      `warnings:"${query}"`,
-      `drug_interactions:"${query}"`,
-      `openfda.dosage_form:"${query}"`,
-      `openfda.application_number:"${query}"`,
-    ].join(' OR ');
-
-    const url = `https://api.fda.gov/drug/label.json?search=${encodeURIComponent(
-      searchFields,
-    )}&limit=${safeLimit}&skip=${safeSkip}`;
-
-    const res = await axios.get(url);
-
-    if (!res.data.results) {
-      return { results: [], total: 0 };
-    }
-
-    // Format response with comprehensive information
-    const formattedResults = res.data.results.map((drug: any) =>
-      this.formatDrugResponse(drug),
-    );
-    const filteredResults = formattedResults.filter(
-      (d: any) => d.openfda?.brand_name || d.openfda?.generic_name,
-    );
-
-    return {
-      results: filteredResults,
-      total: filteredResults.length,
-      skip: safeSkip,
-      limit: safeLimit,
-    };
+    return this.drugCatalog.search(query, limit, skip);
   }
 
-  private formatDrugResponse(drug: any): any {
-    return {
-      id: drug.set_id,
-
-      // Tên thuốc
-      openfda: {
-        brand_name: drug.openfda?.brand_name?.[0] || null, // tên thương mại
-        generic_name: drug.openfda?.generic_name?.[0] || null, // tên gốc/hoạt chất chính
-        route: drug.openfda?.route?.[0] || null, // đường dùng: uống, tiêm, nhỏ mắt…
-        dosage_form: drug.openfda?.dosage_form?.[0] || null, // dạng bào chế: viên nén, siro, tiêm…
-        manufacturer_name: drug.openfda?.manufacturer_name?.[0] || null, // nhà sản xuất
-      },
-
-      // Công dụng
-      indications_and_usage: drug.indications_and_usage?.[0] || null, // chỉ định, thuốc dùng để chữa gì
-
-      // Liều dùng
-      dosage_and_administration: drug.dosage_and_administration?.[0] || null, // liều dùng & cách dùng cơ bản
-
-      // Cảnh báo & chống chỉ định
-      warnings: drug.warnings?.[0] || null, // cảnh báo quan trọng, tóm gọn
-      contraindications: drug.contraindications?.[0] || null, // những trường hợp không được dùng
-
-      // Tác dụng phụ
-      adverse_reactions: drug.adverse_reactions?.[0] || null, // các phản ứng phụ thường gặp
-    };
-  }
-
-  async searchDrugsByField(
-    field: string,
-    value: string,
+  async searchDrugsPartial(
+    query: string,
     limit = 10,
     skip = 0,
   ): Promise<unknown> {
-    const safeLimit = Math.max(1, Math.min(50, Number(limit) || 10));
-    const safeSkip = Math.max(0, Number(skip) || 0);
-
-    const searchQuery = `${field}:"${value}"`;
-    const url = `https://api.fda.gov/drug/label.json?search=${encodeURIComponent(
-      searchQuery,
-    )}&limit=${safeLimit}&skip=${safeSkip}`;
-
-    const res = await axios.get(url);
-
-    if (!res.data.results) {
-      return { results: [], total: 0 };
-    }
-
-    const formattedResults = res.data.results.map((drug: any) =>
-      this.formatDrugResponse(drug),
-    );
-    const filteredResults = formattedResults.filter(
-      (d: any) => d.openfda?.brand_name || d.openfda?.generic_name,
-    );
-
-    return {
-      results: filteredResults,
-      total: filteredResults.length,
-      skip: safeSkip,
-      limit: safeLimit,
-      field,
-      searchValue: value,
-    };
+    return this.drugCatalog.searchPartial(query, limit, skip);
   }
 
-  async getDrugByNdc(ndc: string): Promise<unknown> {
-    const url = `https://api.fda.gov/drug/ndc.json?search=product_ndc:${encodeURIComponent(ndc)}&limit=1`;
-    const res = await axios.get(url);
-    return res.data;
-  }
+  // private formatDrugResponse(drug: any): any {
+  //   return {
+  //     id: drug.set_id,
+
+  //     // Tên thuốc
+  //     openfda: {
+  //       brand_name: drug.openfda?.brand_name?.[0] || null, // tên thương mại
+  //       generic_name: drug.openfda?.generic_name?.[0] || null, // tên gốc/hoạt chất chính
+  //       route: drug.openfda?.route?.[0] || null, // đường dùng: uống, tiêm, nhỏ mắt…
+  //       dosage_form: drug.openfda?.dosage_form?.[0] || null, // dạng bào chế: viên nén, siro, tiêm…
+  //       manufacturer_name: drug.openfda?.manufacturer_name?.[0] || null, // nhà sản xuất
+  //     },
+
+  //     // Công dụng
+  //     indications_and_usage: drug.indications_and_usage?.[0] || null, // chỉ định, thuốc dùng để chữa gì
+
+  //     // Liều dùng
+  //     dosage_and_administration: drug.dosage_and_administration?.[0] || null, // liều dùng & cách dùng cơ bản
+
+  //     // Cảnh báo & chống chỉ định
+  //     warnings: drug.warnings?.[0] || null, // cảnh báo quan trọng, tóm gọn
+  //     contraindications: drug.contraindications?.[0] || null, // những trường hợp không được dùng
+
+  //     // Tác dụng phụ
+  //     adverse_reactions: drug.adverse_reactions?.[0] || null, // các phản ứng phụ thường gặp
+  //   };
+  // }
+
+  // Removed field-based and NDC lookup in favor of full-text search
 
   async listByMedicalRecord(
     medicalRecordId: string,

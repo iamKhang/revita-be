@@ -43,7 +43,6 @@ export class PrescriptionService {
       );
     }
 
-
     if (!services || services.length === 0) {
       throw new BadRequestException('services must not be empty');
     }
@@ -442,8 +441,6 @@ export class PrescriptionService {
   }
 
   async getPrescriptionsByMedicalRecord(medicalRecordId: string) {
-
-
     const prescriptions = await this.prisma.prescription.findMany({
       where: { medicalRecordId },
       include: {
@@ -456,7 +453,6 @@ export class PrescriptionService {
       },
       orderBy: { id: 'desc' }, // Sắp xếp theo ID (UUID mới nhất trước)
     });
-
 
     return prescriptions;
   }
