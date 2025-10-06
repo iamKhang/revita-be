@@ -22,6 +22,16 @@ function readJson<T>(file: string): T {
   return JSON.parse(raw) as T;
 }
 
+function readJsonOr<T>(file: string, fallback: T): T {
+  const full = DATA(file);
+  if (!fs.existsSync(full)) {
+    console.warn(`⚠️  Không tìm thấy file, sử dụng giá trị mặc định: ${full}`);
+    return fallback;
+  }
+  const raw = fs.readFileSync(full, 'utf-8');
+  return JSON.parse(raw) as T;
+}
+
 // Parse ISO date string -> Date | undefined
 const asDate = (v: any) => (v ? new Date(v) : undefined);
 
@@ -135,7 +145,7 @@ async function main() {
   const doctors = readJson<any[]>('doctors.json'); // :contentReference[oaicite:9]{index=9}
   const patients = readJson<any[]>('patients.json'); // :contentReference[oaicite:10]{index=10}
   const patientProfiles = readJson<any[]>('patient_profiles.json'); // :contentReference[oaicite:11]{index=11}
-  const receptionists = readJson<any[]>('receptionists.json'); // :contentReference[oaicite:12]{index=12}
+  const receptionists = readJsonOr<any[]>('receptionists.json', []);
   const cashiers = readJson<any[]>('cashiers.json'); // :contentReference[oaicite:13]{index=13}
   const admins = readJson<any[]>('admins.json'); // :contentReference[oaicite:14]{index=14}
   const technicians = readJson<any[]>('technicians.json'); // :contentReference[oaicite:15]{index=15}

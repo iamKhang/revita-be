@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { LoginModule } from './login/login.module';
@@ -17,12 +18,19 @@ import { WorkSessionModule } from './work-session/work-session.module';
 import { AppointmentBookingModule } from './appointment-booking/appointment-booking.module';
 import { AiChatbotModule } from './ai-chatbot/ai-chatbot.module';
 import { WebSocketModule } from './websocket/websocket.module';
+import { MedicationPrescriptionModule } from './medication-prescription/medication-prescription.module';
+import { DrugCatalogModule } from './drug-catalog/drug-catalog.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+    MongooseModule.forRootAsync({
+      useFactory: () => ({
+        uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/revita-drug',
+      }),
     }),
     LoginModule,
     RegisterModule,
@@ -37,6 +45,8 @@ import { WebSocketModule } from './websocket/websocket.module';
     AppointmentBookingModule,
     AiChatbotModule,
     WebSocketModule,
+    MedicationPrescriptionModule,
+    DrugCatalogModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
