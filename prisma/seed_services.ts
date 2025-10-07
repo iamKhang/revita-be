@@ -56,7 +56,7 @@ async function main() {
           serviceCode: serviceData.serviceCode,
           name: serviceData.name,
           price: serviceData.price,
-          timePerPatient: serviceData.timePerPatient,
+          durationMinutes: serviceData.timePerPatient,
           description: serviceData.description,
         },
       });

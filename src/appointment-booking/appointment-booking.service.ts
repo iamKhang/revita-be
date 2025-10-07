@@ -282,7 +282,7 @@ export class AppointmentBookingService {
             serviceName: wss.service.name,
             serviceCode: wss.service.serviceCode,
             price: wss.service.price || undefined,
-            timePerPatient: wss.service.timePerPatient ?? 15, // default 15 phút
+            timePerPatient: wss.service.durationMinutes ?? 15, // default 15 phút
             description: wss.service.description,
           });
         }
@@ -437,7 +437,7 @@ export class AppointmentBookingService {
       };
     }
 
-    const serviceDuration = service.timePerPatient ?? 15; // phút
+    const serviceDuration = service.durationMinutes ?? 15; // phút
 
     // Lấy tất cả appointments của bác sĩ trong ngày (sử dụng UTC dates)
     const appointments = await this.prisma.appointment.findMany({
@@ -1254,7 +1254,7 @@ export class AppointmentBookingService {
             name: true,
             serviceCode: true,
             price: true,
-            timePerPatient: true,
+            durationMinutes: true,
           },
         },
         appointmentServices: {
@@ -1265,7 +1265,7 @@ export class AppointmentBookingService {
                 name: true,
                 serviceCode: true,
                 price: true,
-                timePerPatient: true,
+                durationMinutes: true,
               },
             },
           },
@@ -1286,7 +1286,7 @@ export class AppointmentBookingService {
             serviceName: as.service.name,
             serviceCode: as.service.serviceCode,
             price: as.service.price,
-            timePerPatient: as.service.timePerPatient ?? 15,
+            timePerPatient: as.service.durationMinutes ?? 15,
           }));
 
         // Nếu không có appointmentServices nhưng có service chính, thêm vào
@@ -1296,7 +1296,7 @@ export class AppointmentBookingService {
             serviceName: apt.service.name,
             serviceCode: apt.service.serviceCode,
             price: apt.service.price,
-            timePerPatient: apt.service.timePerPatient ?? 15,
+            timePerPatient: apt.service.durationMinutes ?? 15,
           });
         }
 
@@ -1366,7 +1366,7 @@ export class AppointmentBookingService {
             name: true,
             serviceCode: true,
             price: true,
-            timePerPatient: true,
+            durationMinutes: true,
           },
         },
         appointmentServices: {
@@ -1377,7 +1377,7 @@ export class AppointmentBookingService {
                 name: true,
                 serviceCode: true,
                 price: true,
-                timePerPatient: true,
+                durationMinutes: true,
               },
             },
           },
@@ -1396,7 +1396,7 @@ export class AppointmentBookingService {
             serviceName: as.service.name,
             serviceCode: as.service.serviceCode,
             price: as.service.price,
-            timePerPatient: as.service.timePerPatient ?? 15,
+            timePerPatient: as.service.durationMinutes ?? 15,
           }));
 
         if (services.length === 0 && apt.service) {
@@ -1405,7 +1405,7 @@ export class AppointmentBookingService {
             serviceName: apt.service.name,
             serviceCode: apt.service.serviceCode,
             price: apt.service.price,
-            timePerPatient: apt.service.timePerPatient ?? 15,
+            timePerPatient: apt.service.durationMinutes ?? 15,
           });
         }
 

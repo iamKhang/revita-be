@@ -557,11 +557,28 @@ model MedicationPrescriptionItem {
   quantity         Float?
   quantityUnit     String? @map("quantity_unit")
   instructions     String?
+  drugId           String?
+  drug             Drug?   @relation(fields: [drugId], references: [id])
 
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("medication_prescription_items")
+}
+
+model Drug {
+  id          String  @id @default(uuid())
+  name        String
+  ndc         String? @unique
+  strength    String?
+  dosageForm  String? @map("dosage_form")
+  route       String?
+  unit        String?
+  source      Json?
+
+  items       MedicationPrescriptionItem[]
+
+  @@map("drugs")
 }
 
 // Bảng trung gian PrescriptionService cho quan hệ nhiều-nhiều giữa Phiếu chỉ định và Dịch vụ
