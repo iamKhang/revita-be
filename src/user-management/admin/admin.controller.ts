@@ -106,6 +106,7 @@ export class AdminController {
       yearsExperience,
       workHistory,
       description,
+      specialtyId,
       // Patient specific fields
       loyaltyPoints,
       // Receptionist specific fields
@@ -164,17 +165,20 @@ export class AdminController {
 
     switch (role) {
       case Role.DOCTOR: {
+        if (!specialtyId) {
+          throw new BadRequestException('Missing required field: specialtyId for DOCTOR');
+        }
         const doctorCode = this.codeGenerator.generateDoctorCode(name);
         roleRecord = await this.prisma.doctor.create({
           data: {
             id: auth.id,
             doctorCode,
             authId: auth.id,
-            degrees: degrees || [],
             yearsExperience: yearsExperience || 0,
             rating: 0,
             workHistory: workHistory || '',
             description: description || '',
+            specialtyId,
           },
         });
         break;
@@ -254,6 +258,7 @@ export class AdminController {
       yearsExperience,
       workHistory,
       description,
+      specialtyId,
       // Patient specific fields
       loyaltyPoints,
       // Admin specific fields
@@ -287,6 +292,7 @@ export class AdminController {
         if (yearsExperience) doctorUpdateData.yearsExperience = yearsExperience;
         if (workHistory) doctorUpdateData.workHistory = workHistory;
         if (description) doctorUpdateData.description = description;
+        if (specialtyId) doctorUpdateData.specialty = { connect: { id: specialtyId } };
 
         if (Object.keys(doctorUpdateData).length > 0) {
           roleRecord = await this.prisma.doctor.update({

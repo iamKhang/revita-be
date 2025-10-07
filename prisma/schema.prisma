@@ -72,17 +72,13 @@ model Doctor {
   id              String      @id @default(uuid())
   doctorCode      String      @unique @map("doctor_code")
   authId          String      @unique @map("auth_id")
-  degrees         Json     // Sửa từ String[] sang Json
   yearsExperience Int      @map("years_experience")
   rating          Float    @map("rating")
   workHistory     String   @map("work_history")
   description     String   @map("description")
-  specialty        String?    @map("specialty")        // Chuyên khoa chính
+  specialtyId     String   @map("specialty_id")      // Chuyên khoa chính
+  specialty       Specialty @relation(fields: [specialtyId], references: [id])
   subSpecialties   String[]   @default([]) @map("sub_specialties")
-  licenseNumber    String?    @unique @map("license_number") // Số chứng chỉ hành nghề
-  licenseIssuedAt  DateTime?  @map("license_issued_at")      // Ngày cấp chứng chỉ
-  licenseExpiry    DateTime?  @map("license_expiry")         // Ngày hết hạn chứng chỉ
-  department       String?    @map("department")       // Khoa / phòng đang công tác
   position         String?    @map("position")         // Chức vụ (Trưởng khoa, Bác sĩ nội trú, ...)
   isActive         Boolean    @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
 
@@ -144,7 +140,7 @@ model Receptionist {
   counters Counter[]    // Quan hệ với các counter
   counterAssignments CounterAssignment[] // Quan hệ với counter assignments
   isActive Boolean     @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
-  certificates    Certificate[] // Chứng chỉ hành nghề (nếu có)
+  // No certificates for receptionist
 
   @@map("receptionists")
 }
@@ -194,7 +190,7 @@ model Admin {
   auth     Auth        @relation(fields: [authId], references: [id])
   isActive Boolean     @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
   position String?     @map("position") // Chức vụ (Trưởng phòng, Trưởng khoa, ...)
-  certificates    Certificate[] // Chứng chỉ (nếu có)
+  // No certificates for admin
 
   @@map("admins")
 }
@@ -205,7 +201,7 @@ model Cashier {
   authId   String      @unique @map("auth_id")
   auth     Auth        @relation(fields: [authId], references: [id])
   isActive Boolean     @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
-  certificates    Certificate[] // Chứng chỉ hành nghề (nếu có)
+  // No certificates for cashier
 
   invoices Invoice[]
   @@map("cashiers")
@@ -221,6 +217,7 @@ model Specialty {
   templates   Template[]
   services    Service[]
   packages    Package[]
+  doctors     Doctor[]
 
   @@map("specialties")
 }
@@ -715,21 +712,13 @@ model Certificate {
   file           String?   @map("file")                      // URL hoặc path ảnh / file scan chứng chỉ
   description    String?   @map("description")               // Mô tả ngắn hoặc ghi chú
   
-  // Liên kết đến nhân sự sở hữu chứng chỉ
+  // Chỉ liên kết tới Doctor hoặc Technician
   doctorId       String?   @map("doctor_id")
   doctor         Doctor?   @relation(fields: [doctorId], references: [id])
 
   technicianId   String?   @map("technician_id")
   technician     Technician? @relation(fields: [technicianId], references: [id])
 
-  receptionistId String?   @map("receptionist_id")
-  receptionist   Receptionist? @relation(fields: [receptionistId], references: [id])
-
-  cashierId      String?   @map("cashier_id")
-  cashier        Cashier? @relation(fields: [cashierId], references: [id])
-
-  adminId        String?   @map("admin_id")
-  admin          Admin? @relation(fields: [adminId], references: [id])
 
   @@map("certificates")
 }

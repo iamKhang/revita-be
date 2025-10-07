@@ -1069,16 +1069,19 @@ async function main() {
     where: { authId: doctorAuth.id },
   });
   if (!existedDefaultDoctor) {
+    const defaultSpecialty =
+      (await prisma.specialty.findFirst()) ||
+      (await prisma.specialty.create({ data: { specialtyCode: 'GEN', name: 'General' } }));
     await prisma.doctor.create({
       data: {
         id: doctorAuth.id, // Sử dụng cùng id với auth
         doctorCode: 'DOC001',
         authId: doctorAuth.id,
-        degrees: ['Bác sĩ đa khoa'],
         yearsExperience: 10,
         rating: 4.8,
         workHistory: 'Bệnh viện Trà Ôn',
         description: 'Chuyên gia nội tổng quát',
+        specialtyId: defaultSpecialty.id,
       },
     });
   }

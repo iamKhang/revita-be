@@ -172,6 +172,9 @@ async function main() {
 
   // === Seed Doctors
   console.log('⏳ Seeding Doctors...');
+  const defaultSpecialty =
+    (await prisma.specialty.findFirst()) ||
+    (await prisma.specialty.create({ data: { specialtyCode: 'GEN', name: 'General' } }));
   for (const raw of doctors) {
     // Cảnh báo nếu có specialtyCode không nằm trong specialties.json (nếu có)
     if (
@@ -183,7 +186,7 @@ async function main() {
         `⚠️  Doctor ${raw.doctorCode} có specialtyCode không khớp danh mục: ${raw.specialtyCode}`,
       );
     }
-    const data = mapDoctor(raw);
+    const data = { ...mapDoctor(raw), specialtyId: raw.specialtyId || defaultSpecialty.id } as any;
     await prisma.doctor.upsert({
       where: { id: data.id },
       update: {},

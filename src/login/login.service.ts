@@ -322,7 +322,6 @@ export class LoginService {
             select: {
               id: true,
               doctorCode: true,
-              degrees: true,
               yearsExperience: true,
               rating: true,
               workHistory: true,
