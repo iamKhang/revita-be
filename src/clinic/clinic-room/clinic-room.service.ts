@@ -247,6 +247,89 @@ export class ClinicRoomService {
     return this.findClinicRoomById(clinicRoom.id);
   }
 
+  async assignServiceToClinicRoom(
+    roomId: string,
+    serviceId: string,
+  ): Promise<ClinicRoomResponseDto> {
+    const [clinicRoom, service] = await Promise.all([
+      this.prisma.clinicRoom.findUnique({
+        where: { id: roomId },
+        select: { id: true },
+      }),
+      this.prisma.service.findUnique({
+        where: { id: serviceId },
+        select: { id: true, isActive: true },
+      }),
+    ]);
+
+    if (!clinicRoom) {
+      throw new NotFoundException('Clinic room not found');
+    }
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    const existingRelation = await this.prisma.clinicRoomService.findUnique({
+      where: {
+        clinicRoomId_serviceId: {
+          clinicRoomId: roomId,
+          serviceId,
+        },
+      },
+    });
+
+    if (existingRelation) {
+      throw new BadRequestException('Service already assigned to this clinic room');
+    }
+
+    await this.prisma.clinicRoomService.create({
+      data: {
+        clinicRoomId: roomId,
+        serviceId,
+      },
+    });
+
+    return this.findClinicRoomById(roomId);
+  }
+
+  async removeServiceFromClinicRoom(
+    roomId: string,
+    serviceId: string,
+  ): Promise<ClinicRoomResponseDto> {
+    const clinicRoom = await this.prisma.clinicRoom.findUnique({
+      where: { id: roomId },
+      select: { id: true },
+    });
+
+    if (!clinicRoom) {
+      throw new NotFoundException('Clinic room not found');
+    }
+
+    const relation = await this.prisma.clinicRoomService.findUnique({
+      where: {
+        clinicRoomId_serviceId: {
+          clinicRoomId: roomId,
+          serviceId,
+        },
+      },
+    });
+
+    if (!relation) {
+      throw new NotFoundException('Service not assigned to this clinic room');
+    }
+
+    await this.prisma.clinicRoomService.delete({
+      where: {
+        clinicRoomId_serviceId: {
+          clinicRoomId: roomId,
+          serviceId,
+        },
+      },
+    });
+
+    return this.findClinicRoomById(roomId);
+  }
+
   async deleteClinicRoom(id: string): Promise<{ message: string }> {
     const existingRoom = await this.prisma.clinicRoom.findUnique({
       where: { id },

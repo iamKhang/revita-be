@@ -11,7 +11,11 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { BoothService } from './booth.service';
-import { CreateBoothDto, UpdateBoothDto } from '../dto/booth.dto';
+import {
+  CreateBoothDto,
+  UpdateBoothDto,
+  BoothServiceAssignmentDto,
+} from '../dto/booth.dto';
 
 @Controller('booths')
 export class BoothController {
@@ -50,6 +54,23 @@ export class BoothController {
     return this.boothService.updateBooth(id, updateBoothDto);
   }
 
+  @Post(':id/services')
+  async assignServiceToBooth(
+    @Param('id') id: string,
+    @Body() dto: BoothServiceAssignmentDto,
+  ) {
+    return this.boothService.assignServiceToBooth(id, dto.serviceId);
+  }
+
+  @Delete(':boothId/services/:serviceId')
+  @HttpCode(HttpStatus.OK)
+  async removeServiceFromBooth(
+    @Param('boothId') boothId: string,
+    @Param('serviceId') serviceId: string,
+  ) {
+    return this.boothService.removeServiceFromBooth(boothId, serviceId);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteBooth(@Param('id') id: string) {
@@ -57,4 +78,3 @@ export class BoothController {
     return { message: 'Booth deleted successfully' };
   }
 }
-

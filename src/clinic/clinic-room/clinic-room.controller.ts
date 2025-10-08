@@ -11,7 +11,11 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ClinicRoomService } from './clinic-room.service';
-import { CreateClinicRoomDto, UpdateClinicRoomDto } from '../dto/clinic-room.dto';
+import {
+  CreateClinicRoomDto,
+  UpdateClinicRoomDto,
+  ClinicRoomServiceAssignmentDto,
+} from '../dto/clinic-room.dto';
 
 @Controller('clinic-rooms')
 export class ClinicRoomController {
@@ -48,6 +52,26 @@ export class ClinicRoomController {
     return this.clinicRoomService.updateClinicRoom(id, updateClinicRoomDto);
   }
 
+  @Post(':id/services')
+  async assignServiceToRoom(
+    @Param('id') id: string,
+    @Body() dto: ClinicRoomServiceAssignmentDto,
+  ) {
+    return this.clinicRoomService.assignServiceToClinicRoom(id, dto.serviceId);
+  }
+
+  @Delete(':roomId/services/:serviceId')
+  @HttpCode(HttpStatus.OK)
+  async removeServiceFromRoom(
+    @Param('roomId') roomId: string,
+    @Param('serviceId') serviceId: string,
+  ) {
+    return this.clinicRoomService.removeServiceFromClinicRoom(
+      roomId,
+      serviceId,
+    );
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteClinicRoom(@Param('id') id: string) {
@@ -55,4 +79,3 @@ export class ClinicRoomController {
     return { message: 'Clinic room deleted successfully' };
   }
 }
-

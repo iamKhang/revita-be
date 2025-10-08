@@ -250,6 +250,20 @@ model ClinicRoomService {
   @@unique([clinicRoomId, serviceId])
   @@map("clinic_room_services")
 }
+
+
+model BoothService {
+  boothId String
+  serviceId String
+  booth Booth @relation(fields: [boothId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+  isActive Boolean @default(true) @map("is_active")
+
+  @@unique([boothId, serviceId])
+  @@map("booth_services")
+}
+
+
 // Dịch vụ nguyên tử (bán lẻ được)
 model Service {
   id              String      @id @default(uuid())
@@ -259,15 +273,13 @@ model Service {
   description     String?     @map("description")
   durationMinutes Int?        @default(15) @map("duration_minutes") @db.SmallInt
   isActive        Boolean     @default(true) @map("is_active")
-  isInsurance     Boolean     @default(false) @map("is_insurance")
   unit            String?     @map("unit")
   currency        String?     @default("VND") @map("currency")
-
-  // phân loại & khoa (tùy chọn)
   categoryId      String?     @map("category_id")
   category        ServiceCategory? @relation(fields: [categoryId], references: [id])
-  departmentId    String?     @map("department_id")
-  specialty      Specialty? @relation(fields: [departmentId], references: [id])
+  specialtyId     String?     @map("specialty_id")
+  specialty      Specialty? @relation(fields: [specialtyId], references: [id])
+  requiresDoctor  Boolean     @default(false) @map("requires_doctor")
 
   // Liên kết tới các gói
   packageItems    PackageItem[]
@@ -287,6 +299,7 @@ model Service {
   @@map("services")
 }
 
+
 // Gói dịch vụ (combo)
 model Package {
   id          String       @id @default(uuid())
@@ -296,6 +309,7 @@ model Package {
   // Giá gói: có thể để null để tính = tổng các item (hoặc set giá riêng)
   price       Float?       @map("price")
   isActive    Boolean      @default(true) @map("is_active")
+  requiresDoctor Boolean    @default(false) @map("requires_doctor")
 
   // phân loại & khoa (nếu muốn thống kê theo nhóm giống Service)
   categoryId  String?      @map("category_id")
@@ -647,17 +661,6 @@ model Booth {
   workSessions WorkSession[]
   boothServices BoothService[]
   @@map("booths")
-}
-
-model BoothService {
-  boothId String
-  serviceId String
-  booth Booth @relation(fields: [boothId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
-  isActive Boolean @default(true) @map("is_active")
-
-  @@unique([boothId, serviceId])
-  @@map("booth_services")
 }
 
 model WorkSession {

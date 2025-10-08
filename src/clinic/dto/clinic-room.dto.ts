@@ -73,3 +73,9 @@ export class ClinicRoomResponseDto {
     isActive: boolean;
   }>;
 }
+
+export class ClinicRoomServiceAssignmentDto {
+  @IsUUID()
+  @IsNotEmpty()
+  serviceId!: string;
+}

@@ -250,6 +250,89 @@ export class BoothService {
     return this.findBoothById(booth.id);
   }
 
+  async assignServiceToBooth(
+    boothId: string,
+    serviceId: string,
+  ): Promise<BoothResponseDto> {
+    const [booth, service] = await Promise.all([
+      this.prisma.booth.findUnique({
+        where: { id: boothId },
+        select: { id: true },
+      }),
+      this.prisma.service.findUnique({
+        where: { id: serviceId },
+        select: { id: true, isActive: true },
+      }),
+    ]);
+
+    if (!booth) {
+      throw new NotFoundException('Booth not found');
+    }
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    const existingRelation = await this.prisma.boothService.findUnique({
+      where: {
+        boothId_serviceId: {
+          boothId,
+          serviceId,
+        },
+      },
+    });
+
+    if (existingRelation) {
+      throw new BadRequestException('Service already assigned to this booth');
+    }
+
+    await this.prisma.boothService.create({
+      data: {
+        boothId,
+        serviceId,
+      },
+    });
+
+    return this.findBoothById(boothId);
+  }
+
+  async removeServiceFromBooth(
+    boothId: string,
+    serviceId: string,
+  ): Promise<BoothResponseDto> {
+    const booth = await this.prisma.booth.findUnique({
+      where: { id: boothId },
+      select: { id: true },
+    });
+
+    if (!booth) {
+      throw new NotFoundException('Booth not found');
+    }
+
+    const relation = await this.prisma.boothService.findUnique({
+      where: {
+        boothId_serviceId: {
+          boothId,
+          serviceId,
+        },
+      },
+    });
+
+    if (!relation) {
+      throw new NotFoundException('Service not assigned to this booth');
+    }
+
+    await this.prisma.boothService.delete({
+      where: {
+        boothId_serviceId: {
+          boothId,
+          serviceId,
+        },
+      },
+    });
+
+    return this.findBoothById(boothId);
+  }
+
   async deleteBooth(id: string): Promise<{ message: string }> {
     const existingBooth = await this.prisma.booth.findUnique({
       where: { id },

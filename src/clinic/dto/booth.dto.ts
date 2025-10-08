@@ -72,3 +72,9 @@ export class BoothResponseDto {
     price?: number;
   }>;
 }
+
+export class BoothServiceAssignmentDto {
+  @IsUUID()
+  @IsNotEmpty()
+  serviceId!: string;
+}
