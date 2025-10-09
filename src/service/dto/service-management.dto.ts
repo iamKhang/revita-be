@@ -50,18 +50,17 @@ export class ServiceManagementQueryDto {
 }
 
 export class CreateServiceDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  serviceCode!: string;
+  serviceCode?: string;
 
   @IsString()
   @IsNotEmpty()
   name!: string;
 
-  @IsOptional()
   @IsNumber()
   @Type(() => Number)
-  price?: number;
+  price!: number;
 
   @IsOptional()
   @IsString()
@@ -180,9 +179,9 @@ export class PackageItemInputDto {
 }
 
 export class CreatePackageDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  code!: string;
+  code?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -192,10 +191,9 @@ export class CreatePackageDto {
   @IsString()
   description?: string;
 
-  @IsOptional()
   @IsNumber()
   @Type(() => Number)
-  price?: number;
+  price!: number;
 
   @IsOptional()
   @IsBoolean()

@@ -249,9 +249,10 @@ export class ServiceService {
     ]);
 
     try {
+      const serviceCode = await this.generateUniqueServiceCode();
       const created = await this.prisma.service.create({
         data: {
-          serviceCode: data.serviceCode,
+          serviceCode,
           name: data.name,
           price: data.price,
           description: data.description,
@@ -286,10 +287,9 @@ export class ServiceService {
     ]);
 
     try {
-      await this.prisma.service.update({
-        where: { id },
-        data: {
-          ...(data.serviceCode && { serviceCode: data.serviceCode }),
+    await this.prisma.service.update({
+      where: { id },
+      data: {
           ...(data.name && { name: data.name }),
           ...(data.price !== undefined && { price: data.price }),
           ...(data.description !== undefined && {
@@ -380,6 +380,7 @@ export class ServiceService {
     ]);
 
     const items = data.items ?? [];
+    const packageCode = await this.generateUniquePackageCode();
     this.ensureNoDuplicateServiceIds(items);
     await this.ensureServicesExist(items.map((item) => item.serviceId));
 
@@ -387,7 +388,7 @@ export class ServiceService {
       const created = await this.prisma.$transaction(async (tx) => {
         const pkg = await tx.package.create({
           data: {
-            code: data.code,
+            code: packageCode,
             name: data.name,
             description: data.description,
             price: data.price,
@@ -448,7 +449,6 @@ export class ServiceService {
         await tx.package.update({
           where: { id },
           data: {
-            ...(data.code && { code: data.code }),
             ...(data.name && { name: data.name }),
             ...(data.description !== undefined && {
               description: data.description,
@@ -592,5 +592,45 @@ export class ServiceService {
     }
 
     throw error;
+  }
+
+  private normalizeCode(code?: string) {
+    if (!code) {
+      return undefined;
+    }
+    return code.trim().replace(/\s+/g, '').toUpperCase();
+  }
+
+  private async generateUniqueServiceCode() {
+    return this.generateUniqueCode('SERV');
+  }
+
+  private async generateUniquePackageCode() {
+    return this.generateUniqueCode('PACK');
+  }
+
+  private async generateUniqueCode(prefix: string) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = `${prefix}${this.randomSuffix()}`;
+      const exists =
+        prefix === 'SERV'
+          ? await this.prisma.service.findUnique({
+              where: { serviceCode: candidate },
+            })
+          : await this.prisma.package.findUnique({
+              where: { code: candidate },
+            });
+      if (!exists) {
+        return candidate;
+      }
+    }
+
+    return `${prefix}${Date.now().toString(36).toUpperCase()}`;
+  }
+
+  private randomSuffix() {
+    return `${Date.now().toString(36)}${Math.random()
+      .toString(36)
+      .slice(2, 6)}`.toUpperCase();
   }
 }
