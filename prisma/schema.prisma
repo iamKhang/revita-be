@@ -135,6 +135,7 @@ model PatientProfile {
 // Bảng Receptionist cho lễ tân/phụ tá
 model Receptionist {
   id       String      @id @default(uuid())
+  receptionistCode String @unique @map("receptionist_code")
   authId   String      @unique @map("auth_id")
   auth     Auth        @relation(fields: [authId], references: [id])
   counters Counter[]    // Quan hệ với các counter
@@ -198,6 +199,7 @@ model Admin {
 // Nhân viên thu ngân
 model Cashier {
   id       String      @id @default(uuid())
+  cashierCode String   @unique @map("cashier_code")
   authId   String      @unique @map("auth_id")
   auth     Auth        @relation(fields: [authId], references: [id])
   isActive Boolean     @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ

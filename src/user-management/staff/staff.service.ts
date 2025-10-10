@@ -71,12 +71,12 @@ export class StaffService {
         const auth = await tx.auth.create({
           data: {
             name,
-          dateOfBirth: this.parseDateOrThrow(dateOfBirth, 'dateOfBirth'),
+            dateOfBirth: this.parseDateOrThrow(dateOfBirth, 'dateOfBirth'),
             gender,
             address,
             citizenId: citizenId || null,
             avatar: avatar || null,
-          role: roleValue,
+            role: roleValue,
             phone: phone || null,
             email: email || null,
             password: hashedPassword,
@@ -84,7 +84,7 @@ export class StaffService {
         });
 
         let staffRecord: any = null;
-      if (roleValue === Role.DOCTOR) {
+        if (roleValue === Role.DOCTOR) {
           if (!body.doctorInfo) {
             throw new BadRequestException('Missing required field for doctor: doctorInfo');
           }
@@ -95,6 +95,7 @@ export class StaffService {
           const doctorCode = this.codeGen.generateDoctorCode(name, undefined);
           staffRecord = await tx.doctor.create({
             data: {
+              id: auth.id,
               authId: auth.id,
               doctorCode,
               yearsExperience: info.yearsExperience ?? 0,
@@ -106,26 +107,38 @@ export class StaffService {
               position: info.position ?? null,
             },
           });
-      } else if (roleValue === Role.TECHNICIAN) {
-          const technicianCode = `TECH${Date.now()}`; // simple unique code
+        } else if (roleValue === Role.TECHNICIAN) {
+          const technicianCode = this.codeGen.generateTechnicianCode(name);
           staffRecord = await tx.technician.create({
             data: {
+              id: auth.id,
               authId: auth.id,
               technicianCode,
             },
           });
-      } else if (roleValue === Role.RECEPTIONIST) {
+        } else if (roleValue === Role.RECEPTIONIST) {
+          const receptionistCode = this.codeGen.generateReceptionistCode(name);
           staffRecord = await tx.receptionist.create({
-            data: { authId: auth.id },
+            data: {
+              id: auth.id,
+              authId: auth.id,
+              receptionistCode,
+            },
           });
-      } else if (roleValue === Role.CASHIER) {
+        } else if (roleValue === Role.CASHIER) {
+          const cashierCode = this.codeGen.generateCashierCode(name);
           staffRecord = await tx.cashier.create({
-            data: { authId: auth.id },
+            data: {
+              id: auth.id,
+              authId: auth.id,
+              cashierCode,
+            },
           });
-      } else if (roleValue === Role.ADMIN) {
+        } else if (roleValue === Role.ADMIN) {
           const adminCode = this.codeGen.generateAdminCode(name);
           staffRecord = await tx.admin.create({
             data: {
+              id: auth.id,
               authId: auth.id,
               adminCode,
               position: body.adminInfo?.position ?? null,
@@ -164,7 +177,7 @@ export class StaffService {
             name,
             username: email || phone || auth.id,
             password: plainPassword,
-          role: roleValue,
+            role: roleValue,
           });
         }
 

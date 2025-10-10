@@ -51,6 +51,7 @@ export class AdminController {
           doctor: true,
           patient: true,
           receptionist: true,
+          cashier: true,
           admin: true,
         },
         orderBy: { name: 'asc' },
@@ -201,15 +202,28 @@ export class AdminController {
         break;
       }
 
-      case Role.RECEPTIONIST:
+      case Role.RECEPTIONIST: {
+        const receptionistCode = this.codeGenerator.generateReceptionistCode(name);
         roleRecord = await this.prisma.receptionist.create({
           data: {
             id: auth.id,
             authId: auth.id,
+            receptionistCode,
           },
         });
         break;
-
+      }
+      case Role.CASHIER: {
+        const cashierCode = this.codeGenerator.generateCashierCode(name);
+        roleRecord = await this.prisma.cashier.create({
+          data: {
+            id: auth.id,
+            authId: auth.id,
+            cashierCode,
+          },
+        });
+        break;
+      }
       case Role.ADMIN: {
         const finalAdminCode =
           adminCode || this.codeGenerator.generateAdminCode(name);

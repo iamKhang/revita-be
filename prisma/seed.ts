@@ -1,7 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { CodeGeneratorService } from '../src/user-management/patient-profile/code-generator.service';
 
 const prisma = new PrismaClient();
+const codeGen = new CodeGeneratorService();
 
 async function main() {
   // 2.1. Tạo danh sách các chuyên khoa (Specialty)
@@ -1171,10 +1173,12 @@ async function main() {
     where: { authId: receptionistAuth.id },
   });
   if (!existedReceptionist) {
+    const receptionistCode = codeGen.generateReceptionistCode(receptionistAuth.name ?? 'Receptionist');
     await prisma.receptionist.create({
       data: {
         id: receptionistAuth.id, // Sử dụng cùng id với auth
         authId: receptionistAuth.id,
+        receptionistCode,
       },
     });
   }

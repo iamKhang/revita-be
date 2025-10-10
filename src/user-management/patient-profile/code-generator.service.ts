@@ -128,6 +128,63 @@ export class CodeGeneratorService {
   }
 
   /**
+   * Tạo mã Technician
+   * Format: TECH{YYMMDD}{HHMMSS}{LASTNAME_INITIAL}
+   */
+  generateTechnicianCode(name: string): string {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const hour = now.getHours().toString().padStart(2, '0');
+    const minute = now.getMinutes().toString().padStart(2, '0');
+    const second = now.getSeconds().toString().padStart(2, '0');
+    const millisecond = now.getMilliseconds().toString().padStart(3, '0');
+
+    const lastNameInitial = this.getLastNameInitial(name);
+
+    return `TECH${year}${month}${day}${hour}${minute}${second}${millisecond}${lastNameInitial}`;
+  }
+
+  /**
+   * Tạo mã Receptionist
+   * Format: RECP{YYMMDD}{HHMMSS}{LASTNAME_INITIAL}
+   */
+  generateReceptionistCode(name: string): string {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const hour = now.getHours().toString().padStart(2, '0');
+    const minute = now.getMinutes().toString().padStart(2, '0');
+    const second = now.getSeconds().toString().padStart(2, '0');
+    const millisecond = now.getMilliseconds().toString().padStart(3, '0');
+
+    const lastNameInitial = this.getLastNameInitial(name);
+
+    return `RECP${year}${month}${day}${hour}${minute}${second}${millisecond}${lastNameInitial}`;
+  }
+
+  /**
+   * Tạo mã Cashier
+   * Format: CASH{YYMMDD}{HHMMSS}{LASTNAME_INITIAL}
+   */
+  generateCashierCode(name: string): string {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const hour = now.getHours().toString().padStart(2, '0');
+    const minute = now.getMinutes().toString().padStart(2, '0');
+    const second = now.getSeconds().toString().padStart(2, '0');
+    const millisecond = now.getMilliseconds().toString().padStart(3, '0');
+
+    const lastNameInitial = this.getLastNameInitial(name);
+
+    return `CASH${year}${month}${day}${hour}${minute}${second}${millisecond}${lastNameInitial}`;
+  }
+
+  /**
    * Tạo mã Medical Record
    * Format: MR{YYMMDD}{HHMMSS}{DOCTOR_INITIAL}{PATIENT_INITIAL}
    */
