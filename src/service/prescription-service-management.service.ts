@@ -507,7 +507,7 @@ export class PrescriptionServiceManagementService {
               name: true,
               price: true,
               description: true,
-              timePerPatient: true,
+              durationMinutes: true,
             },
           },
         },
@@ -651,7 +651,6 @@ export class PrescriptionServiceManagementService {
                               PrescriptionStatus.PREPARING,
                               PrescriptionStatus.SERVING,
                               PrescriptionStatus.SKIPPED,
-                              PrescriptionStatus.RECALL_BACK,
                             ],
                           },
                         },
@@ -675,8 +674,7 @@ export class PrescriptionServiceManagementService {
                               PrescriptionStatus.WAITING,
                               PrescriptionStatus.PREPARING,
                               PrescriptionStatus.SERVING,
-                              PrescriptionStatus.SKIPPED,
-                              PrescriptionStatus.RECALL_BACK,
+                              PrescriptionStatus.SKIPPED
                             ],
                           },
                         },
@@ -812,8 +810,6 @@ export class PrescriptionServiceManagementService {
         return 'Đang phục vụ';
       case PrescriptionStatus.SKIPPED:
         return 'Bỏ qua';
-      case PrescriptionStatus.RECALL_BACK:
-        return 'Gọi lại';
       default:
         return 'Không xác định';
     }
@@ -827,7 +823,7 @@ export class PrescriptionServiceManagementService {
         return 4;
       case PrescriptionStatus.WAITING:
         return 3;
-      case PrescriptionStatus.RECALL_BACK:
+      case PrescriptionStatus.WAITING_RESULT:
         return 2;
       case PrescriptionStatus.SKIPPED:
         return 1;
@@ -844,8 +840,8 @@ export class PrescriptionServiceManagementService {
         return PrescriptionStatus.PREPARING;
       case 'Đang chờ':
         return PrescriptionStatus.WAITING;
-      case 'Gọi lại':
-        return PrescriptionStatus.RECALL_BACK;
+      case 'Đang chờ kết quả':
+        return PrescriptionStatus.WAITING_RESULT;
       case 'Bỏ qua':
         return PrescriptionStatus.SKIPPED;
       default:

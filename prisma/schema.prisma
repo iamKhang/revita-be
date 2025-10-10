@@ -61,6 +61,8 @@ model Technician {
   auth     Auth        @relation(fields: [authId], references: [id])
   workSessions WorkSession[]
   prescriptionServices PrescriptionService[]
+  certificates    Certificate[]
+  isActive Boolean @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
 
   @@map("technicians")
 }
@@ -75,6 +77,15 @@ model Doctor {
   rating          Float    @map("rating")
   workHistory     String   @map("work_history")
   description     String   @map("description")
+  specialty        String?    @map("specialty")        // Chuyên khoa chính
+  subSpecialties   String[]   @default([]) @map("sub_specialties")
+  licenseNumber    String?    @unique @map("license_number") // Số chứng chỉ hành nghề
+  licenseIssuedAt  DateTime?  @map("license_issued_at")      // Ngày cấp chứng chỉ
+  licenseExpiry    DateTime?  @map("license_expiry")         // Ngày hết hạn chứng chỉ
+  department       String?    @map("department")       // Khoa / phòng đang công tác
+  position         String?    @map("position")         // Chức vụ (Trưởng khoa, Bác sĩ nội trú, ...)
+  isActive         Boolean    @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
+
   auth            Auth     @relation(fields: [authId], references: [id])
   appointments    Appointment[]
   medicalRecords  MedicalRecord[]
@@ -82,6 +93,7 @@ model Doctor {
   workSessions WorkSession[]
   prescriptionServices PrescriptionService[]
   medicationPrescriptions MedicationPrescription[]
+  certificates    Certificate[]
 
   @@map("doctors")
 }
@@ -131,6 +143,8 @@ model Receptionist {
   auth     Auth        @relation(fields: [authId], references: [id])
   counters Counter[]    // Quan hệ với các counter
   counterAssignments CounterAssignment[] // Quan hệ với counter assignments
+  isActive Boolean     @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
+  certificates    Certificate[] // Chứng chỉ hành nghề (nếu có)
 
   @@map("receptionists")
 }
@@ -178,6 +192,9 @@ model Admin {
   adminCode String     @map("admin_code")
   authId   String      @unique @map("auth_id")
   auth     Auth        @relation(fields: [authId], references: [id])
+  isActive Boolean     @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
+  position String?     @map("position") // Chức vụ (Trưởng phòng, Trưởng khoa, ...)
+  certificates    Certificate[] // Chứng chỉ (nếu có)
 
   @@map("admins")
 }
@@ -187,6 +204,9 @@ model Cashier {
   id       String      @id @default(uuid())
   authId   String      @unique @map("auth_id")
   auth     Auth        @relation(fields: [authId], references: [id])
+  isActive Boolean     @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
+  certificates    Certificate[] // Chứng chỉ hành nghề (nếu có)
+
   invoices Invoice[]
   @@map("cashiers")
 }
@@ -199,6 +219,8 @@ model Specialty {
   clinicRooms ClinicRoom[]
   appointments Appointment[]
   templates   Template[]
+  services    Service[]
+  packages    Package[]
 
   @@map("specialties")
 }
@@ -232,31 +254,98 @@ model ClinicRoomService {
   @@unique([clinicRoomId, serviceId])
   @@map("clinic_room_services")
 }
-
+// Dịch vụ nguyên tử (bán lẻ được)
 model Service {
-  id          String      @id @default(uuid())
-  serviceCode String      @unique @map("service_code")
-  name        String      @map("name")
-  price       Float?        @map("price")
-  description String       @map("description")
-  timePerPatient Int?       @default(15) @map("time_per_patient") @db.SmallInt
-  isAllowed Boolean        @default(false) @map("is_allowed")
+  id              String      @id @default(uuid())
+  serviceCode     String      @unique @map("service_code")
+  name            String      @map("name")
+  price           Float?      @map("price")
+  description     String?     @map("description")
+  durationMinutes Int?        @default(15) @map("duration_minutes") @db.SmallInt
+  isActive        Boolean     @default(true) @map("is_active")
+  isInsurance     Boolean     @default(false) @map("is_insurance")
+  unit            String?     @map("unit")
+  currency        String?     @default("VND") @map("currency")
 
-  // Quan hệ cha–con
-  parentId   String?       @map("parent_id")
-  parent     Service?      @relation("ServiceHierarchy", fields: [parentId], references: [id])
-  children   Service[]     @relation("ServiceHierarchy")
+  // phân loại & khoa (tùy chọn)
+  categoryId      String?     @map("category_id")
+  category        ServiceCategory? @relation(fields: [categoryId], references: [id])
+  departmentId    String?     @map("department_id")
+  specialty      Specialty? @relation(fields: [departmentId], references: [id])
 
-  // Các quan hệ hiện có
-  clinicRoomServices ClinicRoomService[]
-  prescriptions PrescriptionService[]
-  invoiceDetails InvoiceDetail[]
+  // Liên kết tới các gói
+  packageItems    PackageItem[]
+
+  // Quan hệ khác của hệ thống (giữ nguyên)
+  clinicRoomServices  ClinicRoomService[]
+  prescriptions       PrescriptionService[]
+  invoiceDetails      InvoiceDetail[]
   workSessionServices WorkSessionService[]
   appointmentServices AppointmentService[]
-  appointments Appointment[]
+  appointments        Appointment[]
+  boothServices       BoothService[]
+
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
 
   @@map("services")
 }
+
+// Gói dịch vụ (combo)
+model Package {
+  id          String       @id @default(uuid())
+  code        String       @unique @map("package_code")
+  name        String       @map("name")
+  description String?      @map("description")
+  // Giá gói: có thể để null để tính = tổng các item (hoặc set giá riêng)
+  price       Float?       @map("price")
+  isActive    Boolean      @default(true) @map("is_active")
+
+  // phân loại & khoa (nếu muốn thống kê theo nhóm giống Service)
+  categoryId  String?      @map("category_id")
+  category    ServiceCategory? @relation(fields: [categoryId], references: [id])
+  specialtyId String?     @map("specialty_id")
+  specialty   Specialty? @relation(fields: [specialtyId], references: [id])
+
+  items       PackageItem[]
+
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("packages")
+}
+
+// Thành phần gói: liên kết N-N giữa Package và Service, kèm thuộc tính
+model PackageItem {
+  id            String   @id @default(uuid())
+  packageId     String   @map("package_id")
+  serviceId     String   @map("service_id")
+  quantity      Int      @default(1) @map("quantity")
+  priceOverride Float?   @map("price_override") // nếu giá trong gói khác giá lẻ
+  required      Boolean  @default(true) @map("required") // bắt buộc hay tuỳ chọn
+  sortOrder     Int?     @map("sort_order")
+  notes         String?  @map("notes")
+
+  package       Package  @relation(fields: [packageId], references: [id])
+  service       Service  @relation(fields: [serviceId], references: [id])
+
+  @@unique([packageId, serviceId])
+  @@index([packageId])
+  @@index([serviceId])
+  @@map("package_items")
+}
+
+model ServiceCategory {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  services    Service[]
+  packages    Package[]
+
+  @@map("service_categories")
+}
+
 
 // Bảng Appointment cho lịch hẹn
 model Appointment {
@@ -424,6 +513,8 @@ model MedicalRecordHistory {
   changedAt       DateTime @default(now())
   changes         Json     // Nội dung thay đổi (có thể lưu diff hoặc toàn bộ snapshot)
   medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id])
+
+  @@map("medical_record_histories")
 }
 
 // Bảng Phiếu chỉ định => Bác sĩ chỉ định dịch vụ cho bệnh nhân
@@ -471,28 +562,10 @@ enum MedicationPrescriptionStatus {
   CANCELLED
 }
 
-model Drug {
-  id          String  @id @default(uuid())
-  name        String
-  ndc         String? @unique
-  strength    String?
-  dosageForm  String? @map("dosage_form")
-  route       String?
-  unit        String?
-  source      Json?
-
-  items       MedicationPrescriptionItem[]
-
-  @@map("drugs")
-}
-
 model MedicationPrescriptionItem {
   id               String  @id @default(uuid())
   prescriptionId   String  @map("prescription_id")
   prescription     MedicationPrescription @relation(fields: [prescriptionId], references: [id])
-
-  drugId           String?
-  drug             Drug?   @relation(fields: [drugId], references: [id])
 
   name             String
   ndc              String?
@@ -506,11 +579,28 @@ model MedicationPrescriptionItem {
   quantity         Float?
   quantityUnit     String? @map("quantity_unit")
   instructions     String?
+  drugId           String?
+  drug             Drug?   @relation(fields: [drugId], references: [id])
 
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("medication_prescription_items")
+}
+
+model Drug {
+  id          String  @id @default(uuid())
+  name        String
+  ndc         String? @unique
+  strength    String?
+  dosageForm  String? @map("dosage_form")
+  route       String?
+  unit        String?
+  source      Json?
+
+  items       MedicationPrescriptionItem[]
+
+  @@map("drugs")
 }
 
 // Bảng trung gian PrescriptionService cho quan hệ nhiều-nhiều giữa Phiếu chỉ định và Dịch vụ
@@ -554,8 +644,7 @@ enum PrescriptionStatus {
   COMPLETED
   DELAYED
   CANCELLED
-  MISSING
-  RETURN_AFTER_RESULT
+  SKIPPED
 }
 
 model Booth {
@@ -570,7 +659,20 @@ model Booth {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   workSessions WorkSession[]
+  boothServices BoothService[]
   prescriptionServices PrescriptionService[]
+  @@map("booths")
+}
+
+model BoothService {
+  boothId String
+  serviceId String
+  booth Booth @relation(fields: [boothId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+  isActive Boolean @default(true) @map("is_active")
+
+  @@unique([boothId, serviceId])
+  @@map("booth_services")
 }
 
 model WorkSession {
@@ -612,4 +714,41 @@ enum WorkSessionStatus {
   IN_PROGRESS          
   CANCELED                
   COMPLETED         
+}
+
+model Certificate {
+  id             String    @id @default(uuid())
+  code           String?   @unique @map("code")              // Mã chứng chỉ nội bộ (nếu có)
+  title          String    @map("title")                     // Tên chứng chỉ / văn bằng
+  type           CertificateType @map("type")                // Loại: LICENSE / DEGREE / TRAINING / OTHER
+  issuedBy       String?   @map("issued_by")                 // Cơ quan / tổ chức cấp
+  issuedAt       DateTime? @map("issued_at")                 // Ngày cấp
+  expiryAt       DateTime? @map("expiry_at")                 // Ngày hết hạn (nếu có)
+  file           String?   @map("file")                      // URL hoặc path ảnh / file scan chứng chỉ
+  description    String?   @map("description")               // Mô tả ngắn hoặc ghi chú
+  
+  // Liên kết đến nhân sự sở hữu chứng chỉ
+  doctorId       String?   @map("doctor_id")
+  doctor         Doctor?   @relation(fields: [doctorId], references: [id])
+
+  technicianId   String?   @map("technician_id")
+  technician     Technician? @relation(fields: [technicianId], references: [id])
+
+  receptionistId String?   @map("receptionist_id")
+  receptionist   Receptionist? @relation(fields: [receptionistId], references: [id])
+
+  cashierId      String?   @map("cashier_id")
+  cashier        Cashier? @relation(fields: [cashierId], references: [id])
+
+  adminId        String?   @map("admin_id")
+  admin          Admin? @relation(fields: [adminId], references: [id])
+
+  @@map("certificates")
+}
+
+enum CertificateType {
+  LICENSE      // Chứng chỉ hành nghề
+  DEGREE       // Văn bằng (ĐH, ThS, TS,…)
+  TRAINING     // Chứng nhận đào tạo, workshop, khóa học
+  OTHER        // Loại khác (ví dụ: giải thưởng, vinh danh,...)
 }
