@@ -1,0 +1,99 @@
+@startuml Appointment Booking - Management Sequence Diagram
+!theme plain
+title Tương Tác Đăng Lịch Khám Bệnh - Luồng Bác Sĩ
+
+actor "Bác Sĩ" as D
+boundary "Giao Diện" as F
+control "Controller" as C
+control "Service" as S
+entity "Lịch Làm Việc" as WS
+entity "Bác Sĩ" as DOC
+entity "Dịch Vụ" as SV
+database "Cơ Sở Dữ Liệu" as DB
+
+== Đăng lịch làm việc mới ==
+
+D -> F: Đăng lịch làm việc mới
+F -> C: Gửi yêu cầu đăng lịch
+C -> S: createWorkSession()
+S -> WS: Tạo work session entity
+WS -> DB: Kiểm tra lịch trùng lặp
+DB --> WS: Kết quả kiểm tra trùng lặp
+
+alt Không có trùng lặp
+  WS -> DB: Lưu work session vào database
+  DB --> WS: Xác nhận lưu thành công
+  WS --> S: Trả về work session mới
+  S --> C: Trả về thông tin lịch làm việc
+  C --> F: Trả về kết quả đăng lịch
+  F --> D: Thông báo đăng lịch thành công
+  
+else Có trùng lặp
+  WS --> S: Trả về lỗi trùng lặp
+  S --> C: Trả về lỗi
+  C --> F: Thông báo lỗi
+  F --> D: Thông báo lịch trùng lặp, chỉnh sửa thời gian
+end
+
+== Xem lịch làm việc đã đăng ==
+
+D -> F: Xem lịch làm việc đã đăng
+F -> C: Lấy lịch làm việc của bác sĩ
+C -> S: getDoctorWorkSessions()
+S -> WS: Truy vấn work sessions theo bác sĩ
+WS -> DB: Lấy danh sách lịch làm việc
+DB --> WS: Danh sách work sessions
+WS --> S: Trả về danh sách lịch làm việc
+S --> C: Trả về danh sách lịch làm việc
+C --> F: Danh sách lịch làm việc
+F --> D: Hiển thị lịch làm việc đã đăng
+
+== Cập nhật lịch làm việc ==
+
+D -> F: Cập nhật lịch làm việc
+F -> C: Gửi yêu cầu cập nhật
+C -> S: updateWorkSession()
+S -> WS: Cập nhật thông tin work session
+WS -> DB: Kiểm tra lịch đã có bệnh nhân đặt
+DB --> WS: Kết quả kiểm tra
+
+alt Chưa có bệnh nhân đặt
+  WS -> DB: Cập nhật work session
+  DB --> WS: Xác nhận cập nhật thành công
+  WS --> S: Trả về work session đã cập nhật
+  S --> C: Trả về thông tin lịch làm việc
+  C --> F: Thông tin lịch làm việc đã cập nhật
+  F --> D: Thông báo cập nhật thành công
+  
+else Đã có bệnh nhân đặt
+  WS --> S: Trả về lỗi không thể chỉnh sửa
+  S --> C: Trả về lỗi
+  C --> F: Thông báo lỗi
+  F --> D: Thông báo không thể chỉnh sửa, liên hệ bệnh nhân
+end
+
+== Hủy lịch làm việc ==
+
+D -> F: Hủy lịch làm việc
+F -> C: Gửi yêu cầu hủy lịch
+C -> S: cancelWorkSession()
+S -> WS: Cập nhật trạng thái work session
+WS -> DB: Kiểm tra lịch đã có bệnh nhân đặt
+DB --> WS: Kết quả kiểm tra
+
+alt Chưa có bệnh nhân đặt
+  WS -> DB: Cập nhật trạng thái thành cancelled
+  DB --> WS: Xác nhận cập nhật thành công
+  WS --> S: Trả về work session đã hủy
+  S --> C: Trả về kết quả hủy lịch
+  C --> F: Kết quả hủy lịch làm việc
+  F --> D: Thông báo hủy lịch thành công
+  
+else Đã có bệnh nhân đặt
+  WS --> S: Trả về lỗi không thể hủy
+  S --> C: Trả về lỗi
+  C --> F: Thông báo lỗi
+  F --> D: Thông báo không thể hủy, liên hệ bệnh nhân trước
+end
+
+@enduml

@@ -1,0 +1,76 @@
+@startuml Patient Profile Sequence Diagram
+!theme plain
+title Tương Tác Tạo và Xem Hồ Sơ Bệnh Nhân - Luồng Bác Sĩ và Bệnh Nhân
+
+actor "Bác Sĩ" as D
+actor "Bệnh Nhân" as P
+boundary "Giao Diện" as F
+control "Controller" as C
+control "PatientProfileService" as PS
+entity "PatientProfile" as PP
+entity "Patient" as PAT
+database "Cơ Sở Dữ Liệu" as DB
+
+== Bác sĩ tạo hồ sơ bệnh nhân độc lập ==
+
+D -> F: Tạo hồ sơ bệnh nhân mới
+F -> C: Gửi yêu cầu tạo hồ sơ độc lập
+C -> PS: createIndependent(dto, user)
+PS -> PS: Kiểm tra quyền staff (DOCTOR/ADMIN/RECEPTIONIST)
+
+alt Có quyền tạo
+  PS -> PP: Tạo hồ sơ bệnh nhân độc lập
+  PP -> DB: Lưu thông tin hồ sơ
+  DB --> PP: Hồ sơ đã tạo
+  PP --> PS: Trả về hồ sơ mới
+  PS --> C: Trả về hồ sơ đã tạo
+  C --> F: Trả về kết quả tạo hồ sơ
+  F --> D: Hiển thị thông báo tạo thành công
+  
+else Không có quyền
+  PS --> C: Trả về lỗi quyền truy cập
+  C --> F: Thông báo lỗi
+  F --> D: Hiển thị thông báo không có quyền
+end
+
+== Bệnh nhân tạo hồ sơ cho chính mình ==
+
+P -> F: Tạo hồ sơ bệnh nhân
+F -> C: Gửi yêu cầu tạo hồ sơ
+C -> PS: create(dto, user)
+PS -> PAT: Kiểm tra bệnh nhân tồn tại
+PAT -> DB: Truy vấn thông tin bệnh nhân
+DB --> PAT: Thông tin bệnh nhân
+PAT --> PS: Xác nhận bệnh nhân hợp lệ
+
+PS -> PS: Kiểm tra quyền tạo cho chính mình
+
+alt Có quyền tạo
+  PS -> PP: Tạo hồ sơ bệnh nhân
+  PP -> DB: Lưu thông tin hồ sơ
+  DB --> PP: Hồ sơ đã tạo
+  PP --> PS: Trả về hồ sơ mới
+  PS --> C: Trả về hồ sơ đã tạo
+  C --> F: Trả về kết quả tạo hồ sơ
+  F --> P: Hiển thị thông báo tạo thành công
+  
+else Không có quyền
+  PS --> C: Trả về lỗi quyền truy cập
+  C --> F: Thông báo lỗi
+  F --> P: Hiển thị thông báo không có quyền
+end
+
+== Xem hồ sơ bệnh nhân ==
+
+D -> F: Xem danh sách hồ sơ
+F -> C: Gửi yêu cầu lấy danh sách
+C -> PS: findAll(user)
+PS -> PP: Lấy hồ sơ theo quyền
+PP -> DB: Truy vấn patient profiles
+DB --> PP: Danh sách hồ sơ
+PP --> PS: Trả về danh sách hồ sơ
+PS --> C: Trả về danh sách hồ sơ
+C --> F: Trả về kết quả
+F --> D: Hiển thị danh sách hồ sơ
+
+@enduml

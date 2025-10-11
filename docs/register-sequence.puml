@@ -1,0 +1,130 @@
+@startuml Register Sequence Diagram
+!theme plain
+title Tương Tác Đăng Ký Tài Khoản
+
+actor "Người Dùng" as U
+boundary "Giao Diện" as F
+control "Controller" as C
+control "RegisterService" as R
+entity "Auth" as A
+entity "Patient" as P
+entity "Redis" as RED
+entity "EmailService" as E
+entity "SmsService" as S
+database "Cơ Sở Dữ Liệu" as DB
+
+== Bước 1: Đăng ký với số điện thoại/email ==
+
+U -> F: Nhập số điện thoại hoặc email
+F -> C: Gửi yêu cầu đăng ký bước 1
+C -> R: registerStep1(registerDto)
+R -> A: Kiểm tra phone/email đã tồn tại
+A -> DB: Truy vấn auth table
+DB --> A: Kết quả kiểm tra
+A --> R: Trả về kết quả
+
+alt Phone/email chưa tồn tại
+  R -> R: Tạo OTP 6 chữ số
+  R -> R: Tạo session ID
+  R -> RED: Lưu session data vào Redis
+  RED --> R: Xác nhận lưu session
+  
+  R -> RED: Lưu OTP vào Redis (5 phút)
+  RED --> R: Xác nhận lưu OTP
+  
+  alt Có số điện thoại
+    R -> S: Gửi OTP qua SMS
+    S --> R: Kết quả gửi SMS
+    
+  else Có email
+    R -> E: Gửi OTP qua email
+    E --> R: Kết quả gửi email
+  end
+  
+  R --> C: Trả về sessionId và message
+  C --> F: Trả về kết quả
+  F --> U: Hiển thị thông báo OTP đã gửi
+  
+else Phone/email đã tồn tại
+  R --> C: Trả về lỗi conflict
+  C --> F: Thông báo lỗi
+  F --> U: Hiển thị thông báo đã được đăng ký
+end
+
+== Bước 2: Xác thực OTP ==
+
+U -> F: Nhập mã OTP
+F -> C: Gửi yêu cầu xác thực OTP
+C -> R: verifyOtp(verifyDto)
+R -> RED: Lấy session data
+RED --> R: Session data
+R -> RED: Lấy OTP từ Redis
+RED --> R: OTP đã lưu
+
+alt OTP hợp lệ
+  R -> RED: Cập nhật session - đánh dấu đã xác thực
+  RED --> R: Xác nhận cập nhật
+  R -> RED: Xóa OTP đã sử dụng
+  RED --> R: Xác nhận xóa OTP
+  R --> C: Trả về kết quả xác thực thành công
+  C --> F: Trả về kết quả
+  F --> U: Hiển thị thông báo xác thực thành công, chuyển sang bước 3
+  
+else OTP không hợp lệ
+  R --> C: Trả về lỗi OTP
+  C --> F: Thông báo lỗi
+  F --> U: Hiển thị thông báo OTP không chính xác
+end
+
+== Bước 3: Hoàn tất đăng ký ==
+
+U -> F: Nhập thông tin cá nhân và mật khẩu
+F -> C: Gửi yêu cầu hoàn tất đăng ký
+C -> R: completeRegistration(completeDto)
+R -> RED: Lấy session data
+RED --> R: Session data
+
+alt Session hợp lệ và đã xác thực
+  R -> A: Kiểm tra citizenId nếu có
+  A -> DB: Truy vấn auth table
+  DB --> A: Kết quả kiểm tra
+  A --> R: Trả về kết quả
+  
+  alt CitizenId chưa tồn tại
+    R -> R: Hash password với bcrypt
+    R -> R: Tạo transaction để tạo auth và patient
+    
+    R -> A: Tạo auth record
+    A -> DB: Lưu auth record
+    DB --> A: Auth đã tạo
+    A --> R: Trả về auth
+    
+    R -> P: Tạo patient record với patient code
+    P -> DB: Lưu patient record
+    DB --> P: Patient đã tạo
+    P --> R: Trả về patient
+    
+    R -> RED: Xóa session sau khi đăng ký thành công
+    RED --> R: Xác nhận xóa session
+    
+    R -> E: Gửi email/SMS chào mừng
+    E --> R: Kết quả gửi thông báo
+    
+    R --> C: Trả về kết quả đăng ký thành công
+    C --> F: Trả về kết quả
+    F --> U: Hiển thị thông báo đăng ký thành công
+    
+  else CitizenId đã tồn tại
+    R --> C: Trả về lỗi citizenId đã được đăng ký
+    C --> F: Thông báo lỗi
+    F --> U: Hiển thị thông báo số CMND/CCCD đã được đăng ký
+  end
+  
+else Session không hợp lệ
+  R --> C: Trả về lỗi session
+  C --> F: Thông báo lỗi
+  F --> U: Hiển thị thông báo session không hợp lệ
+end
+
+
+@enduml
