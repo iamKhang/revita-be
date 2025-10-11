@@ -10,7 +10,41 @@ import {
   IsArray,
   ValidateNested,
 } from 'class-validator';
-import { Transform, Type } from 'class-transformer';
+import { Transform, TransformFnParams, Type } from 'class-transformer';
+
+const transformBoolean = ({ value, obj, key }: TransformFnParams) => {
+  const raw = obj?.[key];
+  const input = raw ?? value;
+
+  if (input === undefined || input === null || input === '') {
+    return undefined;
+  }
+
+  if (typeof input === 'boolean') {
+    return input;
+  }
+
+  if (typeof input === 'string') {
+    const normalized = input.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1') {
+      return true;
+    }
+    if (normalized === 'false' || normalized === '0') {
+      return false;
+    }
+  }
+
+  if (typeof input === 'number') {
+    if (input === 1) {
+      return true;
+    }
+    if (input === 0) {
+      return false;
+    }
+  }
+
+  return Boolean(input);
+};
 
 export class ServiceManagementQueryDto {
   @IsOptional()
@@ -28,9 +62,7 @@ export class ServiceManagementQueryDto {
 
   @IsOptional()
   @IsBoolean()
-  @Transform(({ value }) =>
-    value === undefined ? undefined : value === true || value === 'true',
-  )
+  @Transform(transformBoolean)
   isActive?: boolean;
 
   @IsOptional()
@@ -43,9 +75,7 @@ export class ServiceManagementQueryDto {
 
   @IsOptional()
   @IsBoolean()
-  @Transform(({ value }) =>
-    value === undefined ? undefined : value === true || value === 'true',
-  )
+  @Transform(transformBoolean)
   requiresDoctor?: boolean;
 }
 
