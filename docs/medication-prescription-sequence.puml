@@ -4,7 +4,7 @@ title Tương Tác Tạo Đơn Thuốc - Luồng Bác Sĩ
 
 actor "Bác Sĩ" as D
 boundary "Giao Diện" as F
-control "Controller" as C
+control "MedicationPrescriptionController" as C
 control "MedicationPrescriptionService" as M
 control "DrugCatalogService" as DC
 entity "MedicationPrescription" as MP
@@ -17,8 +17,8 @@ database "MongoDB" as MG
 == Bác sĩ tạo đơn thuốc ==
 
 D -> F: Chọn bệnh nhân và tạo đơn thuốc
-F -> C: Gửi yêu cầu tạo đơn thuốc
-C -> M: create(prescriptionData)
+F -> C: POST /medication-prescription/create
+C -> M: create(createMedicationPrescriptionDto)
 M -> M: Kiểm tra items không rỗng
 
 alt Items hợp lệ
@@ -45,7 +45,7 @@ end
 == Tìm kiếm thuốc để thêm vào đơn ==
 
 D -> F: Tìm kiếm thuốc trong catalog
-F -> C: Gửi yêu cầu tìm kiếm
+F -> C: GET /medication-prescription/search-drugs?q=xxx
 C -> DC: searchDrugs(query, limit, skip)
 DC -> DR: Tìm kiếm thuốc theo openfda fields
 DR -> MG: Truy vấn MongoDB với điều kiện

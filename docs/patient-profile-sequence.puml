@@ -5,7 +5,7 @@ title Tương Tác Tạo và Xem Hồ Sơ Bệnh Nhân - Luồng Bác Sĩ và B�
 actor "Bác Sĩ" as D
 actor "Bệnh Nhân" as P
 boundary "Giao Diện" as F
-control "Controller" as C
+control "PatientProfileController" as C
 control "PatientProfileService" as PS
 entity "PatientProfile" as PP
 entity "Patient" as PAT
@@ -14,8 +14,8 @@ database "Cơ Sở Dữ Liệu" as DB
 == Bác sĩ tạo hồ sơ bệnh nhân độc lập ==
 
 D -> F: Tạo hồ sơ bệnh nhân mới
-F -> C: Gửi yêu cầu tạo hồ sơ độc lập
-C -> PS: createIndependent(dto, user)
+F -> C: POST /patient-profile/create-independent
+C -> PS: createIndependent(createIndependentPatientProfileDto, user)
 PS -> PS: Kiểm tra quyền staff (DOCTOR/ADMIN/RECEPTIONIST)
 
 alt Có quyền tạo
@@ -36,8 +36,8 @@ end
 == Bệnh nhân tạo hồ sơ cho chính mình ==
 
 P -> F: Tạo hồ sơ bệnh nhân
-F -> C: Gửi yêu cầu tạo hồ sơ
-C -> PS: create(dto, user)
+F -> C: POST /patient-profile/create
+C -> PS: create(createPatientProfileDto, user)
 PS -> PAT: Kiểm tra bệnh nhân tồn tại
 PAT -> DB: Truy vấn thông tin bệnh nhân
 DB --> PAT: Thông tin bệnh nhân
@@ -63,7 +63,7 @@ end
 == Xem hồ sơ bệnh nhân ==
 
 D -> F: Xem danh sách hồ sơ
-F -> C: Gửi yêu cầu lấy danh sách
+F -> C: GET /patient-profile
 C -> PS: findAll(user)
 PS -> PP: Lấy hồ sơ theo quyền
 PP -> DB: Truy vấn patient profiles

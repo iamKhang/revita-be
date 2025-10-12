@@ -4,8 +4,8 @@ title Tương Tác Đăng Lịch Khám Bệnh - Luồng Bác Sĩ
 
 actor "Bác Sĩ" as D
 boundary "Giao Diện" as F
-control "Controller" as C
-control "Service" as S
+control "WorkSessionController" as C
+control "WorkSessionService" as S
 entity "Lịch Làm Việc" as WS
 entity "Bác Sĩ" as DOC
 entity "Dịch Vụ" as SV
@@ -14,8 +14,8 @@ database "Cơ Sở Dữ Liệu" as DB
 == Đăng lịch làm việc mới ==
 
 D -> F: Đăng lịch làm việc mới
-F -> C: Gửi yêu cầu đăng lịch
-C -> S: createWorkSession()
+F -> C: POST /work-session/create
+C -> S: createWorkSession(createWorkSessionDto, user)
 S -> WS: Tạo work session entity
 WS -> DB: Kiểm tra lịch trùng lặp
 DB --> WS: Kết quả kiểm tra trùng lặp
@@ -38,8 +38,8 @@ end
 == Xem lịch làm việc đã đăng ==
 
 D -> F: Xem lịch làm việc đã đăng
-F -> C: Lấy lịch làm việc của bác sĩ
-C -> S: getDoctorWorkSessions()
+F -> C: GET /work-session/doctor
+C -> S: getDoctorWorkSessions(user)
 S -> WS: Truy vấn work sessions theo bác sĩ
 WS -> DB: Lấy danh sách lịch làm việc
 DB --> WS: Danh sách work sessions
@@ -51,8 +51,8 @@ F --> D: Hiển thị lịch làm việc đã đăng
 == Cập nhật lịch làm việc ==
 
 D -> F: Cập nhật lịch làm việc
-F -> C: Gửi yêu cầu cập nhật
-C -> S: updateWorkSession()
+F -> C: PUT /work-session/update/:id
+C -> S: updateWorkSession(id, updateWorkSessionDto, user)
 S -> WS: Cập nhật thông tin work session
 WS -> DB: Kiểm tra lịch đã có bệnh nhân đặt
 DB --> WS: Kết quả kiểm tra
@@ -75,8 +75,8 @@ end
 == Hủy lịch làm việc ==
 
 D -> F: Hủy lịch làm việc
-F -> C: Gửi yêu cầu hủy lịch
-C -> S: cancelWorkSession()
+F -> C: DELETE /work-session/cancel/:id
+C -> S: cancelWorkSession(id, user)
 S -> WS: Cập nhật trạng thái work session
 WS -> DB: Kiểm tra lịch đã có bệnh nhân đặt
 DB --> WS: Kết quả kiểm tra

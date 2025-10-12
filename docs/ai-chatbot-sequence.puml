@@ -1,0 +1,47 @@
+@startuml AI Chatbot Sequence Diagram
+!theme plain
+title Sơ đồ Sequence - Trò chuyện với AI Chatbot
+
+actor "Nguoi Dung" as U
+participant "Giao Dien" as UI
+participant "AiChatbotController" as C
+participant "AiChatbotService" as ACS
+participant "DatabaseQueryService" as DQS
+participant "Gemini AI" as GAI
+participant "PrismaService" as PS
+database "PostgreSQL" as DB
+
+== Trò chuyện với AI Chatbot ==
+
+U -> UI: Gửi câu hỏi
+UI -> C: POST /ai-chatbot/chat
+C -> C: JwtAuthGuard.validateToken()
+C -> ACS: generateResponse(chatRequest)
+
+ACS -> DQS: processDatabaseQuery(message)
+DQS -> DQS: isDatabaseRelatedQuestion(message)
+alt Câu hỏi liên quan dữ liệu hệ thống
+    DQS -> GAI: generatePrismaQuery(question)
+    GAI --> DQS: Trả về query string
+    DQS -> DQS: validateQueryFormat() + sanitizeQueryForPatient()
+    DQS -> PS: executePrismaQuery(queryString)
+    PS -> DB: Thực thi Prisma query
+    DB --> PS: Trả về dữ liệu
+    PS --> DQS: Kết quả query
+    DQS -> GAI: generateExplanation(question, data)
+    GAI --> DQS: Giải thích bằng tiếng Việt
+    DQS --> ACS: Trả về dữ liệu hệ thống
+else Câu hỏi y tế thông thường
+    DQS --> ACS: success: false
+    ACS -> GAI: buildMedicalAssistantPrompt(message)
+    GAI --> ACS: Trả về câu trả lời
+    ACS -> ACS: containsMedicalAdvice(text)
+end
+
+ACS -> ACS: generateConversationId()
+ACS -> ACS: getMedicalDisclaimer()
+ACS --> C: Trả về ChatResponseDto
+C --> UI: Trả về phản hồi AI
+UI --> U: Hiển thị câu trả lời
+
+@enduml

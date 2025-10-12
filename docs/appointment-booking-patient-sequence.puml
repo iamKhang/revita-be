@@ -4,8 +4,8 @@ title Tương Tác Đặt Lịch Khám Bệnh - Luồng Bệnh Nhân
 
 actor "Bệnh Nhân" as P
 boundary "Giao Diện" as F
-control "Controller" as C
-control "Service" as S
+control "AppointmentBookingController" as C
+control "AppointmentBookingService" as S
 entity "Lịch Hẹn" as A
 entity "Bác Sĩ" as D
 entity "Chuyên Khoa" as SP
@@ -15,7 +15,7 @@ database "Cơ Sở Dữ Liệu" as DB
 == Tìm kiếm và chọn bác sĩ ==
 
 P -> F: Tìm kiếm chuyên khoa
-F -> C: Lấy danh sách chuyên khoa
+F -> C: GET /appointment-booking/specialties
 C -> S: getSpecialties()
 S -> SP: Truy vấn chuyên khoa
 SP -> DB: Lấy danh sách chuyên khoa
@@ -26,8 +26,8 @@ C --> F: Danh sách chuyên khoa
 F --> P: Hiển thị danh sách chuyên khoa
 
 P -> F: Chọn chuyên khoa
-F -> C: Lấy danh sách bác sĩ
-C -> S: getDoctorsBySpecialty()
+F -> C: GET /appointment-booking/doctors?specialtyId=xxx
+C -> S: getDoctorsBySpecialty(specialtyId)
 S -> D: Truy vấn bác sĩ
 D -> DB: Lấy danh sách bác sĩ
 DB --> D: Danh sách bác sĩ
@@ -39,8 +39,8 @@ F --> P: Hiển thị danh sách bác sĩ
 == Đặt lịch khám ==
 
 P -> F: Chọn bác sĩ và ngày
-F -> C: Lấy lịch làm việc
-C -> S: getDoctorWorkingDays()
+F -> C: GET /appointment-booking/working-days?doctorId=xxx
+C -> S: getDoctorWorkingDays(doctorId)
 S -> D: Truy vấn work sessions
 D -> DB: Lấy lịch làm việc
 DB --> D: Lịch làm việc
@@ -50,8 +50,8 @@ C --> F: Lịch làm việc
 F --> P: Hiển thị lịch làm việc
 
 P -> F: Chọn dịch vụ và khung giờ
-F -> C: Lấy lịch trống
-C -> S: getAvailableSlots()
+F -> C: GET /appointment-booking/available-slots
+C -> S: getAvailableSlots(dto)
 S -> A: Tính toán slots trống
 
 note over S: Tính toán slots trống:\n- Duyệt work sessions\n- Tạo slots theo thời lượng\n- Kiểm tra xung đột
@@ -64,8 +64,8 @@ C --> F: Danh sách lịch trống
 F --> P: Hiển thị khung giờ khả dụng
 
 P -> F: Nhập thông tin và đặt lịch
-F -> C: Đặt lịch khám bệnh
-C -> S: bookAppointment()
+F -> C: POST /appointment-booking/book
+C -> S: bookAppointment(bookAppointmentDto, user)
 
 S -> A: Kiểm tra xung đột
 A -> DB: Kiểm tra xung đột
