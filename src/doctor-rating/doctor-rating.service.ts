@@ -63,15 +63,25 @@ export class DoctorRatingService {
     createDto: CreateDoctorRatingDto,
     user: UserContext,
   ): Promise<DoctorRatingResponseDto> {
-    // Kiểm tra quyền: chỉ PATIENT mới được đánh giá
-    if (user.role !== 'PATIENT') {
-      throw new ForbiddenException('Only patients can rate doctors');
+    // Kiểm tra quyền: PATIENT hoặc ADMIN
+    if (user.role !== 'PATIENT' && user.role !== 'ADMIN') {
+      throw new ForbiddenException(
+        'Only patients and admins can create ratings',
+      );
     }
 
-    // Lấy patientId từ authId
-    const patientId = await this.getPatientIdFromAuthId(user.id);
-    if (!patientId) {
-      throw new ForbiddenException('Patient not found');
+    // Lấy patientId
+    let patientId: string;
+    if (user.role === 'ADMIN' && createDto.patientId) {
+      // ADMIN chỉ định patientId
+      patientId = createDto.patientId;
+    } else {
+      // PATIENT sử dụng authId của mình
+      const foundPatientId = await this.getPatientIdFromAuthId(user.id);
+      if (!foundPatientId) {
+        throw new ForbiddenException('Patient not found');
+      }
+      patientId = foundPatientId;
     }
 
     // Kiểm tra bác sĩ có tồn tại không

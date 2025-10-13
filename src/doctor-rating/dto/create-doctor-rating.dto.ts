@@ -14,6 +14,10 @@ export class CreateDoctorRatingDto {
   @IsUUID()
   doctorId: string;
 
+  @IsOptional()
+  @IsUUID()
+  patientId?: string; // Cho phép ADMIN chỉ định patient
+
   @IsInt()
   @Min(1)
   @Max(5)

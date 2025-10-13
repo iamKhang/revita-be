@@ -24,7 +24,7 @@ export class DoctorRatingController {
   constructor(private readonly doctorRatingService: DoctorRatingService) {}
 
   @Post()
-  @Roles(Role.PATIENT)
+  @Roles(Role.PATIENT, Role.ADMIN)
   create(
     @Body() createDoctorRatingDto: CreateDoctorRatingDto,
     @CurrentUser() user: CurrentUserData,
@@ -71,6 +71,16 @@ export class DoctorRatingController {
     @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
   ) {
     return this.doctorRatingService.getAllRatings(page, limit);
+  }
+
+  @Get('admin/doctor/:doctorId')
+  @Roles(Role.ADMIN)
+  getDoctorRatingsByAdmin(
+    @Param('doctorId') doctorId: string,
+    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
+  ) {
+    return this.doctorRatingService.getDoctorRatings(doctorId, page, limit);
   }
 
   @Patch(':id')

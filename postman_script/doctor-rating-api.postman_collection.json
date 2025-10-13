@@ -153,6 +153,61 @@
       }
     },
     {
+      "name": "Create Rating (Admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"doctorId\": \"doctor-uuid-here\",\n  \"patientId\": \"patient-uuid-here\",\n  \"rating\": 4,\n  \"comment\": \"Admin tạo đánh giá thay mặt cho patient\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ratings",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor-ratings"]
+        }
+      }
+    },
+    {
+      "name": "Get Doctor Ratings by Admin",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ratings/admin/doctor/{{doctorId}}?page=1&limit=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor-ratings", "admin", "doctor", "{{doctorId}}"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      }
+    },
+    {
       "name": "Update Rating",
       "request": {
         "method": "PATCH",
