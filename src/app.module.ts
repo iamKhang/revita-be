@@ -20,6 +20,7 @@ import { AiChatbotModule } from './ai-chatbot/ai-chatbot.module';
 import { WebSocketModule } from './websocket/websocket.module';
 import { MedicationPrescriptionModule } from './medication-prescription/medication-prescription.module';
 import { DrugCatalogModule } from './drug-catalog/drug-catalog.module';
+import { ClinicModule } from './clinic/clinic.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { DrugCatalogModule } from './drug-catalog/drug-catalog.module';
     WebSocketModule,
     MedicationPrescriptionModule,
     DrugCatalogModule,
+    ClinicModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
