@@ -51,6 +51,7 @@ export class AdminController {
           doctor: true,
           patient: true,
           receptionist: true,
+          cashier: true,
           admin: true,
         },
         orderBy: { name: 'asc' },
@@ -106,6 +107,7 @@ export class AdminController {
       yearsExperience,
       workHistory,
       description,
+      specialtyId,
       // Patient specific fields
       loyaltyPoints,
       // Receptionist specific fields
@@ -164,17 +166,20 @@ export class AdminController {
 
     switch (role) {
       case Role.DOCTOR: {
+        if (!specialtyId) {
+          throw new BadRequestException('Missing required field: specialtyId for DOCTOR');
+        }
         const doctorCode = this.codeGenerator.generateDoctorCode(name);
         roleRecord = await this.prisma.doctor.create({
           data: {
             id: auth.id,
             doctorCode,
             authId: auth.id,
-            degrees: degrees || [],
             yearsExperience: yearsExperience || 0,
             rating: 0,
             workHistory: workHistory || '',
             description: description || '',
+            specialtyId,
           },
         });
         break;
@@ -197,15 +202,28 @@ export class AdminController {
         break;
       }
 
-      case Role.RECEPTIONIST:
+      case Role.RECEPTIONIST: {
+        const receptionistCode = this.codeGenerator.generateReceptionistCode(name);
         roleRecord = await this.prisma.receptionist.create({
           data: {
             id: auth.id,
             authId: auth.id,
+            receptionistCode,
           },
         });
         break;
-
+      }
+      case Role.CASHIER: {
+        const cashierCode = this.codeGenerator.generateCashierCode(name);
+        roleRecord = await this.prisma.cashier.create({
+          data: {
+            id: auth.id,
+            authId: auth.id,
+            cashierCode,
+          },
+        });
+        break;
+      }
       case Role.ADMIN: {
         const finalAdminCode =
           adminCode || this.codeGenerator.generateAdminCode(name);
@@ -254,6 +272,7 @@ export class AdminController {
       yearsExperience,
       workHistory,
       description,
+      specialtyId,
       // Patient specific fields
       loyaltyPoints,
       // Admin specific fields
@@ -287,6 +306,7 @@ export class AdminController {
         if (yearsExperience) doctorUpdateData.yearsExperience = yearsExperience;
         if (workHistory) doctorUpdateData.workHistory = workHistory;
         if (description) doctorUpdateData.description = description;
+        if (specialtyId) doctorUpdateData.specialty = { connect: { id: specialtyId } };
 
         if (Object.keys(doctorUpdateData).length > 0) {
           roleRecord = await this.prisma.doctor.update({

@@ -1,0 +1,465 @@
+{
+  "info": {
+    "name": "Staff Management API",
+    "description": "API collection for testing staff management endpoints including creating doctors, technicians, receptionists, cashiers, and admins",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "specialtyId",
+      "value": "",
+      "type": "string",
+      "description": "Will be set after getting specialties"
+    }
+  ],
+  "item": [
+    {
+      "name": "Get Specialties (Public)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/appointment-booking/specialties",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "appointment-booking", "specialties"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const response = pm.response.json();",
+              "    if (response && response.specialties && response.specialties.length > 0) {",
+              "        // Set the first specialty ID as default",
+              "        pm.collectionVariables.set('specialtyId', response.specialties[0].specialtyId);",
+              "        console.log('Set specialtyId to:', response.specialties[0].specialtyId);",
+              "        console.log('Specialty name:', response.specialties[0].name);",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Specialties (Admin)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}",
+            "description": "Admin JWT token"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/admin/specialties",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "admin", "specialties"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const response = pm.response.json();",
+              "    if (response && response.data && response.data.length > 0) {",
+              "        // Set the first specialty ID as default",
+              "        pm.collectionVariables.set('specialtyId', response.data[0].id);",
+              "        console.log('Set specialtyId to:', response.data[0].id);",
+              "        console.log('Specialty name:', response.data[0].name);",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Seed Specialties (Manual)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"note\": \"Run this command in terminal: npm run seed:specialties\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/seed-specialties",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "seed-specialties"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "console.log('This endpoint does not exist. Please run: npm run seed:specialties');",
+              "console.log('Or manually create specialties in database');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Doctor",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Dr. Nguyễn Văn A\",\n  \"dateOfBirth\": \"1985-05-15T00:00:00.000Z\",\n  \"gender\": \"Nam\",\n  \"address\": \"123 Đường ABC, Quận 1, TP.HCM\",\n  \"role\": \"DOCTOR\",\n  \"phone\": \"0901234567\",\n  \"email\": \"doctor.a@example.com\",\n  \"citizenId\": \"123456789012\",\n  \"doctorInfo\": {\n    \"yearsExperience\": 8,\n    \"rating\": 4.5,\n    \"workHistory\": \"Bệnh viện Chợ Rẫy, Bệnh viện Đại học Y dược\",\n    \"description\": \"Bác sĩ chuyên khoa nội tổng quát với nhiều năm kinh nghiệm\",\n    \"specialtyId\": \"{{specialtyId}}\",\n    \"subSpecialties\": [\"Tim mạch\", \"Nội tiết\"],\n    \"position\": \"Trưởng khoa\"\n  },\n  \"certificates\": [\n    {\n      \"title\": \"Chứng chỉ hành nghề\",\n      \"type\": \"LICENSE\",\n      \"issuedBy\": \"Bộ Y tế\",\n      \"issuedAt\": \"2015-06-01T00:00:00.000Z\",\n      \"expiryAt\": \"2025-06-01T00:00:00.000Z\",\n      \"description\": \"Chứng chỉ hành nghề y khoa\"\n    },\n    {\n      \"title\": \"Bằng Thạc sĩ Y khoa\",\n      \"type\": \"DEGREE\",\n      \"issuedBy\": \"Đại học Y dược TP.HCM\",\n      \"issuedAt\": \"2012-09-01T00:00:00.000Z\",\n      \"description\": \"Bằng thạc sĩ chuyên ngành nội khoa\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/staff",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"]
+        }
+      }
+    },
+    {
+      "name": "Create Technician",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Kỹ thuật viên Trần Thị B\",\n  \"dateOfBirth\": \"1990-03-20T00:00:00.000Z\",\n  \"gender\": \"Nữ\",\n  \"address\": \"456 Đường DEF, Quận 2, TP.HCM\",\n  \"role\": \"TECHNICIAN\",\n  \"phone\": \"0907654321\",\n  \"email\": \"tech.b@example.com\",\n  \"citizenId\": \"987654321098\",\n  \"certificates\": [\n    {\n      \"title\": \"Chứng chỉ kỹ thuật viên xét nghiệm\",\n      \"type\": \"LICENSE\",\n      \"issuedBy\": \"Bộ Y tế\",\n      \"issuedAt\": \"2018-07-01T00:00:00.000Z\",\n      \"expiryAt\": \"2028-07-01T00:00:00.000Z\",\n      \"description\": \"Chứng chỉ hành nghề kỹ thuật viên xét nghiệm\"\n    },\n    {\n      \"title\": \"Chứng nhận đào tạo máy xét nghiệm\",\n      \"type\": \"TRAINING\",\n      \"issuedBy\": \"Công ty Roche\",\n      \"issuedAt\": \"2019-03-15T00:00:00.000Z\",\n      \"description\": \"Đào tạo vận hành máy xét nghiệm tự động\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/staff",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"]
+        }
+      }
+    },
+    {
+      "name": "Create Receptionist",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Lễ tân Lê Văn C\",\n  \"dateOfBirth\": \"1995-08-10T00:00:00.000Z\",\n  \"gender\": \"Nam\",\n  \"address\": \"789 Đường GHI, Quận 3, TP.HCM\",\n  \"role\": \"RECEPTIONIST\",\n  \"phone\": \"0912345678\",\n  \"email\": \"reception.c@example.com\",\n  \"citizenId\": \"111222333444\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/staff",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"]
+        }
+      }
+    },
+    {
+      "name": "Create Cashier",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Thu ngân Phạm Thị D\",\n  \"dateOfBirth\": \"1992-12-05T00:00:00.000Z\",\n  \"gender\": \"Nữ\",\n  \"address\": \"321 Đường JKL, Quận 4, TP.HCM\",\n  \"role\": \"CASHIER\",\n  \"phone\": \"0923456789\",\n  \"email\": \"cashier.d@example.com\",\n  \"citizenId\": \"555666777888\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/staff",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"]
+        }
+      }
+    },
+    {
+      "name": "Create Admin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Admin Hoàng Văn E\",\n  \"dateOfBirth\": \"1988-01-25T00:00:00.000Z\",\n  \"gender\": \"Nam\",\n  \"address\": \"654 Đường MNO, Quận 5, TP.HCM\",\n  \"role\": \"ADMIN\",\n  \"phone\": \"0934567890\",\n  \"email\": \"admin.e@example.com\",\n  \"citizenId\": \"999888777666\",\n  \"adminInfo\": {\n    \"position\": \"Trưởng phòng quản lý\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/staff",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"]
+        }
+      }
+    },
+    {
+      "name": "List All Staff",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/staff",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"]
+        }
+      }
+    },
+    {
+      "name": "List Staff by Role - Doctor",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/staff?role=DOCTOR",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"],
+          "query": [
+            {
+              "key": "role",
+              "value": "DOCTOR"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "List Staff by Role - Technician",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/staff?role=TECHNICIAN",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"],
+          "query": [
+            {
+              "key": "role",
+              "value": "TECHNICIAN"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "List Staff with Pagination",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/staff?page=1&limit=5",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Staff Detail by Auth ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/staff/{{authId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff", "{{authId}}"],
+          "variable": [
+            {
+              "key": "authId",
+              "value": "",
+              "description": "Will be set after creating staff"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update Staff - Doctor",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Dr. Nguyễn Văn A (Updated)\",\n  \"phone\": \"0901234568\",\n  \"doctorInfo\": {\n    \"yearsExperience\": 10,\n    \"rating\": 4.8,\n    \"position\": \"Phó trưởng khoa\",\n    \"isActive\": true\n  },\n  \"certificates\": [\n    {\n      \"title\": \"Chứng chỉ hành nghề (Updated)\",\n      \"type\": \"LICENSE\",\n      \"issuedBy\": \"Bộ Y tế\",\n      \"issuedAt\": \"2015-06-01T00:00:00.000Z\",\n      \"expiryAt\": \"2025-06-01T00:00:00.000Z\",\n      \"description\": \"Chứng chỉ hành nghề y khoa - Cập nhật\"\n    }\n  ],\n  \"replaceAllCertificates\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/staff/{{authId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff", "{{authId}}"]
+        }
+      }
+    },
+    {
+      "name": "Update Staff - Technician",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Kỹ thuật viên Trần Thị B (Updated)\",\n  \"phone\": \"0907654322\",\n  \"technicianInfo\": {\n    \"isActive\": true\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/staff/{{authId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff", "{{authId}}"]
+        }
+      }
+    },
+    {
+      "name": "Deactivate Staff",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/staff/{{authId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff", "{{authId}}"]
+        }
+      }
+    },
+    {
+      "name": "Create Doctor with Minimal Info",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Dr. Minimal Test\",\n  \"dateOfBirth\": \"1980-01-01T00:00:00.000Z\",\n  \"gender\": \"Nam\",\n  \"address\": \"Test Address\",\n  \"role\": \"DOCTOR\",\n  \"doctorInfo\": {\n    \"specialtyId\": \"{{specialtyId}}\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/staff",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"]
+        }
+      }
+    },
+    {
+      "name": "Create Doctor with All Fields",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Dr. Complete Example\",\n  \"dateOfBirth\": \"1983-07-12T00:00:00.000Z\",\n  \"gender\": \"Nữ\",\n  \"address\": \"789 Đường Complete, Quận Complete, TP.HCM\",\n  \"role\": \"DOCTOR\",\n  \"phone\": \"0945678901\",\n  \"email\": \"doctor.complete@example.com\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"citizenId\": \"777888999000\",\n  \"doctorInfo\": {\n    \"yearsExperience\": 15,\n    \"rating\": 4.9,\n    \"workHistory\": \"Bệnh viện Chợ Rẫy, Bệnh viện Đại học Y dược, Bệnh viện 108\",\n    \"description\": \"Bác sĩ chuyên khoa với nhiều năm kinh nghiệm và thành tích xuất sắc\",\n    \"specialtyId\": \"{{specialtyId}}\",\n    \"subSpecialties\": [\"Tim mạch\", \"Nội tiết\", \"Tiêu hóa\"],\n    \"position\": \"Giám đốc chuyên môn\",\n    \"licenseNumber\": \"BS123456\",\n    \"licenseIssuedAt\": \"2010-06-01T00:00:00.000Z\",\n    \"licenseExpiry\": \"2030-06-01T00:00:00.000Z\",\n    \"department\": \"Khoa Nội tổng quát\"\n  },\n  \"certificates\": [\n    {\n      \"code\": \"CERT001\",\n      \"title\": \"Chứng chỉ hành nghề y khoa\",\n      \"type\": \"LICENSE\",\n      \"issuedBy\": \"Bộ Y tế Việt Nam\",\n      \"issuedAt\": \"2010-06-01T00:00:00.000Z\",\n      \"expiryAt\": \"2030-06-01T00:00:00.000Z\",\n      \"file\": \"https://example.com/cert1.pdf\",\n      \"description\": \"Chứng chỉ hành nghề y khoa chính thức\"\n    },\n    {\n      \"code\": \"CERT002\",\n      \"title\": \"Bằng Tiến sĩ Y khoa\",\n      \"type\": \"DEGREE\",\n      \"issuedBy\": \"Đại học Y dược TP.HCM\",\n      \"issuedAt\": \"2018-09-01T00:00:00.000Z\",\n      \"file\": \"https://example.com/degree.pdf\",\n      \"description\": \"Bằng tiến sĩ chuyên ngành nội khoa\"\n    },\n    {\n      \"code\": \"CERT003\",\n      \"title\": \"Chứng nhận đào tạo quốc tế\",\n      \"type\": \"TRAINING\",\n      \"issuedBy\": \"Johns Hopkins University\",\n      \"issuedAt\": \"2020-03-15T00:00:00.000Z\",\n      \"description\": \"Khóa đào tạo tim mạch can thiệp\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/staff",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"]
+        }
+      }
+    },
+    {
+      "name": "Create Technician with Certificates",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Kỹ thuật viên Advanced\",\n  \"dateOfBirth\": \"1987-11-30T00:00:00.000Z\",\n  \"gender\": \"Nam\",\n  \"address\": \"555 Đường Technician, Quận Tech, TP.HCM\",\n  \"role\": \"TECHNICIAN\",\n  \"phone\": \"0956789012\",\n  \"email\": \"tech.advanced@example.com\",\n  \"citizenId\": \"333444555666\",\n  \"certificates\": [\n    {\n      \"code\": \"TECH_CERT_001\",\n      \"title\": \"Chứng chỉ kỹ thuật viên xét nghiệm hạng I\",\n      \"type\": \"LICENSE\",\n      \"issuedBy\": \"Bộ Y tế\",\n      \"issuedAt\": \"2015-08-01T00:00:00.000Z\",\n      \"expiryAt\": \"2025-08-01T00:00:00.000Z\",\n      \"file\": \"https://example.com/tech_license.pdf\",\n      \"description\": \"Chứng chỉ hành nghề kỹ thuật viên xét nghiệm\"\n    },\n    {\n      \"code\": \"TECH_CERT_002\",\n      \"title\": \"Bằng Cử nhân Kỹ thuật Y học\",\n      \"type\": \"DEGREE\",\n      \"issuedBy\": \"Đại học Y dược TP.HCM\",\n      \"issuedAt\": \"2012-07-01T00:00:00.000Z\",\n      \"file\": \"https://example.com/tech_degree.pdf\",\n      \"description\": \"Bằng cử nhân chuyên ngành kỹ thuật y học\"\n    },\n    {\n      \"code\": \"TECH_CERT_003\",\n      \"title\": \"Chứng nhận đào tạo máy siêu âm\",\n      \"type\": \"TRAINING\",\n      \"issuedBy\": \"Siemens Healthcare\",\n      \"issuedAt\": \"2019-11-20T00:00:00.000Z\",\n      \"description\": \"Đào tạo vận hành và bảo trì máy siêu âm\"\n    },\n    {\n      \"code\": \"TECH_CERT_004\",\n      \"title\": \"Chứng nhận an toàn phóng xạ\",\n      \"type\": \"OTHER\",\n      \"issuedBy\": \"Cục An toàn bức xạ và hạt nhân\",\n      \"issuedAt\": \"2021-05-10T00:00:00.000Z\",\n      \"expiryAt\": \"2026-05-10T00:00:00.000Z\",\n      \"description\": \"Chứng nhận an toàn khi làm việc với thiết bị có phóng xạ\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/staff",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "staff"]
+        }
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-set authId from previous create staff responses",
+          "if (pm.info.requestName.includes('Create') && pm.info.requestName.includes('Staff')) {",
+          "    // This will be set in test script of create requests",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-set authId for subsequent requests",
+          "if (pm.response.code === 201 || pm.response.code === 200) {",
+          "    try {",
+          "        const response = pm.response.json();",
+          "        if (response && response.auth && response.auth.id) {",
+          "            pm.collectionVariables.set('authId', response.auth.id);",
+          "            console.log('Set authId to:', response.auth.id);",
+          "        }",
+          "    } catch (e) {",
+          "        console.log('Could not parse response or set authId');",
+          "    }",
+          "}"
+        ]
+      }
+    }
+  ]
+}

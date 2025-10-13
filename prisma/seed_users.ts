@@ -7,8 +7,11 @@ import { PrismaClient, Role } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as bcrypt from 'bcryptjs';
+import { CodeGeneratorService } from '../src/user-management/patient-profile/code-generator.service';
 
 const prisma = new PrismaClient();
+const codeGen = new CodeGeneratorService();
+let authNameMap: Map<string, string> = new Map();
 
 // Đường dẫn thư mục Data (đặt các file JSON của bạn ở prisma/Data)
 const DATA = (...p: string[]) => path.join(__dirname, 'Data', ...p);
@@ -93,6 +96,9 @@ function mapReceptionist(r: any) {
   return {
     id: r.id,
     authId: r.authId,
+    receptionistCode:
+      r.receptionistCode ??
+      codeGen.generateReceptionistCode(authNameMap.get(r.authId) ?? 'Receptionist'),
   };
 }
 
@@ -100,6 +106,9 @@ function mapCashier(c: any) {
   return {
     id: c.id,
     authId: c.authId,
+    cashierCode:
+      c.cashierCode ??
+      codeGen.generateCashierCode(authNameMap.get(c.authId) ?? 'Cashier'),
   };
 }
 
@@ -115,7 +124,9 @@ function mapAdmin(a: any) {
 function mapTechnician(t: any, index: number) {
   return {
     id: t.id,
-    technicianCode: `TECH-${String(index + 1).padStart(3, '0')}`,
+    technicianCode:
+      t.technicianCode ??
+      codeGen.generateTechnicianCode(authNameMap.get(t.authId) ?? `Technician${index + 1}`),
     authId: t.authId,
   };
 }
@@ -149,6 +160,7 @@ async function main() {
   const cashiers = readJson<any[]>('cashiers.json'); // :contentReference[oaicite:13]{index=13}
   const admins = readJson<any[]>('admins.json'); // :contentReference[oaicite:14]{index=14}
   const technicians = readJson<any[]>('technicians.json'); // :contentReference[oaicite:15]{index=15}
+  authNameMap = new Map((auths ?? []).map((a) => [a.id, a.name ?? '']));
 
   // Không bắt buộc, dùng để cảnh báo nhẹ nếu doctors.json có specialtyCode không thuộc danh mục
   let specialtyCodes: Set<string> | null = null;
@@ -172,6 +184,9 @@ async function main() {
 
   // === Seed Doctors
   console.log('⏳ Seeding Doctors...');
+  const defaultSpecialty =
+    (await prisma.specialty.findFirst()) ||
+    (await prisma.specialty.create({ data: { specialtyCode: 'GEN', name: 'General' } }));
   for (const raw of doctors) {
     // Cảnh báo nếu có specialtyCode không nằm trong specialties.json (nếu có)
     if (
@@ -183,7 +198,7 @@ async function main() {
         `⚠️  Doctor ${raw.doctorCode} có specialtyCode không khớp danh mục: ${raw.specialtyCode}`,
       );
     }
-    const data = mapDoctor(raw);
+    const data = { ...mapDoctor(raw), specialtyId: raw.specialtyId || defaultSpecialty.id } as any;
     await prisma.doctor.upsert({
       where: { id: data.id },
       update: {},

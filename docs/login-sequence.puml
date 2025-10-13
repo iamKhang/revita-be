@@ -1,0 +1,75 @@
+@startuml Login Sequence Diagram
+!theme plain
+title Tương Tác Đăng Nhập Hệ Thống
+
+actor "Người Dùng" as U
+boundary "Giao Diện" as F
+control "Controller" as C
+control "LoginService" as L
+entity "Auth" as A
+entity "Patient" as P
+entity "Doctor" as D
+entity "Receptionist" as R
+entity "Admin" as AD
+database "Cơ Sở Dữ Liệu" as DB
+
+== Đăng nhập thông thường ==
+
+U -> F: Nhập thông tin đăng nhập
+F -> C: Gửi yêu cầu đăng nhập
+C -> L: login(phoneOrEmail, password)
+L -> L: validateUser(phoneOrEmail, password)
+L -> A: Tìm kiếm user theo phone/email
+A -> DB: Truy vấn auth table
+DB --> A: Thông tin auth
+A --> L: Trả về auth record
+
+L -> L: So sánh mật khẩu với bcrypt
+alt Mật khẩu đúng
+  L -> A: Lấy thông tin user đầy đủ
+  A -> DB: Truy vấn thông tin user
+  DB --> A: Thông tin user
+  A --> L: Trả về thông tin user
+  
+  L -> L: Tạo JWT payload
+  L -> L: Thêm thông tin theo role
+  
+  alt Role là PATIENT
+    L -> P: Lấy thông tin patient
+    P -> DB: Truy vấn patient table
+    DB --> P: Thông tin patient
+    P --> L: Trả về patient info
+    
+  else Role là DOCTOR
+    L -> D: Lấy thông tin doctor
+    D -> DB: Truy vấn doctor table
+    DB --> D: Thông tin doctor
+    D --> L: Trả về doctor info
+    
+  else Role là RECEPTIONIST
+    L -> R: Lấy thông tin receptionist
+    R -> DB: Truy vấn receptionist table
+    DB --> R: Thông tin receptionist
+    R --> L: Trả về receptionist info
+    
+  else Role là ADMIN
+    L -> AD: Lấy thông tin admin
+    AD -> DB: Truy vấn admin table
+    DB --> AD: Thông tin admin
+    AD --> L: Trả về admin info
+  end
+  
+  L -> L: Tạo access token (15 ngày)
+  L --> C: Trả về token và user info
+  C --> F: Trả về kết quả đăng nhập
+  F --> U: Hiển thị thông báo thành công và chuyển trang
+  
+else Mật khẩu sai
+  L --> C: Trả về lỗi xác thực
+  C --> F: Thông báo lỗi
+  F --> U: Hiển thị thông báo lỗi đăng nhập
+end
+
+
+
+@enduml

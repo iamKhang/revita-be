@@ -233,17 +233,19 @@ async function ensureAuthAndDoctor(opts: {
         'Nội khoa', // Default specialty
       );
 
+    const defaultSpecialty =
+      (await prisma.specialty.findFirst()) ||
+      (await prisma.specialty.create({ data: { specialtyCode: 'GEN', name: 'General' } }));
     doctor = await prisma.doctor.create({
       data: {
         id: auth.id,
         doctorCode: finalDoctorCode,
         authId: auth.id,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        degrees: opts.doctor.degrees,
         yearsExperience: opts.doctor.yearsExperience,
         rating: opts.doctor.rating,
         workHistory: opts.doctor.workHistory,
         description: opts.doctor.description,
+        specialtyId: defaultSpecialty.id,
       },
     });
   }

@@ -82,7 +82,6 @@ export class UserController {
           select: {
             id: true,
             doctorCode: true,
-            degrees: true,
             yearsExperience: true,
             rating: true,
             workHistory: true,
@@ -348,7 +347,6 @@ export class UserController {
           select: {
             id: true,
             doctorCode: true,
-            degrees: true,
             yearsExperience: true,
             rating: true,
           },
@@ -449,7 +447,6 @@ export class UserController {
           select: {
             id: true,
             doctorCode: true,
-            degrees: true,
             yearsExperience: true,
             rating: true,
             workHistory: true,
@@ -588,7 +585,6 @@ export class UserController {
           select: {
             id: true,
             doctorCode: true,
-            degrees: true,
             yearsExperience: true,
             rating: true,
             workHistory: true,

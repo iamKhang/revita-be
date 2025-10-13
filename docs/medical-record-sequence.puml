@@ -1,0 +1,88 @@
+@startuml Medical Record Sequence Diagram
+!theme plain
+title Tương Tác Tạo và Quản Lý Bệnh Án - Luồng Bác Sĩ
+
+actor "Bác Sĩ" as D
+boundary "Giao Diện" as F
+control "Controller" as C
+control "MedicalRecordService" as M
+entity "MedicalRecord" as MR
+entity "PatientProfile" as PP
+entity "Template" as T
+entity "MedicalRecordHistory" as MRH
+database "Cơ Sở Dữ Liệu" as DB
+
+== Tạo bệnh án mới ==
+
+D -> F: Chọn bệnh nhân
+F -> C: Gửi yêu cầu lấy danh sách template
+C -> M: getTemplates()
+M -> T: Lấy danh sách template
+T -> DB: Truy vấn template table
+DB --> T: Danh sách template
+T --> M: Trả về danh sách template
+M --> C: Trả về danh sách template
+C --> F: Danh sách template
+F --> D: Hiển thị danh sách template
+
+D -> F: Chọn template và gửi yêu cầu tạo bệnh án
+F -> C: Gửi yêu cầu tạo bệnh án
+C -> M: create(dto, user)
+M -> M: Kiểm tra quyền tạo (DOCTOR/ADMIN)
+
+alt Có quyền tạo
+  M -> M: Xác định doctorId từ user
+  M -> PP: Kiểm tra patient profile tồn tại
+  PP -> DB: Truy vấn patient profile
+  DB --> PP: Thông tin patient profile
+  PP --> M: Xác nhận patient profile hợp lệ
+  
+  M -> M: Tạo medical record code
+  M -> MR: Tạo bệnh án mới
+  MR -> DB: Lưu bệnh án vào database
+  DB --> MR: Bệnh án đã tạo
+  MR --> M: Trả về bệnh án mới
+  
+  M -> MRH: Lưu lịch sử tạo mới
+  MRH -> DB: Lưu history record
+  DB --> MRH: History đã lưu
+  MRH --> M: Xác nhận lưu history
+  
+  M --> C: Trả về bệnh án đã tạo
+  C --> F: Trả về kết quả tạo bệnh án
+  F --> D: Hiển thị thông báo tạo thành công
+  
+else Không có quyền
+  M --> C: Trả về lỗi quyền truy cập
+  C --> F: Thông báo lỗi
+  F --> D: Hiển thị thông báo không có quyền
+end
+
+== Xem và quản lý bệnh án ==
+
+D -> F: Xem danh sách bệnh án
+F -> C: Gửi yêu cầu lấy danh sách
+C -> M: findAll(user, page, limit)
+M -> M: Kiểm tra role là DOCTOR
+M -> MR: Lấy bệnh án theo doctorId
+MR -> DB: Truy vấn bệnh án của bác sĩ
+DB --> MR: Danh sách bệnh án
+MR --> M: Trả về danh sách bệnh án
+M --> C: Trả về danh sách với phân trang
+C --> F: Trả về kết quả
+F --> D: Hiển thị danh sách bệnh án
+
+D -> F: Chọn bệnh án để xem chi tiết
+F -> C: Gửi yêu cầu xem chi tiết
+C -> M: findOne(id, user)
+M -> MR: Tìm bệnh án theo ID
+MR -> DB: Truy vấn bệnh án
+DB --> MR: Thông tin bệnh án
+MR --> M: Trả về bệnh án
+M -> M: Kiểm tra quyền xem (doctor tạo ra)
+M --> C: Trả về chi tiết bệnh án
+C --> F: Trả về thông tin bệnh án
+F --> D: Hiển thị chi tiết bệnh án
+
+
+@enduml

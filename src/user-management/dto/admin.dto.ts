@@ -61,6 +61,11 @@ export class CreateUserDto {
   @IsString()
   description?: string;
 
+  // Doctor: required in current schema
+  @IsOptional()
+  @IsString()
+  specialtyId?: string;
+
   // Patient specific fields
   @IsOptional()
   @IsNumber()
@@ -125,6 +130,10 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  specialtyId?: string;
 
   // Patient specific fields
   @IsOptional()

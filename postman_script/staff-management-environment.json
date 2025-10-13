@@ -1,0 +1,69 @@
+{
+  "id": "staff-management-env",
+  "name": "Staff Management Environment",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "specialtyId",
+      "value": "",
+      "type": "default",
+      "enabled": true,
+      "description": "Will be auto-populated from specialties API"
+    },
+    {
+      "key": "authId",
+      "value": "",
+      "type": "default",
+      "enabled": true,
+      "description": "Will be auto-populated from create staff responses"
+    },
+    {
+      "key": "doctorAuthId",
+      "value": "",
+      "type": "default",
+      "enabled": true,
+      "description": "Auth ID of created doctor"
+    },
+    {
+      "key": "technicianAuthId",
+      "value": "",
+      "type": "default",
+      "enabled": true,
+      "description": "Auth ID of created technician"
+    },
+    {
+      "key": "receptionistAuthId",
+      "value": "",
+      "type": "default",
+      "enabled": true,
+      "description": "Auth ID of created receptionist"
+    },
+    {
+      "key": "cashierAuthId",
+      "value": "",
+      "type": "default",
+      "enabled": true,
+      "description": "Auth ID of created cashier"
+    },
+    {
+      "key": "adminAuthId",
+      "value": "",
+      "type": "default",
+      "enabled": true,
+      "description": "Auth ID of created admin"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "default",
+      "enabled": true,
+      "description": "JWT token for admin authentication"
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}

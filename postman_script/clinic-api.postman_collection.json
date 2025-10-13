@@ -1,0 +1,256 @@
+{
+  "info": {
+    "_postman_id": "a0e7f240-7d1a-4b7e-9c59-2b7f2f9d3c11",
+    "name": "Clinic APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman collection for Specialty, Clinic Room, and Booth APIs"
+  },
+  "item": [
+    {
+      "name": "Specialties",
+      "item": [
+        {
+          "name": "Create Specialty",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/specialties",
+              "host": ["{{baseUrl}}"],
+              "path": ["specialties"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"specialtyCode\": \"CARD\",\n  \"name\": \"Cardiology\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Specialties",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/specialties?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["specialties"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Specialty by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/specialties/{{specialtyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["specialties", "{{specialtyId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Specialty",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/specialties/{{specialtyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["specialties", "{{specialtyId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"specialtyCode\": \"CARD-UPD\",\n  \"name\": \"Cardiology Updated\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Specialty",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/specialties/{{specialtyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["specialties", "{{specialtyId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clinic Rooms",
+      "item": [
+        {
+          "name": "Create Clinic Room",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/clinic-rooms",
+              "host": ["{{baseUrl}}"],
+              "path": ["clinic-rooms"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomName\": \"Room 101\",\n  \"specialtyId\": \"{{specialtyId}}\",\n  \"description\": \"First floor\",\n  \"address\": \"Building A\",\n  \"serviceIds\": [\"{{serviceId}}\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "List Clinic Rooms",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/clinic-rooms?page=1&limit=10&specialtyId={{specialtyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["clinic-rooms"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "10"},
+                {"key": "specialtyId", "value": "{{specialtyId}}", "disabled": true}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Clinic Room by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/clinic-rooms/{{clinicRoomId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["clinic-rooms", "{{clinicRoomId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Clinic Room",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/clinic-rooms/{{clinicRoomId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["clinic-rooms", "{{clinicRoomId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomName\": \"Room 101 - Updated\",\n  \"specialtyId\": \"{{specialtyId}}\",\n  \"description\": \"Second floor\",\n  \"address\": \"Building B\",\n  \"serviceIds\": [\"{{serviceId}}\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Clinic Room",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/clinic-rooms/{{clinicRoomId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["clinic-rooms", "{{clinicRoomId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Booths",
+      "item": [
+        {
+          "name": "Create Booth",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booths",
+              "host": ["{{baseUrl}}"],
+              "path": ["booths"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Booth A\",\n  \"roomId\": \"{{clinicRoomId}}\",\n  \"description\": \"Near entrance\",\n  \"isActive\": true,\n  \"serviceIds\": [\"{{serviceId}}\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "List Booths",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/booths?page=1&limit=10&roomId={{clinicRoomId}}&isActive=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["booths"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "10"},
+                {"key": "roomId", "value": "{{clinicRoomId}}", "disabled": true},
+                {"key": "isActive", "value": "true", "disabled": true}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Booth by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/booths/{{boothId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["booths", "{{boothId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Booth",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booths/{{boothId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["booths", "{{boothId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Booth A - Updated\",\n  \"roomId\": \"{{clinicRoomId}}\",\n  \"description\": \"Opposite reception\",\n  \"isActive\": false,\n  \"serviceIds\": [\"{{serviceId}}\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Booth",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/booths/{{boothId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["booths", "{{boothId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "specialtyId", "value": "00000000-0000-0000-0000-000000000000" },
+    { "key": "clinicRoomId", "value": "00000000-0000-0000-0000-000000000000" },
+    { "key": "boothId", "value": "00000000-0000-0000-0000-000000000000" },
+    { "key": "serviceId", "value": "00000000-0000-0000-0000-000000000000" }
+  ]
+}
+
+
