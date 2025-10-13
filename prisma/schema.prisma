@@ -50,6 +50,11 @@ model Auth {
   admin        Admin?
   cashier      Cashier?
   technician   Technician?
+
+  comments Comment[]
+  likes PostLike[]
+  commentLikes CommentLike[]
+
   @@map("auths")
 }
 
@@ -189,6 +194,7 @@ model Admin {
   adminCode String     @map("admin_code")
   authId   String      @unique @map("auth_id")
   auth     Auth        @relation(fields: [authId], references: [id])
+  posts Post[]
   isActive Boolean     @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
   position String?     @map("position") // Chức vụ (Trưởng phòng, Trưởng khoa, ...)
   // No certificates for admin
@@ -733,4 +739,147 @@ enum CertificateType {
   DEGREE       // Văn bằng (ĐH, ThS, TS,…)
   TRAINING     // Chứng nhận đào tạo, workshop, khóa học
   OTHER        // Loại khác (ví dụ: giải thưởng, vinh danh,...)
+}
+// ====================== POST & STATUS ======================
+model Post {
+  id           String     @id @default(uuid())
+  title        String
+  slug         String     @unique @map("slug")
+  thumbnail    String?    @map("thumbnail")
+  summary      String?
+  content      String?
+  authorId     String     @map("author_id")
+  author       Admin      @relation(fields: [authorId], references: [id])
+  status       PostStatus @default(DRAFT)
+  isPinned     Boolean    @default(false) @map("is_pinned")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  tags         String[]   @map("tags")
+
+  // N–N explicit với Category
+  inCategories PostInCategory[]
+
+  // N–N explicit với Series (có thứ tự)
+  seriesPosts  SeriesPost[]
+
+  // Bình luận & lượt thích
+  comments     Comment[]
+  likes        PostLike[]
+
+  @@map("posts")
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+}
+
+// ====================== CATEGORY ======================
+model PostCategory {
+  id              String           @id @default(uuid())
+  name            String
+  slug            String           @unique @map("slug")
+  description     String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  postsInCategory PostInCategory[]
+
+  @@map("post_categories")
+}
+
+// Bảng nối Post ↔ Category (đặt tên rõ ràng)
+model PostInCategory {
+  postId     String @map("post_id")
+  categoryId String @map("category_id")
+
+  post       Post         @relation(fields: [postId], references: [id])
+  category   PostCategory @relation(fields: [categoryId], references: [id])
+
+  @@id([postId, categoryId])
+  @@index([categoryId])
+  @@map("posts_categories")
+}
+
+// ====================== SERIES ======================
+model Series {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique @map("slug")
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  seriesPosts SeriesPost[]
+
+  @@map("series")
+}
+
+// Bảng nối Series ↔ Post (có thứ tự)
+model SeriesPost {
+  seriesId String @map("series_id")
+  postId   String @map("post_id")
+  order    Int    @map("order_in_series")
+
+  series   Series @relation(fields: [seriesId], references: [id])
+  post     Post   @relation(fields: [postId], references: [id])
+
+  @@id([seriesId, postId])
+  @@index([postId])
+  @@map("series_posts")
+}
+
+// ====================== COMMENTS ======================
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  parentId  String?  @map("parent_id")
+  authorId  String   @map("author_id")
+  content   String
+  isEdited  Boolean  @default(false) @map("is_edited")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Quan hệ
+  post     Post     @relation(fields: [postId], references: [id])
+  parent   Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies  Comment[] @relation("CommentReplies")
+  author   Auth    @relation(fields: [authorId], references: [id])
+
+  likes    CommentLike[]
+
+  @@index([postId])
+  @@index([parentId])
+  @@index([authorId])
+  @@map("comments")
+}
+
+// ====================== LIKES ======================
+// Like bài viết
+model PostLike {
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post Post   @relation(fields: [postId], references: [id])
+  user Auth  @relation(fields: [userId], references: [id])
+
+  @@id([postId, userId])
+  @@index([userId])
+  @@map("post_likes")
+}
+
+// Like bình luận
+model CommentLike {
+  commentId String   @map("comment_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment Comment @relation(fields: [commentId], references: [id])
+  user  Auth   @relation(fields: [userId], references: [id])
+
+  @@id([commentId, userId])
+  @@index([userId])
+  @@map("comment_likes")
 }
