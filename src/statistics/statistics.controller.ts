@@ -53,7 +53,7 @@ export class StatisticsController {
    * Thống kê lịch làm việc: WorkSession theo bác sĩ/kỹ thuật viên, tỉ lệ phiên COMPLETED/CANCELED
    */
   @Get('work-sessions')
-  @Roles(Role.ADMIN, Role.RECEPTIONIST)
+  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR)
   async getWorkSessionStats(
     @Query() query: QueryPeriodDto,
     @CurrentUser() user: CurrentUserData,
