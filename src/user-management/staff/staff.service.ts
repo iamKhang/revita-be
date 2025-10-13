@@ -328,19 +328,47 @@ export class StaffService {
           }
 
           for (const c of dto.certificates) {
+            const code = c.code ?? null;
+            const issuedAt = c.issuedAt ? this.parseDateOrThrow(c.issuedAt, 'issuedAt') : null;
+            const expiryAt = c.expiryAt ? this.parseDateOrThrow(c.expiryAt, 'expiryAt') : null;
+            const certificateBaseData = {
+              code,
+              title: c.title,
+              type: c.type as CertificateType,
+              issuedBy: c.issuedBy ?? null,
+              issuedAt,
+              expiryAt,
+              file: c.file ?? null,
+              description: c.description ?? null,
+              doctorId: role === Role.DOCTOR ? staff.id : null,
+              technicianId: role === Role.TECHNICIAN ? staff.id : null,
+            };
+
+            if (code) {
+              const existingCertificate = await tx.certificate.findUnique({
+                where: { code },
+                select: { id: true, doctorId: true, technicianId: true },
+              });
+
+              if (existingCertificate) {
+                const belongsToCurrentStaff =
+                  (role === Role.DOCTOR && existingCertificate.doctorId === staff.id) ||
+                  (role === Role.TECHNICIAN && existingCertificate.technicianId === staff.id);
+
+                if (!belongsToCurrentStaff) {
+                  throw new BadRequestException('Certificate code already exists for another staff member');
+                }
+
+                await tx.certificate.update({
+                  where: { id: existingCertificate.id },
+                  data: certificateBaseData,
+                });
+                continue;
+              }
+            }
+
             await tx.certificate.create({
-              data: {
-                code: c.code ?? null,
-                title: c.title,
-                type: c.type as CertificateType,
-                issuedBy: c.issuedBy ?? null,
-                issuedAt: c.issuedAt ? this.parseDateOrThrow(c.issuedAt, 'issuedAt') : null,
-                expiryAt: c.expiryAt ? this.parseDateOrThrow(c.expiryAt, 'expiryAt') : null,
-                file: c.file ?? null,
-                description: c.description ?? null,
-                doctorId: role === Role.DOCTOR ? staff.id : null,
-                technicianId: role === Role.TECHNICIAN ? staff.id : null,
-              },
+              data: certificateBaseData,
             });
           }
         }
