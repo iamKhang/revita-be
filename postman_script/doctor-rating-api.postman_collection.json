@@ -1,0 +1,219 @@
+{
+  "info": {
+    "name": "Doctor Rating API",
+    "description": "API collection for doctor rating system",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Rating",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"doctorId\": \"doctor-uuid-here\",\n  \"rating\": 5,\n  \"comment\": \"Bác sĩ rất tận tâm và chuyên nghiệp!\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ratings",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor-ratings"]
+        }
+      }
+    },
+    {
+      "name": "Get Doctor Ratings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ratings/doctor/{{doctorId}}?page=1&limit=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor-ratings", "doctor", "{{doctorId}}"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Doctor Rating Stats",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ratings/doctor/{{doctorId}}/stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor-ratings", "doctor", "{{doctorId}}", "stats"]
+        }
+      }
+    },
+    {
+      "name": "Get Patient Ratings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ratings/patient/my-ratings?page=1&limit=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor-ratings", "patient", "my-ratings"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get All Doctor Rating Summaries",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ratings/summaries",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor-ratings", "summaries"]
+        }
+      }
+    },
+    {
+      "name": "Get All Ratings (Admin)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ratings/admin/all-ratings?page=1&limit=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor-ratings", "admin", "all-ratings"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update Rating",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rating\": 4,\n  \"comment\": \"Bác sĩ tốt, nhưng cần cải thiện thời gian chờ đợi\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ratings/{{ratingId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor-ratings", "{{ratingId}}"]
+        }
+      }
+    },
+    {
+      "name": "Delete Rating",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/doctor-ratings/{{ratingId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor-ratings", "{{ratingId}}"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    },
+    {
+      "key": "doctorId",
+      "value": ""
+    },
+    {
+      "key": "ratingId",
+      "value": ""
+    }
+  ]
+}
