@@ -1,0 +1,647 @@
+{
+  "info": {
+    "name": "Time-Based Statistics API Test - Revita",
+    "description": "Comprehensive test collection for the new time-based statistics endpoints including appointments, examinations, and revenue by time",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Appointments by Time Tests",
+      "item": [
+        {
+          "name": "Appointments by Time - Today",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has data array', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Response has period info', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('period');",
+                  "    pm.expect(jsonData.period).to.have.property('startDate');",
+                  "    pm.expect(jsonData.period).to.have.property('endDate');",
+                  "    pm.expect(jsonData.period).to.have.property('periodType');",
+                  "});",
+                  "",
+                  "pm.test('Data items have required fields', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.data.length > 0) {",
+                  "        const item = jsonData.data[0];",
+                  "        pm.expect(item).to.have.property('date');",
+                  "        pm.expect(item).to.have.property('total');",
+                  "        pm.expect(item).to.have.property('completed');",
+                  "        pm.expect(item).to.have.property('pending');",
+                  "        pm.expect(item).to.have.property('cancelled');",
+                  "        pm.expect(item).to.have.property('confirmed');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=day",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "day"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Appointments by Time - Last 7 Days",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Period type is week', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.period.periodType).to.eql('week');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=week",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "week"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Appointments by Time - Last 30 Days",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Period type is month', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.period.periodType).to.eql('month');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=month",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "month"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Appointments by Time - Custom Range (2024)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Period type is custom', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.period.periodType).to.eql('custom');",
+                  "});",
+                  "",
+                  "pm.test('Custom date range is correct', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.period.startDate).to.include('2024-01-01');",
+                  "    pm.expect(jsonData.period.endDate).to.include('2024-12-31');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=custom&startDate=2024-01-01&endDate=2024-12-31",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "custom"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Examinations by Time Tests",
+      "item": [
+        {
+          "name": "Examinations by Time - Today",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has data array', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Data items have examination fields', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.data.length > 0) {",
+                  "        const item = jsonData.data[0];",
+                  "        pm.expect(item).to.have.property('date');",
+                  "        pm.expect(item).to.have.property('totalAppointments');",
+                  "        pm.expect(item).to.have.property('completedAppointments');",
+                  "        pm.expect(item).to.have.property('averageDurationMinutes');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/examinations/by-time?period=day",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "examinations", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "day"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Examinations by Time - Last Week",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/examinations/by-time?period=week",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "examinations", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "week"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Examinations by Time - Last Month",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/examinations/by-time?period=month",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "examinations", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "month"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Examinations by Time - Custom Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/examinations/by-time?period=custom&startDate=2024-01-01&endDate=2024-12-31",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "examinations", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "custom"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Revenue by Time Tests",
+      "item": [
+        {
+          "name": "Revenue by Time - Today",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has data array', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Data items have revenue fields', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.data.length > 0) {",
+                  "        const item = jsonData.data[0];",
+                  "        pm.expect(item).to.have.property('date');",
+                  "        pm.expect(item).to.have.property('totalRevenue');",
+                  "        pm.expect(item).to.have.property('paidRevenue');",
+                  "        pm.expect(item).to.have.property('accountsReceivable');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/revenue/by-time?period=day",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "revenue", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "day"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revenue by Time - Last Week",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/revenue/by-time?period=week",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "revenue", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "week"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revenue by Time - Last Month",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/revenue/by-time?period=month",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "revenue", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "month"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revenue by Time - Custom Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/revenue/by-time?period=custom&startDate=2024-01-01&endDate=2024-12-31",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "revenue", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "custom"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Error Handling Tests",
+      "item": [
+        {
+          "name": "Invalid Period Parameter",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 or 422', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=invalid",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "invalid"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Missing Period Parameter",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 or 422', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"]
+            }
+          }
+        },
+        {
+          "name": "Invalid Date Format",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 or 422', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=custom&startDate=invalid-date&endDate=2024-12-31",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "custom"
+                },
+                {
+                  "key": "startDate",
+                  "value": "invalid-date"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unauthorized Access",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=day",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "day"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

@@ -73,7 +73,8 @@ model Doctor {
   doctorCode      String      @unique @map("doctor_code")
   authId          String      @unique @map("auth_id")
   yearsExperience Int      @map("years_experience")
-  rating          Float    @map("rating")
+  rating          Float    @default(0) @map("rating") // Rating trung bình từ các đánh giá
+  ratingCount     Int      @default(0) @map("rating_count") // Số lượng đánh giá
   workHistory     String   @map("work_history")
   description     String   @map("description")
   specialtyId     String   @map("specialty_id")      // Chuyên khoa chính
@@ -90,6 +91,7 @@ model Doctor {
   prescriptionServices PrescriptionService[]
   medicationPrescriptions MedicationPrescription[]
   certificates    Certificate[]
+  ratings         DoctorRating[] // Quan hệ với các đánh giá
 
   @@map("doctors")
 }
@@ -102,6 +104,7 @@ model Patient {
   auth              Auth?       @relation(fields: [authId], references: [id])
   loyaltyPoints     Int         @default(0) @map("loyalty_points") // Điểm thưởng
   patientProfiles   PatientProfile[] // Quan hệ với các hồ sơ khám bệnh (có thể null)
+  doctorRatings     DoctorRating[] // Quan hệ với các đánh giá bác sĩ
 
   @@map("patients")
 }
@@ -733,4 +736,24 @@ enum CertificateType {
   DEGREE       // Văn bằng (ĐH, ThS, TS,…)
   TRAINING     // Chứng nhận đào tạo, workshop, khóa học
   OTHER        // Loại khác (ví dụ: giải thưởng, vinh danh,...)
+}
+
+// Bảng đánh giá bác sĩ từ bệnh nhân
+model DoctorRating {
+  id                String    @id @default(uuid())
+  doctorId          String    @map("doctor_id")
+  patientId         String    @map("patient_id")
+  rating            Int       @map("rating") // 1-5 sao
+  comment           String?   @map("comment") // Bình luận của bệnh nhân
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  doctor            Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, patientId]) // Mỗi patient chỉ đánh giá 1 lần cho 1 doctor
+  @@index([doctorId])
+  @@index([patientId])
+  @@index([rating])
+  @@map("doctor_ratings")
 }
