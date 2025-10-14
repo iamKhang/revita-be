@@ -10,6 +10,10 @@ import {
   TopServicesStatsResponseDto,
   PatientSpendingHistoryResponseDto,
   PatientSpendingQueryDto,
+  TimeBasedQueryDto,
+  AppointmentsByTimeResponseDto,
+  ExaminationsByTimeResponseDto,
+  RevenueByTimeResponseDto,
 } from './dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { Roles } from '../rbac/roles.decorator';
@@ -117,5 +121,44 @@ export class StatisticsController {
       periodQuery,
       user,
     );
+  }
+
+  /**
+   * GET /statistics/appointments/by-time
+   * Thống kê lịch hẹn theo thời gian: cung cấp dữ liệu cho biểu đồ xu hướng lịch hẹn
+   */
+  @Get('appointments/by-time')
+  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR)
+  async getAppointmentsByTime(
+    @Query() query: TimeBasedQueryDto,
+    @CurrentUser() user: CurrentUserData,
+  ): Promise<AppointmentsByTimeResponseDto> {
+    return this.statisticsService.getAppointmentsByTime(query, user);
+  }
+
+  /**
+   * GET /statistics/examinations/by-time
+   * Thống kê khám bệnh theo thời gian: cung cấp dữ liệu cho biểu đồ xu hướng khám bệnh
+   */
+  @Get('examinations/by-time')
+  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR)
+  async getExaminationsByTime(
+    @Query() query: TimeBasedQueryDto,
+    @CurrentUser() user: CurrentUserData,
+  ): Promise<ExaminationsByTimeResponseDto> {
+    return this.statisticsService.getExaminationsByTime(query, user);
+  }
+
+  /**
+   * GET /statistics/revenue/by-time
+   * Thống kê doanh thu theo thời gian: cung cấp dữ liệu cho biểu đồ xu hướng doanh thu
+   */
+  @Get('revenue/by-time')
+  @Roles(Role.ADMIN, Role.CASHIER)
+  async getRevenueByTime(
+    @Query() query: TimeBasedQueryDto,
+    @CurrentUser() user: CurrentUserData,
+  ): Promise<RevenueByTimeResponseDto> {
+    return this.statisticsService.getRevenueByTimeStats(query, user);
   }
 }

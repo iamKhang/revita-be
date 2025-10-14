@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Statistics API - Revita",
-    "description": "API endpoints for various statistics including KPIs, revenue, work sessions, examination volume, payment methods, top services, and patient spending history",
+    "description": "API endpoints for various statistics including KPIs, revenue, work sessions, examination volume, payment methods, top services, patient spending history, and time-based statistics for appointments, examinations, and revenue",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -482,6 +482,323 @@
                   "key": "patientId",
                   "value": "{{patient_id}}"
                 },
+                {
+                  "key": "period",
+                  "value": "custom"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Time-Based Statistics",
+      "item": [
+        {
+          "name": "Appointments by Time - Daily",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=day",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "day"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Appointments by Time - Weekly",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=week",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "week"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Appointments by Time - Monthly",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=month",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "month"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Appointments by Time - Custom Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/appointments/by-time?period=custom&startDate=2024-01-01&endDate=2024-12-31",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "appointments", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "custom"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Examinations by Time - Daily",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/examinations/by-time?period=day",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "examinations", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "day"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Examinations by Time - Weekly",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/examinations/by-time?period=week",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "examinations", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "week"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Examinations by Time - Monthly",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/examinations/by-time?period=month",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "examinations", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "month"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Examinations by Time - Custom Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/examinations/by-time?period=custom&startDate=2024-01-01&endDate=2024-12-31",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "examinations", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "custom"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revenue by Time - Daily",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/revenue/by-time?period=day",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "revenue", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "day"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revenue by Time - Weekly",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/revenue/by-time?period=week",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "revenue", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "week"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revenue by Time - Monthly",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/revenue/by-time?period=month",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "revenue", "by-time"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "month"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revenue by Time - Custom Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/statistics/revenue/by-time?period=custom&startDate=2024-01-01&endDate=2024-12-31",
+              "host": ["{{base_url}}"],
+              "path": ["statistics", "revenue", "by-time"],
+              "query": [
                 {
                   "key": "period",
                   "value": "custom"

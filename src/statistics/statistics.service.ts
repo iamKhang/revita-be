@@ -30,6 +30,13 @@ import {
   PatientFamilySpendingDto,
   PatientProfileSpendingDto,
   UserContext,
+  TimeBasedQueryDto,
+  AppointmentsByTimeResponseDto,
+  AppointmentTimeDataDto,
+  ExaminationsByTimeResponseDto,
+  ExaminationTimeDataDto,
+  RevenueByTimeResponseDto,
+  RevenueTimeDataDto,
 } from './dto';
 
 @Injectable()
@@ -1449,6 +1456,292 @@ export class StatisticsService {
       totalAppointments,
       profileCount: profiles.length,
       profiles,
+    };
+  }
+
+  /**
+   * 8. Thống kê lịch hẹn theo thời gian
+   */
+  async getAppointmentsByTime(
+    query: TimeBasedQueryDto,
+    _user: UserContext,
+  ): Promise<AppointmentsByTimeResponseDto> {
+    const { startDate, endDate } = this.calculateDateRange({
+      period: query.period,
+      startDate: query.startDate,
+      endDate: query.endDate,
+    });
+
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        date: true,
+        status: true,
+      },
+      orderBy: {
+        date: 'asc',
+      },
+    });
+
+    // Group appointments by time period
+    const groupedData = new Map<string, AppointmentTimeDataDto>();
+
+    appointments.forEach((appointment) => {
+      let dateKey: string;
+      const appointmentDate = new Date(appointment.date);
+
+      switch (query.period) {
+        case TimePeriod.DAY:
+          dateKey = appointmentDate.toISOString().split('T')[0];
+          break;
+        case TimePeriod.WEEK: {
+          // Get start of week (Monday)
+          const weekStart = new Date(appointmentDate);
+          weekStart.setDate(
+            appointmentDate.getDate() - appointmentDate.getDay() + 1,
+          );
+          dateKey = weekStart.toISOString().split('T')[0];
+          break;
+        }
+        case TimePeriod.MONTH:
+          dateKey = `${appointmentDate.getFullYear()}-${String(appointmentDate.getMonth() + 1).padStart(2, '0')}`;
+          break;
+        default:
+          dateKey = appointmentDate.toISOString().split('T')[0];
+      }
+
+      if (!groupedData.has(dateKey)) {
+        groupedData.set(dateKey, {
+          date: dateKey,
+          total: 0,
+          completed: 0,
+          pending: 0,
+          cancelled: 0,
+          confirmed: 0,
+        });
+      }
+
+      const data = groupedData.get(dateKey)!;
+      data.total++;
+
+      switch (appointment.status) {
+        case 'COMPLETED':
+          data.completed++;
+          break;
+        case 'PENDING':
+          data.pending++;
+          break;
+        case 'CANCELLED':
+          data.cancelled++;
+          break;
+        case 'CONFIRMED':
+          data.confirmed++;
+          break;
+      }
+    });
+
+    const data = Array.from(groupedData.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+
+    return {
+      data,
+      period: {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        periodType: query.period,
+      },
+    };
+  }
+
+  /**
+   * 9. Thống kê khám bệnh theo thời gian
+   */
+  async getExaminationsByTime(
+    query: TimeBasedQueryDto,
+    _user: UserContext,
+  ): Promise<ExaminationsByTimeResponseDto> {
+    const { startDate, endDate } = this.calculateDateRange({
+      period: query.period,
+      startDate: query.startDate,
+      endDate: query.endDate,
+    });
+
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      include: {
+        service: {
+          select: {
+            durationMinutes: true,
+          },
+        },
+      },
+      orderBy: {
+        date: 'asc',
+      },
+    });
+
+    // Group appointments by time period
+    const groupedData = new Map<string, ExaminationTimeDataDto>();
+
+    appointments.forEach((appointment) => {
+      let dateKey: string;
+      const appointmentDate = new Date(appointment.date);
+
+      switch (query.period) {
+        case TimePeriod.DAY:
+          dateKey = appointmentDate.toISOString().split('T')[0];
+          break;
+        case TimePeriod.WEEK: {
+          // Get start of week (Monday)
+          const weekStart = new Date(appointmentDate);
+          weekStart.setDate(
+            appointmentDate.getDate() - appointmentDate.getDay() + 1,
+          );
+          dateKey = weekStart.toISOString().split('T')[0];
+          break;
+        }
+        case TimePeriod.MONTH:
+          dateKey = `${appointmentDate.getFullYear()}-${String(appointmentDate.getMonth() + 1).padStart(2, '0')}`;
+          break;
+        default:
+          dateKey = appointmentDate.toISOString().split('T')[0];
+      }
+
+      if (!groupedData.has(dateKey)) {
+        groupedData.set(dateKey, {
+          date: dateKey,
+          totalAppointments: 0,
+          completedAppointments: 0,
+          averageDurationMinutes: 0,
+        });
+      }
+
+      const data = groupedData.get(dateKey)!;
+      data.totalAppointments++;
+
+      if (appointment.status === 'COMPLETED') {
+        data.completedAppointments++;
+      }
+
+      // Add duration for average calculation
+      if (appointment.service?.durationMinutes) {
+        data.averageDurationMinutes += appointment.service.durationMinutes;
+      }
+    });
+
+    // Calculate average duration for each period
+    const data = Array.from(groupedData.values())
+      .map((item) => ({
+        ...item,
+        averageDurationMinutes:
+          item.totalAppointments > 0
+            ? item.averageDurationMinutes / item.totalAppointments
+            : 0,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      data,
+      period: {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        periodType: query.period,
+      },
+    };
+  }
+
+  /**
+   * 10. Thống kê doanh thu theo thời gian (Time-based)
+   */
+  async getRevenueByTimeStats(
+    query: TimeBasedQueryDto,
+    _user: UserContext,
+  ): Promise<RevenueByTimeResponseDto> {
+    const { startDate, endDate } = this.calculateDateRange({
+      period: query.period,
+      startDate: query.startDate,
+      endDate: query.endDate,
+    });
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        createdAt: true,
+        totalAmount: true,
+        amountPaid: true,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    // Group invoices by time period
+    const groupedData = new Map<string, RevenueTimeDataDto>();
+
+    invoices.forEach((invoice) => {
+      let dateKey: string;
+      const invoiceDate = new Date(invoice.createdAt);
+
+      switch (query.period) {
+        case TimePeriod.DAY:
+          dateKey = invoiceDate.toISOString().split('T')[0];
+          break;
+        case TimePeriod.WEEK: {
+          // Get start of week (Monday)
+          const weekStart = new Date(invoiceDate);
+          weekStart.setDate(invoiceDate.getDate() - invoiceDate.getDay() + 1);
+          dateKey = weekStart.toISOString().split('T')[0];
+          break;
+        }
+        case TimePeriod.MONTH:
+          dateKey = `${invoiceDate.getFullYear()}-${String(invoiceDate.getMonth() + 1).padStart(2, '0')}`;
+          break;
+        default:
+          dateKey = invoiceDate.toISOString().split('T')[0];
+      }
+
+      if (!groupedData.has(dateKey)) {
+        groupedData.set(dateKey, {
+          date: dateKey,
+          totalRevenue: 0,
+          paidRevenue: 0,
+          accountsReceivable: 0,
+        });
+      }
+
+      const data = groupedData.get(dateKey)!;
+      data.totalRevenue += invoice.totalAmount;
+      data.paidRevenue += invoice.amountPaid;
+      data.accountsReceivable = data.totalRevenue - data.paidRevenue;
+    });
+
+    const data = Array.from(groupedData.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+
+    return {
+      data,
+      period: {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        periodType: query.period,
+      },
     };
   }
 }

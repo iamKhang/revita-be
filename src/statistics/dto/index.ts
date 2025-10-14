@@ -7,3 +7,4 @@ export * from './payment-method-stats.dto';
 export * from './top-services-stats.dto';
 export * from './patient-spending-history.dto';
 export * from './user-context.dto';
+export * from './time-based-stats.dto';
