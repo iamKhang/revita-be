@@ -17,7 +17,6 @@ import {
   CreateCategoryDto,
   CreateCommentDto,
   CreateDraftPostDto,
-  CreatePostDto,
   CreateSeriesDto,
   LimitedPostsQueryDto,
   PublishedPostsQueryDto,
@@ -42,10 +41,64 @@ export class PostsController {
     return this.postsService.createDraftPost(req.user?.id, dto);
   }
 
-  @Post('admin')
+  @Get('admin')
   @Roles(Role.ADMIN)
-  createPost(@Body() dto: CreatePostDto, @Request() req: any) {
-    return this.postsService.createPost(req.user?.id, dto);
+  getAdminPosts(@Query() query: AdminPostsQueryDto) {
+    return this.postsService.getAdminPosts(query);
+  }
+
+  @Get('admin/categories')
+  @Roles(Role.ADMIN)
+  getAdminCategories() {
+    return this.postsService.getAdminCategories();
+  }
+
+  @Post('admin/categories')
+  @Roles(Role.ADMIN)
+  createCategory(@Body() dto: CreateCategoryDto) {
+    return this.postsService.createCategory(dto);
+  }
+
+  @Put('admin/categories/:categoryId')
+  @Roles(Role.ADMIN)
+  updateCategory(
+    @Param('categoryId') categoryId: string,
+    @Body() dto: UpdateCategoryDto,
+  ) {
+    return this.postsService.updateCategory(categoryId, dto);
+  }
+
+  @Delete('admin/categories/:categoryId')
+  @Roles(Role.ADMIN)
+  removeCategory(@Param('categoryId') categoryId: string) {
+    return this.postsService.deleteCategory(categoryId);
+  }
+
+  @Get('admin/series')
+  @Roles(Role.ADMIN)
+  getAdminSeries() {
+    return this.postsService.getAdminSeries();
+  }
+
+  @Post('admin/series')
+  @Roles(Role.ADMIN)
+  createSeries(@Body() dto: CreateSeriesDto) {
+    return this.postsService.createSeries(dto);
+  }
+
+  @Put('admin/series/:seriesId')
+  @Roles(Role.ADMIN)
+  updateSeries(
+    @Param('seriesId') seriesId: string,
+    @Body() dto: UpdateSeriesDto,
+  ) {
+    return this.postsService.updateSeries(seriesId, dto);
+  }
+
+  @Delete('admin/series/:seriesId')
+  @Roles(Role.ADMIN)
+  removeSeries(@Param('seriesId') seriesId: string) {
+    return this.postsService.deleteSeries(seriesId);
   }
 
   @Put('admin/:postId')
@@ -68,42 +121,6 @@ export class PostsController {
   @Roles(Role.ADMIN)
   findPostById(@Param('postId') postId: string) {
     return this.postsService.getPostById(postId);
-  }
-
-  @Get('admin')
-  @Roles(Role.ADMIN)
-  getAdminPosts(@Query() query: AdminPostsQueryDto) {
-    return this.postsService.getAdminPosts(query);
-  }
-
-  @Post('admin/categories')
-  @Roles(Role.ADMIN)
-  createCategory(@Body() dto: CreateCategoryDto) {
-    return this.postsService.createCategory(dto);
-  }
-
-  @Put('admin/categories/:categoryId')
-  @Roles(Role.ADMIN)
-  updateCategory(
-    @Param('categoryId') categoryId: string,
-    @Body() dto: UpdateCategoryDto,
-  ) {
-    return this.postsService.updateCategory(categoryId, dto);
-  }
-
-  @Post('admin/series')
-  @Roles(Role.ADMIN)
-  createSeries(@Body() dto: CreateSeriesDto) {
-    return this.postsService.createSeries(dto);
-  }
-
-  @Put('admin/series/:seriesId')
-  @Roles(Role.ADMIN)
-  updateSeries(
-    @Param('seriesId') seriesId: string,
-    @Body() dto: UpdateSeriesDto,
-  ) {
-    return this.postsService.updateSeries(seriesId, dto);
   }
 
   @Post(':postId/like')

@@ -736,6 +736,38 @@ export class PostsService {
     return this.getCategoryById(id);
   }
 
+  async getAdminCategories() {
+    const categories = await this.prisma.postCategory.findMany({
+      orderBy: [{ name: 'asc' }],
+      include: categoryWithRelationsInclude,
+    });
+
+    return categories.map((category) => this.toCategoryResponse(category));
+  }
+
+  async deleteCategory(id: string) {
+    const category = await this.prisma.postCategory.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.postInCategory.deleteMany({
+        where: { categoryId: id },
+      });
+
+      await tx.postCategory.delete({
+        where: { id },
+      });
+    });
+
+    return { success: true };
+  }
+
   async createSeries(dto: CreateSeriesDto) {
     const name = dto.name.trim();
     const description = dto.description.trim();
@@ -845,6 +877,38 @@ export class PostsService {
     });
 
     return this.getSeriesById(id);
+  }
+
+  async getAdminSeries() {
+    const seriesList = await this.prisma.series.findMany({
+      orderBy: [{ name: 'asc' }],
+      include: seriesWithRelationsInclude,
+    });
+
+    return seriesList.map((series) => this.toSeriesResponse(series));
+  }
+
+  async deleteSeries(id: string) {
+    const series = await this.prisma.series.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!series) {
+      throw new NotFoundException('Series not found');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.seriesPost.deleteMany({
+        where: { seriesId: id },
+      });
+
+      await tx.series.delete({
+        where: { id },
+      });
+    });
+
+    return { success: true };
   }
 
   async getPostBySlug(slug: string, viewerId?: string) {
