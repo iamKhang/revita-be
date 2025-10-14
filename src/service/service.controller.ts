@@ -33,6 +33,11 @@ import {
   GetServicesDto,
   GetRoomWaitingListDto,
   GetRoomWaitingListResponseDto,
+  ServiceManagementQueryDto,
+  CreateServiceDto,
+  UpdateServiceDto,
+  CreatePackageDto,
+  UpdatePackageDto,
 } from './dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -97,6 +102,258 @@ export class ServiceController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  @Get('management/services')
+  async getManagementServices(
+    @Query() query: ServiceManagementQueryDto,
+  ) {
+    try {
+      const result = await this.serviceService.getServiceManagementList(query);
+      return {
+        success: true,
+        message: 'Lấy danh sách dịch vụ (quản lý) thành công',
+        data: result,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Get management services error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi lấy danh sách dịch vụ (quản lý)',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('management/services/:id')
+  async getManagementServiceById(@Param('id') id: string) {
+    try {
+      const service = await this.serviceService.getServiceManagementById(id);
+      return {
+        success: true,
+        message: 'Lấy thông tin dịch vụ (quản lý) thành công',
+        data: service,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Get management service detail error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi lấy thông tin dịch vụ (quản lý)',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('management/services')
+  async createServiceForManagement(@Body() dto: CreateServiceDto) {
+    try {
+      const service = await this.serviceService.createService(dto);
+      return {
+        success: true,
+        message: 'Tạo dịch vụ thành công',
+        data: service,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Create service error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi tạo dịch vụ',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Put('management/services/:id')
+  async updateServiceForManagement(
+    @Param('id') id: string,
+    @Body() dto: UpdateServiceDto,
+  ) {
+    try {
+      const service = await this.serviceService.updateService(id, dto);
+      return {
+        success: true,
+        message: 'Cập nhật dịch vụ thành công',
+        data: service,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Update service error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi cập nhật dịch vụ',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('management/packages')
+  async getManagementPackages(
+    @Query() query: ServiceManagementQueryDto,
+  ) {
+    try {
+      const result = await this.serviceService.getPackageManagementList(query);
+      return {
+        success: true,
+        message: 'Lấy danh sách gói dịch vụ thành công',
+        data: result,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Get management packages error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi lấy danh sách gói dịch vụ',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('management/packages/:id')
+  async getManagementPackageById(@Param('id') id: string) {
+    try {
+      const pkg = await this.serviceService.getPackageManagementById(id);
+      return {
+        success: true,
+        message: 'Lấy thông tin gói dịch vụ thành công',
+        data: pkg,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Get management package detail error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi lấy thông tin gói dịch vụ',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('management/packages')
+  async createPackageForManagement(@Body() dto: CreatePackageDto) {
+    try {
+      const pkg = await this.serviceService.createPackage(dto);
+      return {
+        success: true,
+        message: 'Tạo gói dịch vụ thành công',
+        data: pkg,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Create package error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi tạo gói dịch vụ',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Put('management/packages/:id')
+  async updatePackageForManagement(
+    @Param('id') id: string,
+    @Body() dto: UpdatePackageDto,
+  ) {
+    try {
+      const pkg = await this.serviceService.updatePackage(id, dto);
+      return {
+        success: true,
+        message: 'Cập nhật gói dịch vụ thành công',
+        data: pkg,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Update package error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi cập nhật gói dịch vụ',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('management/endpoints')
+  getManagementEndpoints() {
+    return {
+      success: true,
+      message: 'Danh sách endpoint quản lý dịch vụ',
+      data: {
+        servicesList: '/services/management/services',
+        serviceDetail: '/services/management/services/:id',
+        createService: '/services/management/services',
+        updateService: '/services/management/services/:id',
+        packagesList: '/services/management/packages',
+        packageDetail: '/services/management/packages/:id',
+        createPackage: '/services/management/packages',
+        updatePackage: '/services/management/packages/:id',
+      },
+    };
   }
 
   @Get('my-services')
@@ -191,47 +448,6 @@ export class ServiceController {
           message: 'Có lỗi xảy ra khi lấy thông tin dịch vụ',
           error: error.message,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  // Prescription Service Management endpoints
-  @Post('scan-prescription')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.DOCTOR, Role.TECHNICIAN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Quét mã phiếu chỉ định để nhận thông tin dịch vụ' })
-  @ApiResponse({
-    status: 200,
-    description: 'Quét thành công',
-    type: ScanPrescriptionResponseDto,
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Không tìm thấy phiếu chỉ định',
-  })
-  async scanPrescription(
-    @Body() scanDto: ScanPrescriptionDto,
-    @Request() req: any,
-  ): Promise<ScanPrescriptionResponseDto> {
-    try {
-      const userId = req.user.id;
-      const userRole = req.user.role;
-
-      const result = await this.prescriptionServiceManagement.scanPrescription(
-        scanDto.prescriptionCode,
-        userId,
-        userRole,
-      );
-      return result;
-    } catch (error) {
-      this.logger.error(`Scan prescription error: ${error.message}`);
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Lỗi khi quét phiếu chỉ định',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

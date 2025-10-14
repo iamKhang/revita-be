@@ -9,6 +9,8 @@ export enum EntityType {
   MEDICAL_RECORD = 'MR',
   APPOINTMENT = 'APPT',
   PRESCRIPTION = 'PRESC',
+  CLINIC_ROOM = 'ROOM',
+  BOOTH = 'BOOTH',
 }
 
 @Injectable()
@@ -123,6 +125,63 @@ export class CodeGeneratorService {
     const lastNameInitial = this.getLastNameInitial(name);
 
     return `ADM${year}${month}${day}${hour}${minute}${second}${lastNameInitial}`;
+  }
+
+  /**
+   * Tạo mã Technician
+   * Format: TECH{YYMMDD}{HHMMSS}{LASTNAME_INITIAL}
+   */
+  generateTechnicianCode(name: string): string {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const hour = now.getHours().toString().padStart(2, '0');
+    const minute = now.getMinutes().toString().padStart(2, '0');
+    const second = now.getSeconds().toString().padStart(2, '0');
+    const millisecond = now.getMilliseconds().toString().padStart(3, '0');
+
+    const lastNameInitial = this.getLastNameInitial(name);
+
+    return `TECH${year}${month}${day}${hour}${minute}${second}${millisecond}${lastNameInitial}`;
+  }
+
+  /**
+   * Tạo mã Receptionist
+   * Format: RECP{YYMMDD}{HHMMSS}{LASTNAME_INITIAL}
+   */
+  generateReceptionistCode(name: string): string {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const hour = now.getHours().toString().padStart(2, '0');
+    const minute = now.getMinutes().toString().padStart(2, '0');
+    const second = now.getSeconds().toString().padStart(2, '0');
+    const millisecond = now.getMilliseconds().toString().padStart(3, '0');
+
+    const lastNameInitial = this.getLastNameInitial(name);
+
+    return `RECP${year}${month}${day}${hour}${minute}${second}${millisecond}${lastNameInitial}`;
+  }
+
+  /**
+   * Tạo mã Cashier
+   * Format: CASH{YYMMDD}{HHMMSS}{LASTNAME_INITIAL}
+   */
+  generateCashierCode(name: string): string {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const hour = now.getHours().toString().padStart(2, '0');
+    const minute = now.getMinutes().toString().padStart(2, '0');
+    const second = now.getSeconds().toString().padStart(2, '0');
+    const millisecond = now.getMilliseconds().toString().padStart(3, '0');
+
+    const lastNameInitial = this.getLastNameInitial(name);
+
+    return `CASH${year}${month}${day}${hour}${minute}${second}${millisecond}${lastNameInitial}`;
   }
 
   /**
@@ -371,5 +430,54 @@ export class CodeGeneratorService {
       lastNameInitial,
       ageGroup,
     };
+  }
+
+  /**
+   * Tạo mã Clinic Room
+   * Format: ROOM{SPECIALTY_CODE}{SEQUENCE_NUMBER}
+   * 
+   * Ví dụ:
+   * - ROOMCARD001 (ROOM + CARD + 001)
+   * - ROOMDERM002 (ROOM + DERM + 002)
+   */
+  generateClinicRoomCode(specialtyCode: string, existingCount: number = 0): string {
+    // Lấy 4 ký tự đầu của specialty code và chuyển thành uppercase
+    const specialtyPrefix = specialtyCode.substring(0, 4).toUpperCase();
+    
+    // Tạo sequence number (3 chữ số, bắt đầu từ 001)
+    const sequenceNumber = (existingCount + 1).toString().padStart(3, '0');
+    
+    return `ROOM${specialtyPrefix}${sequenceNumber}`;
+  }
+
+  /**
+   * Tạo mã Booth
+   * Format: BOOTH{ROOM_CODE}{SEQUENCE_NUMBER}
+   * 
+   * Ví dụ:
+   * - BOOTHCARD001001 (BOOTH + ROOMCARD001 + 001)
+   * - BOOTHCARD001002 (BOOTH + ROOMCARD001 + 002)
+   */
+  generateBoothCode(roomCode: string, existingCount: number = 0): string {
+    // Tạo sequence number (3 chữ số, bắt đầu từ 001)
+    const sequenceNumber = (existingCount + 1).toString().padStart(3, '0');
+    
+    return `BOOTH${roomCode}${sequenceNumber}`;
+  }
+
+  /**
+   * Tạo mã đơn giản cho Clinic Room (fallback)
+   * Format: ROOM{timestamp}
+   */
+  generateSimpleClinicRoomCode(): string {
+    return `ROOM${Date.now()}`;
+  }
+
+  /**
+   * Tạo mã đơn giản cho Booth (fallback)
+   * Format: BOOTH{timestamp}
+   */
+  generateSimpleBoothCode(): string {
+    return `BOOTH${Date.now()}`;
   }
 }

@@ -5,6 +5,7 @@ import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
 import { PatientProfileModule } from './patient-profile/patient-profile.module';
 import { FileStorageModule } from '../file-storage/file-storage.module';
+import { StaffModule } from './staff/staff.module';
 
 import { PrismaClient } from '@prisma/client';
 import { PassportModule } from '@nestjs/passport';
@@ -18,6 +19,7 @@ import { UserController } from './user.controller';
     PatientModule,
     PatientProfileModule,
     FileStorageModule,
+    StaffModule,
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,

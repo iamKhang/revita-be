@@ -10,6 +10,12 @@ export class EmailService {
     this.resend = new Resend(process.env.RESEND_API_KEY);
   }
 
+  private isDryRun(): boolean {
+    // If EMAIL_DRY_RUN is 'true', do not send emails; only log to console
+    // Useful for local development/testing
+    return String(process.env.EMAIL_DRY_RUN).toLowerCase() === 'true';
+  }
+
   /**
    * Gửi OTP qua email
    * @param email - Địa chỉ email người nhận
@@ -18,6 +24,11 @@ export class EmailService {
    */
   async sendOtp(email: string, otp: string, name?: string): Promise<boolean> {
     try {
+      if (this.isDryRun()) {
+        // eslint-disable-next-line no-console
+        console.log('[EMAIL_DRY_RUN] sendOtp', { to: email, subject: 'Mã xác thực OTP - Revita Healthcare', otp, name });
+        return true;
+      }
       const { data, error } = await this.resend.emails.send({
         from: 'Revita Healthcare <noreply@revita.io.vn>',
         to: [email],
@@ -53,6 +64,11 @@ export class EmailService {
    */
   async sendWelcomeEmail(email: string, name: string): Promise<boolean> {
     try {
+      if (this.isDryRun()) {
+        // eslint-disable-next-line no-console
+        console.log('[EMAIL_DRY_RUN] sendWelcomeEmail', { to: email, subject: 'Chào mừng bạn đến với Revita Healthcare!', name });
+        return true;
+      }
       const { data, error } = await this.resend.emails.send({
         from: 'Revita Healthcare <noreply@revita.io.vn>',
         to: [email],
@@ -261,6 +277,90 @@ export class EmailService {
             <p>Trân trọng,<br><strong>Đội ngũ Revita Healthcare</strong></p>
             <p>Email này được gửi tự động, vui lòng không trả lời.</p>
           </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  /**
+   * Gửi thông tin tài khoản cho nhân viên mới
+   */
+  async sendAccountCredentials(params: {
+    email: string;
+    name: string;
+    username: string;
+    password: string;
+    role?: string;
+  }): Promise<boolean> {
+    const { email, name, username, password, role } = params;
+    try {
+      if (this.isDryRun()) {
+        // eslint-disable-next-line no-console
+        console.log('[EMAIL_DRY_RUN] sendAccountCredentials', { to: email, subject: 'Thông tin tài khoản nhân viên - Revita Healthcare', name, username, password, role });
+        return true;
+      }
+      const { data, error } = await this.resend.emails.send({
+        from: 'Revita Healthcare <noreply@revita.io.vn>',
+        to: [email],
+        subject: 'Thông tin tài khoản nhân viên - Revita Healthcare',
+        html: this.generateCredentialsTemplate({ name, username, password, role }),
+      });
+      if (error) {
+        this.logger.error('Failed to send credentials email:', error);
+        return false;
+      }
+      this.logger.log(`Credentials email sent to ${email}. ID: ${data?.id}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🔐 Tài khoản: ${username} | Mật khẩu: ${password}`);
+      }
+      return true;
+    } catch (error) {
+      this.logger.error('Error sending credentials email:', error);
+      return false;
+    }
+  }
+
+  private generateCredentialsTemplate(params: {
+    name: string;
+    username: string;
+    password: string;
+    role?: string;
+  }): string {
+    const { name, username, password, role } = params;
+    return `
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Thông tin tài khoản nhân viên</title>
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4; }
+          .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+          .header { text-align: center; margin-bottom: 20px; }
+          .logo { font-size: 22px; font-weight: bold; color: #2c5aa0; }
+          .box { background: #f8f9fa; border: 1px solid #e9ecef; padding: 16px; border-radius: 8px; }
+          .label { color: #6c757d; font-size: 13px; }
+          .value { font-weight: 600; font-size: 15px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="logo">🏥 Revita Healthcare</div>
+            <h2>Thông tin tài khoản nhân viên</h2>
+          </div>
+          <p>Xin chào ${name},</p>
+          <p>Tài khoản làm việc tại Revita Healthcare của bạn đã được tạo${role ? ` cho vai trò <strong>${role}</strong>` : ''}.</p>
+          <div class="box">
+            <div class="label">Tên đăng nhập</div>
+            <div class="value">${username}</div>
+            <div class="label" style="margin-top:10px;">Mật khẩu tạm thời</div>
+            <div class="value">${password}</div>
+          </div>
+          <p>Vui lòng đăng nhập và đổi mật khẩu ngay sau lần đăng nhập đầu tiên để bảo mật tài khoản.</p>
+          <p>Trân trọng,<br/>Đội ngũ Revita Healthcare</p>
         </div>
       </body>
       </html>

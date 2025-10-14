@@ -12,12 +12,19 @@ import { v4 as uuidv4 } from 'uuid';
 export class FileStorageService {
   private supabase: SupabaseClient;
   private readonly logger = new Logger(FileStorageService.name);
-  private readonly allowedBuckets = ['profiles', 'results'];
+  private readonly allowedBuckets: string[];
 
   constructor() {
     const supabaseUrl = process.env.SUPABASE_URL ?? '';
     const supabaseKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+    const bucketsEnv = process.env.SUPABASE_BUCKETS ?? '';
+    const parsedBuckets = bucketsEnv
+      .split(',')
+      .map((bucket) => bucket.trim())
+      .filter((bucket) => bucket.length > 0);
+
+    this.allowedBuckets = parsedBuckets.length > 0 ? parsedBuckets : ['profiles', 'results'];
 
     this.supabase = createClient(supabaseUrl, supabaseKey, {
       auth: {
