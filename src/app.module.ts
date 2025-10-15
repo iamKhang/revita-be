@@ -23,6 +23,7 @@ import { DrugCatalogModule } from './drug-catalog/drug-catalog.module';
 import { ClinicModule } from './clinic/clinic.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { DoctorRatingModule } from './doctor-rating/doctor-rating.module';
+import { PostsModule } from './posts/posts.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { DoctorRatingModule } from './doctor-rating/doctor-rating.module';
     ClinicModule,
     StatisticsModule,
     DoctorRatingModule,
+    PostsModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
