@@ -27,6 +27,7 @@ interface SystemInfo {
   tables: string[];
   relationships: string[];
   sampleQueries: string[];
+  statisticalQueries: string[];
 }
 
 interface QueryValidationResult {
@@ -416,6 +417,12 @@ QUAN TRỌNG:
 - Cấm truy vấn "full scan" không where trên bảng nhạy cảm (personal tables)
 - Nếu thiếu where, tự động thêm scope cá nhân
 
+THỐNG KÊ VÀ BÁO CÁO (CHỈ CHO PHÉP CÁC VAI TRÒ KHÔNG PHẢI PATIENT):
+- Nếu câu hỏi về thống kê, báo cáo, phân tích dữ liệu hệ thống, có thể sử dụng các method thống kê chuyên dụng
+- PATIENT TUYỆT ĐỐI KHÔNG được truy cập dữ liệu thống kê hệ thống
+- Các method thống kê: getAppointmentStatsByTime, getRevenueStatsByTime, getExaminationVolumeStats, getWorkSessionStats, getPaymentMethodStats, getTopServicesStats, getDoctorPerformanceStats, getPatientStatistics, getSpecialtyStats
+- Khi sử dụng method thống kê, truyền period ('day', 'week', 'month', 'custom') và startDate/endDate nếu cần
+
  LUẬT RÀNG BUỘC VỀ TRƯỜNG (bắt buộc tuân thủ):
  - WorkSession: KHÔNG có trường "date". Dùng startTime/endTime để filter/order theo thời gian. Các trường chính: id, doctorId, technicianId, startTime, endTime, nextAvailableAt, status, createdAt, updatedAt; có thể select doctor{ auth{ name } }.
  - Appointment: có trường date, startTime, endTime, status, patientProfileId, doctorId, specialtyId, createdAt, updatedAt.
@@ -439,6 +446,17 @@ VÍ DỤ CHI TIẾT:
  - "Lịch làm việc bác sĩ trong tuần này" (WorkSession) → await this.prismaService.workSession.findMany({ where: { startTime: { gte: new Date(new Date().setDate(new Date().getDate()-new Date().getDay()+1)), lt: new Date(new Date().setDate(new Date().getDate()-new Date().getDay()+8)) } }, select: { id: true, startTime: true, endTime: true, doctor: { select: { id: true, auth: { select: { name: true } } } } }, orderBy: [{ startTime: 'asc' }], take: 50, skip: 0 })
  - "Bác sĩ Kiên thuộc chuyên khoa gì" → await this.prismaService.appointment.findMany({ where: { doctor: { auth: { name: { contains: "Kiên", mode: "insensitive" } } } }, select: { specialty: { select: { id: true, name: true } } }, distinct: ["specialtyId"] })
  - "Bệnh viện có bao nhiêu chuyên khoa?, liệt kê ra" → await this.prismaService.specialty.findMany({ select: { id: true, specialtyCode: true, name: true } })
+
+VÍ DỤ THỐNG KÊ (CHỈ CHO ADMIN/RECEPTIONIST/DOCTOR/CASHIER/TECHNICIAN):
+- "Thống kê lịch hẹn hôm nay" → await this.getAppointmentStatsByTime('day')
+- "Báo cáo doanh thu tuần này" → await this.getRevenueStatsByTime('week')
+- "Thống kê khối lượng khám tháng này" → await this.getExaminationVolumeStats('month')
+- "Lịch làm việc bác sĩ tuần này" → await this.getWorkSessionStats('week')
+- "Thống kê phương thức thanh toán hôm nay" → await this.getPaymentMethodStats('day')
+- "Dịch vụ phổ biến nhất tháng này" → await this.getTopServicesStats('month')
+- "Hiệu suất bác sĩ tuần này" → await this.getDoctorPerformanceStats('week')
+- "Thống kê bệnh nhân theo giới tính" → await this.getPatientStatistics('month')
+- "Thống kê chuyên khoa" → await this.getSpecialtyStats('month')
 
 QUERY:`;
 
@@ -659,13 +677,39 @@ QUERY:`;
     // Sử dụng eval với context hạn chế
     try {
       const scopedPrisma = this.createScopedPrisma(this.prismaService);
-      // Bind this to provide this.prismaService in the generated query
-      const fn = eval(`(async function() { return ${queryString}; })`);
-      const result = await (
-        fn as (this: { prismaService: PrismaService }) => Promise<unknown>
-      ).call({ prismaService: scopedPrisma });
 
-      return result;
+      // Check if query contains statistical methods
+      const statisticalMethods = [
+        'getAppointmentStatsByTime',
+        'getRevenueStatsByTime',
+        'getExaminationVolumeStats',
+        'getWorkSessionStats',
+        'getPaymentMethodStats',
+        'getTopServicesStats',
+        'getDoctorPerformanceStats',
+        'getPatientStatistics',
+        'getSpecialtyStats',
+      ];
+
+      const hasStatisticalMethod = statisticalMethods.some((method) =>
+        queryString.includes(`await this.${method}`),
+      );
+
+      if (hasStatisticalMethod) {
+        // For statistical methods, bind the service instance
+        const fn = eval(`(async function() { return ${queryString}; })`);
+        const result = await (
+          fn as (this: DatabaseQueryService) => Promise<unknown>
+        ).call(this);
+        return result;
+      } else {
+        // For regular Prisma queries, use scoped prisma
+        const fn = eval(`(async function() { return ${queryString}; })`);
+        const result = await (
+          fn as (this: { prismaService: PrismaService }) => Promise<unknown>
+        ).call({ prismaService: scopedPrisma });
+        return result;
+      }
     } catch (error) {
       this.logger.error('Error executing AI-generated query:', error);
       this.logger.error(`Generated query was: ${queryString}`);
@@ -988,6 +1032,17 @@ Trả lời:`;
         'Bệnh nhân theo bác sĩ: appointment.findMany({include: {doctor: true, patientProfile: true}})',
         'Dịch vụ phổ biến: service.findMany({orderBy: {price: "desc"}})',
       ],
+      statisticalQueries: [
+        'Thống kê lịch hẹn theo thời gian: getAppointmentStatsByTime(period, startDate?, endDate?)',
+        'Thống kê doanh thu theo thời gian: getRevenueStatsByTime(period, startDate?, endDate?)',
+        'Thống kê khối lượng khám: getExaminationVolumeStats(period, startDate?, endDate?)',
+        'Thống kê lịch làm việc: getWorkSessionStats(period, startDate?, endDate?)',
+        'Thống kê phương thức thanh toán: getPaymentMethodStats(period, startDate?, endDate?)',
+        'Thống kê dịch vụ phổ biến: getTopServicesStats(period, startDate?, endDate?)',
+        'Thống kê hiệu suất bác sĩ: getDoctorPerformanceStats(period, startDate?, endDate?)',
+        'Thống kê bệnh nhân (tổng hợp): getPatientStatistics(period, startDate?, endDate?)',
+        'Thống kê chuyên khoa: getSpecialtyStats(period, startDate?, endDate?)',
+      ],
     };
   }
 
@@ -1096,6 +1151,494 @@ Trả lời:`;
     } catch (error) {
       this.logger.error('Error getting appointments by date range:', error);
       throw error;
+    }
+  }
+
+  // ===== STATISTICAL QUERIES FOR AI CHATBOT =====
+  // These methods are restricted to non-PATIENT roles only
+
+  /**
+   * Get appointment statistics by time period
+   * Restricted to: ADMIN, RECEPTIONIST, DOCTOR, CASHIER
+   */
+  async getAppointmentStatsByTime(
+    period: 'day' | 'week' | 'month' | 'custom',
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<unknown> {
+    this.checkStatisticalAccess();
+
+    const { start, end } = this.calculateTimeRange(period, startDate, endDate);
+    return await this.prismaService.appointment.findMany({
+      where: {
+        date: {
+          gte: start,
+          lte: end,
+        },
+      },
+      select: {
+        id: true,
+        date: true,
+        status: true,
+        appointmentCode: true,
+        doctor: {
+          select: {
+            id: true,
+            auth: { select: { name: true } },
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        patientProfile: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: { date: 'asc' },
+    });
+  }
+
+  /**
+   * Get revenue statistics by time period
+   * Restricted to: ADMIN, CASHIER
+   */
+  async getRevenueStatsByTime(
+    period: 'day' | 'week' | 'month' | 'custom',
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<unknown> {
+    this.checkStatisticalAccess();
+
+    const { start, end } = this.calculateTimeRange(period, startDate, endDate);
+    return await this.prismaService.invoice.findMany({
+      where: {
+        createdAt: {
+          gte: start,
+          lte: end,
+        },
+      },
+      select: {
+        id: true,
+        invoiceCode: true,
+        totalAmount: true,
+        amountPaid: true,
+        isPaid: true,
+        paymentMethod: true,
+        createdAt: true,
+        patientProfile: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
+   * Get examination volume statistics
+   * Restricted to: ADMIN, RECEPTIONIST, DOCTOR
+   */
+  async getExaminationVolumeStats(
+    period: 'day' | 'week' | 'month' | 'custom',
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<unknown> {
+    this.checkStatisticalAccess();
+
+    const { start, end } = this.calculateTimeRange(period, startDate, endDate);
+    return await this.prismaService.appointment.findMany({
+      where: {
+        date: {
+          gte: start,
+          lte: end,
+        },
+        status: 'COMPLETED',
+      },
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            auth: { select: { name: true } },
+            doctorCode: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            durationMinutes: true,
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: { date: 'asc' },
+    });
+  }
+
+  /**
+   * Get work session statistics
+   * Restricted to: ADMIN, RECEPTIONIST, DOCTOR
+   */
+  async getWorkSessionStats(
+    period: 'day' | 'week' | 'month' | 'custom',
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<unknown> {
+    this.checkStatisticalAccess();
+
+    const { start, end } = this.calculateTimeRange(period, startDate, endDate);
+    return await this.prismaService.workSession.findMany({
+      where: {
+        startTime: {
+          gte: start,
+          lte: end,
+        },
+      },
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            auth: { select: { name: true } },
+            doctorCode: true,
+          },
+        },
+        technician: {
+          select: {
+            id: true,
+            auth: { select: { name: true } },
+            technicianCode: true,
+          },
+        },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+  }
+
+  /**
+   * Get payment method statistics
+   * Restricted to: ADMIN, CASHIER
+   */
+  async getPaymentMethodStats(
+    period: 'day' | 'week' | 'month' | 'custom',
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<unknown> {
+    this.checkStatisticalAccess();
+
+    const { start, end } = this.calculateTimeRange(period, startDate, endDate);
+    return await this.prismaService.invoice.findMany({
+      where: {
+        createdAt: {
+          gte: start,
+          lte: end,
+        },
+      },
+      select: {
+        id: true,
+        paymentMethod: true,
+        totalAmount: true,
+        amountPaid: true,
+        isPaid: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
+   * Get top services statistics
+   * Restricted to: ADMIN, RECEPTIONIST
+   */
+  async getTopServicesStats(
+    period: 'day' | 'week' | 'month' | 'custom',
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<unknown> {
+    this.checkStatisticalAccess();
+
+    const { start, end } = this.calculateTimeRange(period, startDate, endDate);
+    return await this.prismaService.invoiceDetail.findMany({
+      where: {
+        invoice: {
+          createdAt: {
+            gte: start,
+            lte: end,
+          },
+        },
+      },
+      include: {
+        service: {
+          select: {
+            id: true,
+            name: true,
+            serviceCode: true,
+            price: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        invoice: {
+          select: {
+            id: true,
+            totalAmount: true,
+            amountPaid: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: { invoice: { createdAt: 'asc' } },
+    });
+  }
+
+  /**
+   * Get doctor performance statistics
+   * Restricted to: ADMIN, RECEPTIONIST, DOCTOR
+   */
+  async getDoctorPerformanceStats(
+    period: 'day' | 'week' | 'month' | 'custom',
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<unknown> {
+    this.checkStatisticalAccess();
+
+    const { start, end } = this.calculateTimeRange(period, startDate, endDate);
+    return await this.prismaService.doctor.findMany({
+      include: {
+        auth: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        appointments: {
+          where: {
+            date: {
+              gte: start,
+              lte: end,
+            },
+          },
+          select: {
+            id: true,
+            date: true,
+            status: true,
+            specialty: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        workSessions: {
+          where: {
+            startTime: {
+              gte: start,
+              lte: end,
+            },
+          },
+          select: {
+            id: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+          },
+        },
+        // Note: doctorRatings relationship may not exist in current schema
+        // ratings: {
+        //   where: {
+        //     createdAt: {
+        //       gte: start,
+        //       lte: end,
+        //     },
+        //   },
+        //   select: {
+        //     id: true,
+        //     rating: true,
+        //     comment: true,
+        //     createdAt: true,
+        //   },
+        // },
+      },
+    });
+  }
+
+  /**
+   * Get patient statistics (aggregated, no personal data)
+   * Restricted to: ADMIN, RECEPTIONIST, DOCTOR
+   */
+  async getPatientStatistics(
+    period: 'day' | 'week' | 'month' | 'custom',
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<unknown> {
+    this.checkStatisticalAccess();
+
+    const { start, end } = this.calculateTimeRange(period, startDate, endDate);
+    // Get aggregated patient data without personal information
+    return await this.prismaService.patientProfile.groupBy({
+      by: ['relationship', 'gender'],
+      where: {
+        appointments: {
+          some: {
+            date: {
+              gte: start,
+              lte: end,
+            },
+          },
+        },
+      },
+      _count: {
+        id: true,
+      },
+    });
+  }
+
+  /**
+   * Get specialty statistics
+   * Restricted to: ADMIN, RECEPTIONIST, DOCTOR
+   */
+  async getSpecialtyStats(
+    period: 'day' | 'week' | 'month' | 'custom',
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<unknown> {
+    this.checkStatisticalAccess();
+
+    const { start, end } = this.calculateTimeRange(period, startDate, endDate);
+    return await this.prismaService.specialty.findMany({
+      include: {
+        appointments: {
+          where: {
+            date: {
+              gte: start,
+              lte: end,
+            },
+          },
+          select: {
+            id: true,
+            date: true,
+            status: true,
+            doctor: {
+              select: {
+                id: true,
+                auth: { select: { name: true } },
+              },
+            },
+          },
+        },
+        // Note: doctors relationship may not exist in current schema
+        // doctors: {
+        //   select: {
+        //     id: true,
+        //     auth: { select: { name: true } },
+        //     doctorCode: true,
+        //     rating: true,
+        //   },
+        // },
+      },
+    });
+  }
+
+  // ===== HELPER METHODS FOR STATISTICAL QUERIES =====
+
+  /**
+   * Check if user has access to statistical queries
+   * PATIENT role is explicitly denied
+   */
+  private checkStatisticalAccess(): void {
+    const jwtUser = (this.request as any)?.user as
+      | {
+          role?: string;
+        }
+      | undefined;
+
+    const userRole = jwtUser?.role?.toUpperCase();
+
+    if (userRole === 'PATIENT') {
+      throw new BadRequestException(
+        'Bệnh nhân không được phép truy cập dữ liệu thống kê hệ thống',
+      );
+    }
+
+    if (
+      !userRole ||
+      !['ADMIN', 'RECEPTIONIST', 'DOCTOR', 'CASHIER', 'TECHNICIAN'].includes(
+        userRole,
+      )
+    ) {
+      throw new BadRequestException(
+        'Bạn không có quyền truy cập dữ liệu thống kê',
+      );
+    }
+  }
+
+  /**
+   * Calculate time range based on period
+   */
+  private calculateTimeRange(
+    period: 'day' | 'week' | 'month' | 'custom',
+    startDate?: Date,
+    endDate?: Date,
+  ): { start: Date; end: Date } {
+    const now = new Date();
+
+    if (period === 'custom' && startDate && endDate) {
+      return { start: startDate, end: endDate };
+    }
+    switch (period) {
+      case 'day': {
+        const start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(now);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case 'week': {
+        const start = new Date(now);
+        start.setDate(now.getDate() - now.getDay() + 1);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case 'month': {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999,
+        );
+        return { start, end };
+      }
+      default: {
+        const start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(now);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
     }
   }
 }

@@ -4,7 +4,7 @@ title Tương Tác Đăng Ký Tài Khoản
 
 actor "Người Dùng" as U
 boundary "Giao Diện" as F
-control "Controller" as C
+control "RegisterController" as C
 control "RegisterService" as R
 entity "Auth" as A
 entity "Patient" as P
@@ -16,7 +16,7 @@ database "Cơ Sở Dữ Liệu" as DB
 == Bước 1: Đăng ký với số điện thoại/email ==
 
 U -> F: Nhập số điện thoại hoặc email
-F -> C: Gửi yêu cầu đăng ký bước 1
+F -> C: POST /register/step1
 C -> R: registerStep1(registerDto)
 R -> A: Kiểm tra phone/email đã tồn tại
 A -> DB: Truy vấn auth table
@@ -54,7 +54,7 @@ end
 == Bước 2: Xác thực OTP ==
 
 U -> F: Nhập mã OTP
-F -> C: Gửi yêu cầu xác thực OTP
+F -> C: POST /register/verify-otp
 C -> R: verifyOtp(verifyDto)
 R -> RED: Lấy session data
 RED --> R: Session data
@@ -79,7 +79,7 @@ end
 == Bước 3: Hoàn tất đăng ký ==
 
 U -> F: Nhập thông tin cá nhân và mật khẩu
-F -> C: Gửi yêu cầu hoàn tất đăng ký
+F -> C: POST /register/complete
 C -> R: completeRegistration(completeDto)
 R -> RED: Lấy session data
 RED --> R: Session data

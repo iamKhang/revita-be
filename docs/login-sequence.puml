@@ -4,7 +4,7 @@ title Tương Tác Đăng Nhập Hệ Thống
 
 actor "Người Dùng" as U
 boundary "Giao Diện" as F
-control "Controller" as C
+control "LoginController" as C
 control "LoginService" as L
 entity "Auth" as A
 entity "Patient" as P
@@ -16,8 +16,8 @@ database "Cơ Sở Dữ Liệu" as DB
 == Đăng nhập thông thường ==
 
 U -> F: Nhập thông tin đăng nhập
-F -> C: Gửi yêu cầu đăng nhập
-C -> L: login(phoneOrEmail, password)
+F -> C: POST /login
+C -> L: login(loginDto)
 L -> L: validateUser(phoneOrEmail, password)
 L -> A: Tìm kiếm user theo phone/email
 A -> DB: Truy vấn auth table

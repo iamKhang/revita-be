@@ -4,7 +4,7 @@ title Tương Tác Tạo và Quản Lý Bệnh Án - Luồng Bác Sĩ
 
 actor "Bác Sĩ" as D
 boundary "Giao Diện" as F
-control "Controller" as C
+control "MedicalRecordController" as C
 control "MedicalRecordService" as M
 entity "MedicalRecord" as MR
 entity "PatientProfile" as PP
@@ -15,7 +15,7 @@ database "Cơ Sở Dữ Liệu" as DB
 == Tạo bệnh án mới ==
 
 D -> F: Chọn bệnh nhân
-F -> C: Gửi yêu cầu lấy danh sách template
+F -> C: GET /medical-record/templates
 C -> M: getTemplates()
 M -> T: Lấy danh sách template
 T -> DB: Truy vấn template table
@@ -26,8 +26,8 @@ C --> F: Danh sách template
 F --> D: Hiển thị danh sách template
 
 D -> F: Chọn template và gửi yêu cầu tạo bệnh án
-F -> C: Gửi yêu cầu tạo bệnh án
-C -> M: create(dto, user)
+F -> C: POST /medical-record/create
+C -> M: create(createMedicalRecordDto, user)
 M -> M: Kiểm tra quyền tạo (DOCTOR/ADMIN)
 
 alt Có quyền tạo
@@ -61,7 +61,7 @@ end
 == Xem và quản lý bệnh án ==
 
 D -> F: Xem danh sách bệnh án
-F -> C: Gửi yêu cầu lấy danh sách
+F -> C: GET /medical-record?page=1&limit=10
 C -> M: findAll(user, page, limit)
 M -> M: Kiểm tra role là DOCTOR
 M -> MR: Lấy bệnh án theo doctorId
@@ -73,7 +73,7 @@ C --> F: Trả về kết quả
 F --> D: Hiển thị danh sách bệnh án
 
 D -> F: Chọn bệnh án để xem chi tiết
-F -> C: Gửi yêu cầu xem chi tiết
+F -> C: GET /medical-record/:id
 C -> M: findOne(id, user)
 M -> MR: Tìm bệnh án theo ID
 MR -> DB: Truy vấn bệnh án
