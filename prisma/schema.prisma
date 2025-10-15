@@ -195,6 +195,8 @@ model Admin {
   authId   String      @unique @map("auth_id")
   auth     Auth        @relation(fields: [authId], references: [id])
   posts Post[]
+  categories PostCategory[]
+  series Series[]
   isActive Boolean     @default(true) @map("is_active") // Còn đang làm việc hay đã nghỉ
   position String?     @map("position") // Chức vụ (Trưởng phòng, Trưởng khoa, ...)
   // No certificates for admin
@@ -745,12 +747,12 @@ model Post {
   id           String     @id @default(uuid())
   title        String
   slug         String     @unique @map("slug")
-  thumbnail    String?    @map("thumbnail")
+  coverImage   String?    @map("cover_image")
   summary      String?
   content      String?
   authorId     String     @map("author_id")
   author       Admin      @relation(fields: [authorId], references: [id])
-  status       PostStatus @default(DRAFT)
+  status       ContentStatus @default(DRAFT)
   isPinned     Boolean    @default(false) @map("is_pinned")
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -769,21 +771,25 @@ model Post {
   @@map("posts")
 }
 
-enum PostStatus {
+enum ContentStatus {
   DRAFT
   PUBLISHED
   UNPUBLISHED
 }
+
 
 // ====================== CATEGORY ======================
 model PostCategory {
   id              String           @id @default(uuid())
   name            String
   slug            String           @unique @map("slug")
+  coverImage      String?          @map("cover_image")
   description     String
   createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-
+  updatedAt       DateTime?         @updatedAt
+  authorId        String?           @map("author_id")
+  author          Admin?            @relation(fields: [authorId], references: [id])
+  status          ContentStatus    @default(DRAFT)
   postsInCategory PostInCategory[]
 
   @@map("post_categories")
@@ -806,7 +812,11 @@ model PostInCategory {
 model Series {
   id          String   @id @default(uuid())
   name        String
+  coverImage  String?  @map("cover_image")
+  authorId    String?   @map("author_id")
+  author      Admin?    @relation(fields: [authorId], references: [id])
   slug        String   @unique @map("slug")
+  status      ContentStatus @default(DRAFT)
   description String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

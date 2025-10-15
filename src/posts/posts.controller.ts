@@ -14,10 +14,10 @@ import {
 import { PostsService } from './posts.service';
 import {
   AdminPostsQueryDto,
-  CreateCategoryDto,
+  CreateCategoryDraftDto,
   CreateCommentDto,
   CreateDraftPostDto,
-  CreateSeriesDto,
+  CreateSeriesDraftDto,
   LimitedPostsQueryDto,
   PublishedPostsQueryDto,
   UpdateCategoryDto,
@@ -53,10 +53,13 @@ export class PostsController {
     return this.postsService.getAdminCategories();
   }
 
-  @Post('admin/categories')
+  @Post('admin/categories/draft')
   @Roles(Role.ADMIN)
-  createCategory(@Body() dto: CreateCategoryDto) {
-    return this.postsService.createCategory(dto);
+  createCategoryDraft(
+    @Body() dto: CreateCategoryDraftDto,
+    @Request() req: any,
+  ) {
+    return this.postsService.createCategoryDraft(req.user?.id, dto);
   }
 
   @Put('admin/categories/:categoryId')
@@ -80,10 +83,13 @@ export class PostsController {
     return this.postsService.getAdminSeries();
   }
 
-  @Post('admin/series')
+  @Post('admin/series/draft')
   @Roles(Role.ADMIN)
-  createSeries(@Body() dto: CreateSeriesDto) {
-    return this.postsService.createSeries(dto);
+  createSeriesDraft(
+    @Body() dto: CreateSeriesDraftDto,
+    @Request() req: any,
+  ) {
+    return this.postsService.createSeriesDraft(req.user?.id, dto);
   }
 
   @Put('admin/series/:seriesId')
@@ -188,6 +194,30 @@ export class PostsController {
   @Public()
   getTopPosts(@Query() query: LimitedPostsQueryDto) {
     return this.postsService.getTopPosts(query);
+  }
+
+  @Get('categories')
+  @Public()
+  getPublishedCategories() {
+    return this.postsService.getPublishedCategories();
+  }
+
+  @Get('categories/:slug')
+  @Public()
+  getCategoryBySlug(@Param('slug') slug: string) {
+    return this.postsService.getCategoryBySlug(slug);
+  }
+
+  @Get('series')
+  @Public()
+  getPublishedSeries() {
+    return this.postsService.getPublishedSeries();
+  }
+
+  @Get('series/:slug')
+  @Public()
+  getSeriesBySlug(@Param('slug') slug: string) {
+    return this.postsService.getSeriesBySlug(slug);
   }
 
   @Get(':slug')

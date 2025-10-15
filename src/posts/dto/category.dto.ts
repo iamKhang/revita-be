@@ -2,34 +2,35 @@ import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
 } from 'class-validator';
+import { ContentStatus } from '@prisma/client';
 
-export class CreateCategoryDto {
+export class CreateCategoryDraftDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(255)
-  name!: string;
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  description?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(255)
   slug?: string;
 
-  @IsString()
-  @IsNotEmpty()
-  description!: string;
-
   @IsOptional()
-  @IsArray()
-  @IsUUID('all', { each: true })
-  @ArrayMaxSize(200)
-  @ArrayUnique()
-  postIds?: string[];
+  @IsString()
+  @MaxLength(500)
+  coverImage?: string;
 }
 
 export class UpdateCategoryDto {
@@ -47,6 +48,15 @@ export class UpdateCategoryDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  coverImage?: string;
+
+  @IsOptional()
+  @IsEnum(ContentStatus)
+  status?: ContentStatus;
 
   @IsOptional()
   @IsArray()

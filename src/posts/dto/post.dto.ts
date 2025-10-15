@@ -16,7 +16,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { PostStatus } from '@prisma/client';
+import { ContentStatus } from '@prisma/client';
 
 const transformLimit = (value: unknown, fallback: number, max: number) => {
   if (value === undefined || value === null || value === '') {
@@ -76,11 +76,11 @@ export class CreatePostDto {
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  thumbnail?: string;
+  coverImage?: string;
 
   @IsOptional()
-  @IsEnum(PostStatus)
-  status?: PostStatus;
+  @IsEnum(ContentStatus)
+  status?: ContentStatus;
 
   @IsOptional()
   @IsBoolean()
@@ -128,11 +128,11 @@ export class UpdatePostDto {
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  thumbnail?: string;
+  coverImage?: string;
 
   @IsOptional()
-  @IsEnum(PostStatus)
-  status?: PostStatus;
+  @IsEnum(ContentStatus)
+  status?: ContentStatus;
 
   @IsOptional()
   @IsBoolean()
@@ -162,8 +162,8 @@ export class UpdatePostDto {
 
 export class AdminPostsQueryDto {
   @IsOptional()
-  @IsEnum(PostStatus)
-  status?: PostStatus;
+  @IsEnum(ContentStatus)
+  status?: ContentStatus;
 
   @IsOptional()
   @IsBoolean()

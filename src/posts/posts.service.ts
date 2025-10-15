@@ -3,15 +3,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PostStatus } from '@prisma/client';
+import { ContentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AdminPostsQueryDto,
-  CreateCategoryDto,
+  CreateCategoryDraftDto,
   CreateCommentDto,
   CreateDraftPostDto,
   CreatePostDto,
-  CreateSeriesDto,
+  CreateSeriesDraftDto,
   LimitedPostsQueryDto,
   PublishedPostsQueryDto,
   UpdateCategoryDto,
@@ -41,6 +41,8 @@ const postWithRelationsInclude = {
           name: true,
           slug: true,
           description: true,
+          coverImage: true,
+          status: true,
         },
       },
     },
@@ -53,6 +55,8 @@ const postWithRelationsInclude = {
           name: true,
           slug: true,
           description: true,
+          coverImage: true,
+          status: true,
         },
       },
     },
@@ -76,6 +80,8 @@ const categoryWithRelationsInclude = {
           id: true,
           title: true,
           slug: true,
+          summary: true,
+          coverImage: true,
           status: true,
           isPinned: true,
           createdAt: true,
@@ -99,6 +105,8 @@ const seriesWithRelationsInclude = {
           id: true,
           title: true,
           slug: true,
+          summary: true,
+          coverImage: true,
           status: true,
           isPinned: true,
           createdAt: true,
@@ -186,7 +194,7 @@ export class PostsService {
         title,
         slug,
         authorId: admin.id,
-        status: PostStatus.DRAFT,
+        status: ContentStatus.DRAFT,
         tags: [],
       },
       include: postWithRelationsInclude,
@@ -205,7 +213,7 @@ export class PostsService {
     const baseSlug = this.slugify(title) || `post-${Date.now()}`;
     const slug = await this.ensureUniquePostSlug(baseSlug);
     const tags = this.normalizeTags(dto.tags);
-    const status = dto.status ?? PostStatus.DRAFT;
+    const status = dto.status ?? ContentStatus.DRAFT;
     const categoryIds = dto.categoryIds ? [...new Set(dto.categoryIds)] : undefined;
     const seriesAssignments = dto.seriesAssignments
       ? dto.seriesAssignments.map((item, index) => ({
@@ -232,7 +240,7 @@ export class PostsService {
           slug,
           summary: dto.summary?.trim() || undefined,
           content: dto.content ?? undefined,
-          thumbnail: dto.thumbnail?.trim() || undefined,
+          coverImage: dto.coverImage?.trim() || undefined,
           status,
           isPinned: dto.isPinned ?? false,
           authorId: admin.id,
@@ -311,8 +319,8 @@ export class PostsService {
         data.content = dto.content ?? null;
       }
 
-      if (dto.thumbnail !== undefined) {
-        data.thumbnail = dto.thumbnail?.trim() || null;
+      if (dto.coverImage !== undefined) {
+        data.coverImage = dto.coverImage?.trim() || null;
       }
 
       if (dto.status !== undefined) {
@@ -528,7 +536,7 @@ export class PostsService {
     );
 
     const where: Prisma.PostWhereInput = {
-      status: PostStatus.PUBLISHED,
+      status: ContentStatus.PUBLISHED,
     };
 
     if (query.search) {
@@ -595,7 +603,7 @@ export class PostsService {
     const limit = this.clampLimit(query.limit, 20, 5);
     const posts = await this.prisma.post.findMany({
       where: {
-        status: PostStatus.PUBLISHED,
+        status: ContentStatus.PUBLISHED,
         isPinned: true,
       },
       take: limit,
@@ -610,7 +618,7 @@ export class PostsService {
     const limit = this.clampLimit(query.limit, 20, 5);
     const posts = await this.prisma.post.findMany({
       where: {
-        status: PostStatus.PUBLISHED,
+        status: ContentStatus.PUBLISHED,
       },
       take: limit,
       orderBy: [{ createdAt: 'desc' }],
@@ -620,50 +628,159 @@ export class PostsService {
     return posts.map((post) => this.toPostResponse(post));
   }
 
-  async createCategory(dto: CreateCategoryDto) {
-    const name = dto.name.trim();
-    const description = dto.description.trim();
-
-    if (!name) {
-      throw new BadRequestException('Category name must not be empty');
-    }
-
-    if (!description) {
-      throw new BadRequestException('Category description must not be empty');
-    }
-
-    const slugInput = dto.slug?.trim() || name;
-    const baseSlug = this.slugify(slugInput) || `category-${Date.now()}`;
-    const slug = await this.ensureUniqueCategorySlug(baseSlug);
-    const postIds = dto.postIds ? [...new Set(dto.postIds)] : undefined;
-
-    const categoryId = await this.prisma.$transaction(async (tx) => {
-      if (postIds && postIds.length > 0) {
-        await this.assertPostIds(postIds, tx);
-      }
-
-      const created = await tx.postCategory.create({
-        data: {
-          name,
-          slug,
-          description,
-        },
-      });
-
-      if (postIds && postIds.length > 0) {
-        await tx.postInCategory.createMany({
-          data: postIds.map((postId) => ({
-            postId,
-            categoryId: created.id,
-          })),
-          skipDuplicates: true,
-        });
-      }
-
-      return created.id;
+  async getPublishedCategories() {
+    const categories = await this.prisma.postCategory.findMany({
+      where: { status: ContentStatus.PUBLISHED },
+      orderBy: [{ name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        coverImage: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
-    return this.getCategoryById(categoryId);
+    return categories;
+  }
+
+  async getCategoryBySlug(slug: string) {
+    const category = await this.prisma.postCategory.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        coverImage: true,
+        status: true,
+      },
+    });
+
+    if (!category || category.status !== ContentStatus.PUBLISHED) {
+      throw new NotFoundException('Category not found');
+    }
+
+    const posts = await this.prisma.post.findMany({
+      where: {
+        status: ContentStatus.PUBLISHED,
+        inCategories: {
+          some: {
+            categoryId: category.id,
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      include: postWithRelationsInclude,
+    });
+
+    return {
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+      description: category.description,
+      coverImage: category.coverImage,
+      totalPosts: posts.length,
+      posts: posts.map((post) => this.toPostResponse(post)),
+    };
+  }
+
+  async getPublishedSeries() {
+    const seriesList = await this.prisma.series.findMany({
+      where: { status: ContentStatus.PUBLISHED },
+      orderBy: [{ name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        coverImage: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return seriesList;
+  }
+
+  async getSeriesBySlug(slug: string) {
+    const series = await this.prisma.series.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        coverImage: true,
+        status: true,
+      },
+    });
+
+    if (!series || series.status !== ContentStatus.PUBLISHED) {
+      throw new NotFoundException('Series not found');
+    }
+
+    const posts = await this.prisma.seriesPost.findMany({
+      where: {
+        seriesId: series.id,
+        post: {
+          status: ContentStatus.PUBLISHED,
+        },
+      },
+      orderBy: [{ order: 'asc' }],
+      include: {
+        post: {
+          include: postWithRelationsInclude,
+        },
+      },
+    });
+
+    return {
+      id: series.id,
+      name: series.name,
+      slug: series.slug,
+      description: series.description,
+      coverImage: series.coverImage,
+      totalPosts: posts.length,
+      posts: posts.map(({ post, order }) => ({
+        order,
+        post: this.toPostResponse(post),
+      })),
+    };
+  }
+
+  async createCategoryDraft(authId: string, dto: CreateCategoryDraftDto) {
+    const admin = await this.ensureAdminByAuthId(authId);
+    const rawName = dto.name?.trim() ?? '';
+    const name = rawName.length > 0 ? rawName : 'New Draft Category';
+    const rawDescription = dto.description?.trim() ?? '';
+    const description =
+      rawDescription.length > 0 ? rawDescription : 'Draft category description';
+    const baseSlugInput = dto.slug?.trim() || name;
+    const baseSlug =
+      this.slugify(baseSlugInput) || `category-${Date.now()}`;
+    const slug = await this.ensureUniqueCategorySlug(baseSlug);
+    const coverImageInput = dto.coverImage?.trim();
+    const coverImage =
+      coverImageInput && coverImageInput.length > 0
+        ? coverImageInput
+        : undefined;
+
+    const category = await this.prisma.postCategory.create({
+      data: {
+        name,
+        slug,
+        description,
+        coverImage,
+        authorId: admin.id,
+        status: ContentStatus.DRAFT,
+      },
+      include: categoryWithRelationsInclude,
+    });
+
+    return this.toCategoryResponse(category);
   }
 
   async updateCategory(id: string, dto: UpdateCategoryDto) {
@@ -700,9 +817,21 @@ export class PostsService {
       }
 
       if (dto.slug !== undefined) {
+        const trimmed = dto.slug.trim();
         const baseSlug =
-          this.slugify(dto.slug.trim()) || `category-${Date.now()}`;
+          this.slugify(trimmed) ||
+          this.slugify(category.name) ||
+          `category-${Date.now()}`;
         data.slug = await this.ensureUniqueCategorySlug(baseSlug, id);
+      }
+
+      if (dto.coverImage !== undefined) {
+        const trimmed = dto.coverImage.trim();
+        data.coverImage = trimmed ? trimmed : null;
+      }
+
+      if (dto.status !== undefined) {
+        data.status = dto.status;
       }
 
       if (Object.keys(data).length > 0) {
@@ -768,52 +897,36 @@ export class PostsService {
     return { success: true };
   }
 
-  async createSeries(dto: CreateSeriesDto) {
-    const name = dto.name.trim();
-    const description = dto.description.trim();
-
-    if (!name) {
-      throw new BadRequestException('Series name must not be empty');
-    }
-
-    if (!description) {
-      throw new BadRequestException('Series description must not be empty');
-    }
-
-    const slugInput = dto.slug?.trim() || name;
-    const baseSlug = this.slugify(slugInput) || `series-${Date.now()}`;
+  async createSeriesDraft(authId: string, dto: CreateSeriesDraftDto) {
+    const admin = await this.ensureAdminByAuthId(authId);
+    const rawName = dto.name?.trim() ?? '';
+    const name = rawName.length > 0 ? rawName : 'New Draft Series';
+    const rawDescription = dto.description?.trim() ?? '';
+    const description =
+      rawDescription.length > 0 ? rawDescription : 'Draft series description';
+    const baseSlugInput = dto.slug?.trim() || name;
+    const baseSlug =
+      this.slugify(baseSlugInput) || `series-${Date.now()}`;
     const slug = await this.ensureUniqueSeriesSlug(baseSlug);
-    const posts = dto.posts
-      ? dto.posts.map((item, index) => ({
-          postId: item.postId,
-          order: item.order ?? index,
-        }))
-      : undefined;
+    const coverImageInput = dto.coverImage?.trim();
+    const coverImage =
+      coverImageInput && coverImageInput.length > 0
+        ? coverImageInput
+        : undefined;
 
-    const seriesId = await this.prisma.$transaction(async (tx) => {
-      if (posts && posts.length > 0) {
-        await this.assertPostIds(
-          posts.map((item) => item.postId),
-          tx,
-        );
-      }
-
-      const created = await tx.series.create({
-        data: {
-          name,
-          slug,
-          description,
-        },
-      });
-
-      if (posts && posts.length > 0) {
-        await this.setSeriesPosts(tx, created.id, posts);
-      }
-
-      return created.id;
+    const series = await this.prisma.series.create({
+      data: {
+        name,
+        slug,
+        description,
+        coverImage,
+        authorId: admin.id,
+        status: ContentStatus.DRAFT,
+      },
+      include: seriesWithRelationsInclude,
     });
 
-    return this.getSeriesById(seriesId);
+    return this.toSeriesResponse(series);
   }
 
   async updateSeries(id: string, dto: UpdateSeriesDto) {
@@ -853,8 +966,21 @@ export class PostsService {
       }
 
       if (dto.slug !== undefined) {
-        const baseSlug = this.slugify(dto.slug.trim()) || `series-${Date.now()}`;
+        const trimmed = dto.slug.trim();
+        const baseSlug =
+          this.slugify(trimmed) ||
+          this.slugify(series.name) ||
+          `series-${Date.now()}`;
         data.slug = await this.ensureUniqueSeriesSlug(baseSlug, id);
+      }
+
+      if (dto.coverImage !== undefined) {
+        const trimmed = dto.coverImage.trim();
+        data.coverImage = trimmed ? trimmed : null;
+      }
+
+      if (dto.status !== undefined) {
+        data.status = dto.status;
       }
 
       if (Object.keys(data).length > 0) {
@@ -917,7 +1043,7 @@ export class PostsService {
       include: postWithRelationsInclude,
     });
 
-    if (!post || post.status !== PostStatus.PUBLISHED) {
+    if (!post || post.status !== ContentStatus.PUBLISHED) {
       throw new NotFoundException('Post not found');
     }
 
@@ -969,7 +1095,7 @@ export class PostsService {
       select: { id: true, status: true },
     });
 
-    if (!post || post.status !== PostStatus.PUBLISHED) {
+    if (!post || post.status !== ContentStatus.PUBLISHED) {
       throw new NotFoundException('Post not found');
     }
 
@@ -1023,7 +1149,7 @@ export class PostsService {
       select: { id: true, status: true },
     });
 
-    if (!post || post.status !== PostStatus.PUBLISHED) {
+    if (!post || post.status !== ContentStatus.PUBLISHED) {
       throw new NotFoundException('Post not found');
     }
 
@@ -1136,12 +1262,21 @@ export class PostsService {
   }
 
   private toPostResponse(post: PostWithRelations) {
-    const categories = post.inCategories.map((entry) => entry.category);
+    const categories = post.inCategories.map((entry) => ({
+      id: entry.category.id,
+      name: entry.category.name,
+      slug: entry.category.slug,
+      description: entry.category.description,
+      coverImage: entry.category.coverImage,
+      status: entry.category.status,
+    }));
     const series = post.seriesPosts.map((entry) => ({
       id: entry.series.id,
       name: entry.series.name,
       slug: entry.series.slug,
       description: entry.series.description,
+      coverImage: entry.series.coverImage,
+      status: entry.series.status,
       order: entry.order,
     }));
 
@@ -1151,7 +1286,7 @@ export class PostsService {
       slug: post.slug,
       summary: post.summary,
       content: post.content,
-      thumbnail: post.thumbnail,
+      coverImage: post.coverImage,
       status: post.status,
       isPinned: post.isPinned,
       tags: post.tags,
@@ -1178,6 +1313,8 @@ export class PostsService {
       name: category.name,
       slug: category.slug,
       description: category.description,
+      coverImage: category.coverImage,
+      status: category.status,
       createdAt: category.createdAt,
       updatedAt: category.updatedAt,
       totalPosts: category._count.postsInCategory,
@@ -1191,6 +1328,8 @@ export class PostsService {
       name: series.name,
       slug: series.slug,
       description: series.description,
+      coverImage: series.coverImage,
+      status: series.status,
       createdAt: series.createdAt,
       updatedAt: series.updatedAt,
       totalPosts: series._count.seriesPosts,

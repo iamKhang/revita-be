@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -12,6 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ContentStatus } from '@prisma/client';
 
 export class SeriesPostItemDto {
   @IsUUID()
@@ -23,28 +25,25 @@ export class SeriesPostItemDto {
   order?: number;
 }
 
-export class CreateSeriesDto {
+export class CreateSeriesDraftDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(255)
-  name!: string;
+  name?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(255)
   slug?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  description!: string;
+  description?: string;
 
   @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => SeriesPostItemDto)
-  @ArrayMaxSize(200)
-  @ArrayUnique((item: SeriesPostItemDto) => item.postId)
-  posts?: SeriesPostItemDto[];
+  @IsString()
+  @MaxLength(500)
+  coverImage?: string;
 }
 
 export class UpdateSeriesDto {
@@ -62,6 +61,15 @@ export class UpdateSeriesDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  coverImage?: string;
+
+  @IsOptional()
+  @IsEnum(ContentStatus)
+  status?: ContentStatus;
 
   @IsOptional()
   @IsArray()
