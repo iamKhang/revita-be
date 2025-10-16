@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ContentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { WebSocketService } from '../websocket/websocket.service';
 import {
   AdminPostsQueryDto,
   CreateCategoryDraftDto,
@@ -180,7 +181,10 @@ interface CommentNode {
 
 @Injectable()
 export class PostsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly webSocketService: WebSocketService,
+  ) {}
 
   async createDraftPost(authId: string, dto: CreateDraftPostDto) {
     const admin = await this.ensureAdminByAuthId(authId);
@@ -1153,6 +1157,8 @@ export class PostsService {
       where: { postId },
     });
 
+    this.webSocketService.notifyPostLiked(postId, { userId, likesCount });
+
     return {
       postId,
       liked: true,
@@ -1171,6 +1177,8 @@ export class PostsService {
     const likesCount = await this.prisma.postLike.count({
       where: { postId },
     });
+
+    this.webSocketService.notifyPostUnliked(postId, { userId, likesCount });
 
     return {
       postId,
@@ -1215,13 +1223,16 @@ export class PostsService {
       include: commentWithAuthorInclude,
     });
 
-    return this.toCommentNode(comment, false);
+    const commentNode = this.toCommentNode(comment, false);
+    this.webSocketService.notifyPostCommentCreated(postId, commentNode);
+
+    return commentNode;
   }
 
   async likeComment(commentId: string, userId: string) {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
-      select: { id: true },
+      select: { id: true, postId: true },
     });
     if (!comment) {
       throw new NotFoundException('Comment not found');
@@ -1245,6 +1256,11 @@ export class PostsService {
       where: { commentId },
     });
 
+    this.webSocketService.notifyPostCommentLiked(comment.postId, commentId, {
+      userId,
+      likeCount,
+    });
+
     return {
       commentId,
       liked: true,
@@ -1253,6 +1269,15 @@ export class PostsService {
   }
 
   async unlikeComment(commentId: string, userId: string) {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      select: { id: true, postId: true },
+    });
+
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
     await this.prisma.commentLike.deleteMany({
       where: {
         commentId,
@@ -1262,6 +1287,11 @@ export class PostsService {
 
     const likeCount = await this.prisma.commentLike.count({
       where: { commentId },
+    });
+
+    this.webSocketService.notifyPostCommentUnliked(comment.postId, commentId, {
+      userId,
+      likeCount,
     });
 
     return {
