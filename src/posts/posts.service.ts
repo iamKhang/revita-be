@@ -528,7 +528,10 @@ export class PostsService {
     };
   }
 
-  async getPublishedPosts(query: PublishedPostsQueryDto) {
+  async getPublishedPosts(
+    query: PublishedPostsQueryDto,
+    viewerId?: string,
+  ) {
     const { take, skip } = this.normalizePagination(
       query.limit,
       query.offset,
@@ -593,13 +596,20 @@ export class PostsService {
       this.prisma.post.count({ where }),
     ]);
 
+    const likedPostIds = await this.getViewerLikedPostIds(
+      viewerId,
+      posts.map((post) => post.id),
+    );
+
     return {
-      items: posts.map((post) => this.toPostResponse(post)),
+      items: posts.map((post) =>
+        this.toPostResponse(post, likedPostIds.has(post.id)),
+      ),
       pagination: this.buildPagination(total, take, skip),
     };
   }
 
-  async getPinnedPosts(query: LimitedPostsQueryDto) {
+  async getPinnedPosts(query: LimitedPostsQueryDto, viewerId?: string) {
     const limit = this.clampLimit(query.limit, 20, 5);
     const posts = await this.prisma.post.findMany({
       where: {
@@ -611,10 +621,17 @@ export class PostsService {
       include: postWithRelationsInclude,
     });
 
-    return posts.map((post) => this.toPostResponse(post));
+    const likedPostIds = await this.getViewerLikedPostIds(
+      viewerId,
+      posts.map((post) => post.id),
+    );
+
+    return posts.map((post) =>
+      this.toPostResponse(post, likedPostIds.has(post.id)),
+    );
   }
 
-  async getTopPosts(query: LimitedPostsQueryDto) {
+  async getTopPosts(query: LimitedPostsQueryDto, viewerId?: string) {
     const limit = this.clampLimit(query.limit, 20, 5);
     const posts = await this.prisma.post.findMany({
       where: {
@@ -625,7 +642,14 @@ export class PostsService {
       include: postWithRelationsInclude,
     });
 
-    return posts.map((post) => this.toPostResponse(post));
+    const likedPostIds = await this.getViewerLikedPostIds(
+      viewerId,
+      posts.map((post) => post.id),
+    );
+
+    return posts.map((post) =>
+      this.toPostResponse(post, likedPostIds.has(post.id)),
+    );
   }
 
   async getPublishedCategories() {
@@ -646,7 +670,7 @@ export class PostsService {
     return categories;
   }
 
-  async getCategoryBySlug(slug: string) {
+  async getCategoryBySlug(slug: string, viewerId?: string) {
     const category = await this.prisma.postCategory.findUnique({
       where: { slug },
       select: {
@@ -676,6 +700,11 @@ export class PostsService {
       include: postWithRelationsInclude,
     });
 
+    const likedPostIds = await this.getViewerLikedPostIds(
+      viewerId,
+      posts.map((post) => post.id),
+    );
+
     return {
       id: category.id,
       name: category.name,
@@ -683,7 +712,9 @@ export class PostsService {
       description: category.description,
       coverImage: category.coverImage,
       totalPosts: posts.length,
-      posts: posts.map((post) => this.toPostResponse(post)),
+      posts: posts.map((post) =>
+        this.toPostResponse(post, likedPostIds.has(post.id)),
+      ),
     };
   }
 
@@ -705,7 +736,7 @@ export class PostsService {
     return seriesList;
   }
 
-  async getSeriesBySlug(slug: string) {
+  async getSeriesBySlug(slug: string, viewerId?: string) {
     const series = await this.prisma.series.findUnique({
       where: { slug },
       select: {
@@ -737,6 +768,11 @@ export class PostsService {
       },
     });
 
+    const likedPostIds = await this.getViewerLikedPostIds(
+      viewerId,
+      posts.map(({ post }) => post.id),
+    );
+
     return {
       id: series.id,
       name: series.name,
@@ -746,7 +782,7 @@ export class PostsService {
       totalPosts: posts.length,
       posts: posts.map(({ post, order }) => ({
         order,
-        post: this.toPostResponse(post),
+        post: this.toPostResponse(post, likedPostIds.has(post.id)),
       })),
     };
   }
@@ -1083,7 +1119,7 @@ export class PostsService {
     );
 
     return {
-      post: this.toPostResponse(post),
+      post: this.toPostResponse(post, Boolean(likedRecord)),
       likedByViewer: Boolean(likedRecord),
       comments: this.buildCommentTree(comments, likedCommentIds),
     };
@@ -1261,7 +1297,30 @@ export class PostsService {
     return this.toSeriesResponse(series);
   }
 
-  private toPostResponse(post: PostWithRelations) {
+  private async getViewerLikedPostIds(
+    viewerId: string | undefined,
+    postIds: string[],
+  ): Promise<Set<string>> {
+    if (!viewerId || postIds.length === 0) {
+      return new Set<string>();
+    }
+
+    const likedPosts = await this.prisma.postLike.findMany({
+      where: {
+        userId: viewerId,
+        postId: {
+          in: postIds,
+        },
+      },
+      select: {
+        postId: true,
+      },
+    });
+
+    return new Set(likedPosts.map((item) => item.postId));
+  }
+
+  private toPostResponse(post: PostWithRelations, likedByViewer = false) {
     const categories = post.inCategories.map((entry) => ({
       id: entry.category.id,
       name: entry.category.name,
@@ -1294,6 +1353,7 @@ export class PostsService {
       updatedAt: post.updatedAt,
       likesCount: post._count.likes,
       commentsCount: post._count.comments,
+      isLike: Boolean(likedByViewer),
       categories,
       series,
       author: post.author
