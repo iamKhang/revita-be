@@ -6,7 +6,6 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
   // Cấu hình WebSocket adapter
   app.useWebSocketAdapter(new IoAdapter(app));
 
@@ -79,7 +78,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document); // Đặt endpoint cho Swagger UI tại /docs (ngoài tiền tố api)
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(Number(process.env.PORT ?? 3000), '0.0.0.0');
 }
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
 bootstrap();

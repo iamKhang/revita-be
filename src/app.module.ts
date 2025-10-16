@@ -32,7 +32,8 @@ import { DoctorRatingModule } from './doctor-rating/doctor-rating.module';
     }),
     MongooseModule.forRootAsync({
       useFactory: () => ({
-        uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/revita-drug',
+        // Default to Docker service name when env var is not provided
+        uri: process.env.MONGODB_URI || 'mongodb://mongo:27017/revita-drug',
       }),
     }),
     LoginModule,
