@@ -99,6 +99,43 @@ Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 
 # Revita Backend
 
+## Run behind NGINX API Gateway (load balancer, retry, rate limit)
+
+This repo includes an `nginx` gateway configured to sit in front of the NestJS app to provide connection reuse, basic retries, and request rate limiting. No routing changes are needed because the app is the only backend.
+
+### Quick start (docker-compose)
+
+1. Ensure Docker is installed.
+2. Set required environment variables in a `.env` (optional). By default, Mongo runs in the compose stack.
+3. Start the stack:
+
+```bash
+docker compose up -d --build
+```
+
+Services:
+- App (NestJS) listening internally on port `3000`
+- NGINX listening on host port `80`
+- MongoDB on internal network
+
+Scale app replicas to improve concurrency:
+
+```bash
+docker compose up -d --scale app=3
+```
+
+Swagger docs at: `http://localhost/docs`
+
+Health check passthrough at: `http://localhost/health`
+
+### NGINX features
+- Load balancing (least connections)
+- Retries for transient upstream errors
+- Basic rate limit: 100 req/s per IP (burst 200)
+- Microcaching for GET/HEAD responses
+
+Adjust `nginx/nginx.conf` to tune limits and timeouts.
+
 Backend API cho hệ thống quản lý phòng khám Revita, được xây dựng với NestJS.
 
 ## Tính năng
