@@ -791,6 +791,140 @@ export class PostsService {
     };
   }
 
+  async getRelatedPosts(postId: string, viewerId?: string) {
+    const basePost = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        status: true,
+        inCategories: {
+          select: {
+            categoryId: true,
+          },
+        },
+      },
+    });
+
+    if (!basePost || basePost.status !== ContentStatus.PUBLISHED) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const categoryIds = [
+      ...new Set(basePost.inCategories.map((entry) => entry.categoryId)),
+    ];
+
+    if (categoryIds.length === 0) {
+      return [];
+    }
+
+    const posts = await this.prisma.post.findMany({
+      where: {
+        status: ContentStatus.PUBLISHED,
+        id: {
+          not: postId,
+        },
+        inCategories: {
+          some: {
+            categoryId: {
+              in: categoryIds,
+            },
+          },
+        },
+      },
+      take: 10,
+      orderBy: [
+        {
+          createdAt: 'desc',
+        },
+        {
+          title: 'asc',
+        },
+      ],
+      include: postWithRelationsInclude,
+    });
+
+    const likedPostIds = await this.getViewerLikedPostIds(
+      viewerId,
+      posts.map((post) => post.id),
+    );
+
+    return posts.map((post) =>
+      this.toPostResponse(post, likedPostIds.has(post.id)),
+    );
+  }
+
+  async getSeriesPostsByPostId(postId: string, viewerId?: string) {
+    const basePost = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!basePost || basePost.status !== ContentStatus.PUBLISHED) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const seriesList = await this.prisma.series.findMany({
+      where: {
+        status: ContentStatus.PUBLISHED,
+        seriesPosts: {
+          some: {
+            postId,
+          },
+        },
+      },
+      orderBy: [
+        {
+          name: 'asc',
+        },
+      ],
+      include: {
+        seriesPosts: {
+          where: {
+            post: {
+              status: ContentStatus.PUBLISHED,
+            },
+          },
+          orderBy: [
+            {
+              order: 'asc',
+            },
+          ],
+          include: {
+            post: {
+              include: postWithRelationsInclude,
+            },
+          },
+        },
+      },
+    });
+
+    if (seriesList.length === 0) {
+      return [];
+    }
+
+    const postIds = [
+      ...new Set(
+        seriesList.flatMap((series) =>
+          series.seriesPosts.map(({ post }) => post.id),
+        ),
+      ),
+    ];
+
+    const likedPostIds = await this.getViewerLikedPostIds(viewerId, postIds);
+
+    return seriesList.map((series) => ({
+      id: series.id,
+      name: series.name,
+      posts: series.seriesPosts.map(({ order, post }) => ({
+        order,
+        post: this.toPostResponse(post, likedPostIds.has(post.id)),
+      })),
+    }));
+  }
+
   async createCategoryDraft(authId: string, dto: CreateCategoryDraftDto) {
     const admin = await this.ensureAdminByAuthId(authId);
     const rawName = dto.name?.trim() ?? '';

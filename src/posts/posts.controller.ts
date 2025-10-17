@@ -238,6 +238,18 @@ export class PostsController {
     return this.postsService.getSeriesBySlug(slug, req.user?.id);
   }
 
+  @Get(':postId/related')
+  @Public()
+  getRelatedPosts(@Param('postId') postId: string, @Request() req: any) {
+    return this.postsService.getRelatedPosts(postId, req.user?.id);
+  }
+
+  @Get(':postId/series')
+  @Public()
+  getSeriesPosts(@Param('postId') postId: string, @Request() req: any) {
+    return this.postsService.getSeriesPostsByPostId(postId, req.user?.id);
+  }
+
   @Get(':slug')
   @Public()
   getPostBySlug(
