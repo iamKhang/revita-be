@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsEnum,
   IsObject,
+  IsBoolean,
 } from 'class-validator';
 
 export enum GenderEnum {
@@ -48,4 +49,12 @@ export class UpdatePatientProfileDto {
   @IsOptional()
   @IsString()
   relationship?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPregnant?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isDisabled?: boolean;
 }

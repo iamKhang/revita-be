@@ -5,6 +5,7 @@ import {
   IsUUID,
   IsDateString,
   IsObject,
+  IsBoolean,
 } from 'class-validator';
 
 export class CreateIndependentPatientProfileDto {
@@ -47,4 +48,12 @@ export class CreateIndependentPatientProfileDto {
   @IsUUID()
   @IsOptional()
   patientId?: string; // Optional - để liên kết với Patient nếu cần
+
+  @IsOptional()
+  @IsBoolean()
+  isPregnant?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isDisabled?: boolean;
 }
