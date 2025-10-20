@@ -24,6 +24,7 @@ import { ClinicModule } from './clinic/clinic.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { DoctorRatingModule } from './doctor-rating/doctor-rating.module';
 import { PostsModule } from './posts/posts.module';
+import { PublicModule } from './public/public.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { PostsModule } from './posts/posts.module';
     StatisticsModule,
     DoctorRatingModule,
     PostsModule,
+    PublicModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard, JwtStrategy],
