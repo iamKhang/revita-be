@@ -763,6 +763,12 @@ export class StatisticsService {
     const canceledSessions = workSessions.filter(
       (ws) => ws.status === 'CANCELED',
     ).length;
+    const approvedSessions = workSessions.filter(
+      (ws) => ws.status === 'APPROVED',
+    ).length;
+    const pendingSessions = workSessions.filter(
+      (ws) => ws.status === 'PENDING',
+    ).length;
 
     return {
       byDoctor,
@@ -771,6 +777,8 @@ export class StatisticsService {
         totalSessions,
         completedSessions,
         canceledSessions,
+        approvedSessions,
+        pendingSessions,
         completedPercent:
           totalSessions > 0 ? (completedSessions / totalSessions) * 100 : 0,
         canceledPercent:

@@ -35,6 +35,8 @@ export class WorkSessionStatsResponseDto {
     totalSessions: number;
     completedSessions: number;
     canceledSessions: number;
+    approvedSessions: number;
+    pendingSessions: number;
     completedPercent: number;
     canceledPercent: number;
   };

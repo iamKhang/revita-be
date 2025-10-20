@@ -385,23 +385,6 @@ export class AppointmentBookingService {
       },
     });
 
-    // Debug: Log query parameters
-    console.log(
-      'DEBUG: Querying work sessions for date:',
-      targetDate.toISOString().split('T')[0],
-    );
-    console.log('DEBUG: startOfDay (UTC):', startOfDay.toISOString());
-    console.log('DEBUG: endOfDay (UTC):', endOfDay.toISOString());
-
-    // Debug: Log work sessions found
-    console.log(
-      'DEBUG: Found',
-      workSessions.length,
-      'work sessions for doctor',
-      doctorId,
-      'on date',
-      targetDate.toISOString().split('T')[0],
-    );
     workSessions.forEach((ws, index) => {
       console.log(`Work session ${index}:`, {
         id: ws.id,
@@ -419,12 +402,6 @@ export class AppointmentBookingService {
     );
 
     if (validWorkSessions.length === 0) {
-      console.log(
-        'DEBUG: No valid work sessions found for doctor',
-        doctorId,
-        'and service',
-        serviceId,
-      );
       return {
         doctorId: doctor.id,
         doctorName: doctor.auth.name,
@@ -460,14 +437,6 @@ export class AppointmentBookingService {
       },
     });
 
-    console.log(
-      'DEBUG: Found',
-      appointments.length,
-      'existing appointments for doctor',
-      doctorId,
-      'on date',
-      targetDate.toISOString().split('T')[0],
-    );
     appointments.forEach((apt, index) => {
       console.log(`Appointment ${index}:`, {
         id: apt.id,
@@ -483,11 +452,6 @@ export class AppointmentBookingService {
     // Merge tất cả work sessions thành một danh sách slots duy nhất
     const allSlots: AvailableSlotDto[] = [];
 
-    console.log(
-      'DEBUG: Processing',
-      validWorkSessions.length,
-      'valid work sessions',
-    );
     console.log('DEBUG: Service duration:', serviceDuration, 'minutes');
 
     for (const workSession of validWorkSessions) {
@@ -583,11 +547,6 @@ export class AppointmentBookingService {
         // Tăng currentTime lên serviceDuration để tạo slot tiếp theo
         // Điều này đảm bảo slots liên tiếp nhau mà không có khoảng trống
         currentTime = new Date(currentTime.getTime() + serviceDuration * 60000);
-
-        console.log(
-          'DEBUG: Next slot will start at:',
-          currentTime.toISOString(),
-        );
       }
 
       console.log(
@@ -600,8 +559,6 @@ export class AppointmentBookingService {
 
     // Sort slots theo thời gian
     allSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-    console.log('DEBUG: Generated slots count:', allSlots.length);
 
     // Tính toán effective work session start và end từ tất cả valid work sessions
     let overallStart: Date | null = null;
@@ -980,11 +937,6 @@ export class AppointmentBookingService {
 
       return isSuitable;
     });
-
-    console.log(
-      'DEBUG: Found suitable work session:',
-      suitableWorkSession?.id || 'NONE',
-    );
 
     if (!suitableWorkSession) {
       throw new Error(

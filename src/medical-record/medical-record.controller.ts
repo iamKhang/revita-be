@@ -30,6 +30,7 @@ import {
   RemoveAttachmentsDto,
 } from './dto/create-medical-record.dto';
 import { UpdateMedicalRecordDto } from './dto/update-medical-record.dto';
+import { PatientMedicalSummaryResponseDto } from './dto/patient-medical-summary.dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
@@ -205,6 +206,50 @@ export class MedicalRecordController {
       page,
       limit,
     );
+  }
+
+  @Get('patient-profile/:patientProfileId/summary')
+  @ApiOperation({
+    summary: 'Lấy tóm tắt toàn bộ thông tin y tế của bệnh nhân',
+    description:
+      'Trả về chuỗi tóm tắt bao gồm: nội dung bệnh án, tên dịch vụ, kết quả dịch vụ, tên thuốc',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tóm tắt thông tin y tế của bệnh nhân',
+    type: PatientMedicalSummaryResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy hồ sơ bệnh nhân',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Không có quyền truy cập thông tin này',
+  })
+  async getPatientMedicalSummary(
+    @Param('patientProfileId') patientProfileId: string,
+    @Request() req: { user: JwtUserPayload },
+  ): Promise<PatientMedicalSummaryResponseDto> {
+    const summary = await this.medicalRecordService.getPatientMedicalSummary(
+      patientProfileId,
+      req.user,
+    );
+
+    // Lấy thông tin bệnh nhân để trả về trong response
+    const patientProfile = await this.medicalRecordService[
+      'prisma'
+    ].patientProfile.findUnique({
+      where: { id: patientProfileId },
+      select: { name: true },
+    });
+
+    return {
+      summary,
+      patientProfileId,
+      patientName: patientProfile?.name || 'Không xác định',
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   @Get('templates')

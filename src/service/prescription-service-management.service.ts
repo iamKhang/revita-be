@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Injectable,
   NotFoundException,
@@ -674,7 +677,7 @@ export class PrescriptionServiceManagementService {
                               PrescriptionStatus.WAITING,
                               PrescriptionStatus.PREPARING,
                               PrescriptionStatus.SERVING,
-                              PrescriptionStatus.SKIPPED
+                              PrescriptionStatus.SKIPPED,
                             ],
                           },
                         },
@@ -698,9 +701,7 @@ export class PrescriptionServiceManagementService {
       });
 
       if (!room) {
-        throw new NotFoundException(
-          `Không tìm thấy phòng với ID: ${roomId}`,
-        );
+        throw new NotFoundException(`Không tìm thấy phòng với ID: ${roomId}`);
       }
 
       // Bước 2: Thu thập tất cả prescription services từ các work sessions
@@ -972,9 +973,7 @@ export class PrescriptionServiceManagementService {
   /**
    * Phân công nhiều services cùng lúc dựa trên work session
    */
-  async assignServicesFromWorkSession(
-    workSessionId: string,
-  ): Promise<{
+  async assignServicesFromWorkSession(workSessionId: string): Promise<{
     success: boolean;
     message: string;
     assignedServices: Array<{
@@ -1037,10 +1036,7 @@ export class PrescriptionServiceManagementService {
             in: [PrescriptionStatus.NOT_STARTED, PrescriptionStatus.PENDING],
           },
           // Chưa được assign cho ai
-          AND: [
-            { doctorId: null },
-            { technicianId: null },
-          ],
+          AND: [{ doctorId: null }, { technicianId: null }],
         },
         include: {
           service: true,
