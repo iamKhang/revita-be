@@ -19,7 +19,6 @@ export interface ScanPrescriptionResponse {
 
 export interface UpdateServiceStatusResponse {
   service: any;
-  nextService?: any;
   message: string;
 }
 
@@ -283,14 +282,6 @@ export class PrescriptionServiceManagementService {
         );
       }
 
-      // Lấy tất cả prescription services để tìm service tiếp theo
-      const allPrescriptionServices =
-        await this.prisma.prescriptionService.findMany({
-          where: { prescriptionId: prescriptionService.prescriptionId },
-          include: { service: true },
-          orderBy: { order: 'asc' },
-        });
-
       // Cập nhật status
       const updateData: any = {
         status,
@@ -312,41 +303,8 @@ export class PrescriptionServiceManagementService {
         include: { service: true },
       });
 
-      let nextService: any = null;
-
-      // Nếu chuyển từ SERVING sang WAITING_RESULT, tìm service tiếp theo và chuyển sang WAITING
-      if (
-        prescriptionService.status === PrescriptionStatus.SERVING &&
-        status === PrescriptionStatus.WAITING_RESULT
-      ) {
-        const currentOrder = prescriptionService.order;
-        const nextOrderService = allPrescriptionServices.find(
-          (ps) => ps.order === currentOrder + 1,
-        );
-
-        if (nextOrderService) {
-          nextService = await this.prisma.prescriptionService.update({
-            where: {
-              prescriptionId_serviceId: {
-                prescriptionId: prescriptionService.prescriptionId,
-                serviceId: nextOrderService.serviceId,
-              },
-            },
-            data: {
-              status: PrescriptionStatus.WAITING,
-            },
-            include: { service: true },
-          });
-
-          this.logger.log(
-            `Next service ${nextOrderService.serviceId} updated to WAITING`,
-          );
-        }
-      }
-
       return {
         service: updatedService,
-        nextService,
         message: 'Cập nhật trạng thái thành công',
       };
     } catch (error) {
