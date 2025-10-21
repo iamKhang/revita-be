@@ -7,35 +7,154 @@ const codeGen = new CodeGeneratorService();
 
 async function main() {
   // 2.1. Tạo danh sách các chuyên khoa (Specialty)
-  const specialtyNames = [
-    'Nội tổng quát',
-    'Răng hàm mặt',
-    'Mắt',
-    'Ngoại khoa',
-    'Ung bướu',
-    'Truyền nhiễm',
-    'Nhi khoa',
-    'Phụ khoa',
-    'Da liễu',
-    'Sản khoa',
-    'Tai mũi họng',
-    'Phục hồi chức năng',
-    'Bỏng',
-    'Huyết học/truyền máu',
-    'Tâm thần',
-    'Ngoại trú chung',
+  const specialties = [
+    {
+      name: 'Nội tổng quát',
+      description:
+        'Chuyên khoa điều trị các bệnh lý nội khoa tổng quát, bao gồm các bệnh tim mạch, hô hấp, tiêu hóa và nội tiết.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043352/da-khoa_ldgwhl.png',
+    },
+    {
+      name: 'Răng hàm mặt',
+      description:
+        'Chuyên khoa chăm sóc và điều trị các bệnh lý về răng, hàm mặt, bao gồm nha khoa tổng quát và phẫu thuật hàm mặt.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043351/rang-ham-mat_lkuean.png',
+    },
+    {
+      name: 'Mắt',
+      description:
+        'Chuyên khoa điều trị các bệnh lý về mắt, bao gồm khúc xạ, phẫu thuật mắt và điều trị các bệnh lý mắt phức tạp.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043352/mat_tpfp6a.png',
+    },
+    {
+      name: 'Ngoại khoa',
+      description:
+        'Chuyên khoa phẫu thuật điều trị các bệnh lý cần can thiệp ngoại khoa, bao gồm phẫu thuật tổng quát và chuyên sâu.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-surgery.jpg',
+    },
+    {
+      name: 'Ung bướu',
+      description:
+        'Chuyên khoa điều trị các bệnh ung thư và khối u, bao gồm hóa trị, xạ trị và phẫu thuật ung bướu.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-oncology.jpg',
+    },
+    {
+      name: 'Truyền nhiễm',
+      description:
+        'Chuyên khoa điều trị các bệnh truyền nhiễm, bao gồm các bệnh do vi khuẩn, virus, ký sinh trùng và nấm.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-infectious-disease.jpg',
+    },
+    {
+      name: 'Nhi khoa',
+      description:
+        'Chuyên khoa chăm sóc sức khỏe trẻ em từ sơ sinh đến 18 tuổi, bao gồm điều trị và phòng ngừa bệnh tật.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043351/nhi_oiew69.png',
+    },
+    {
+      name: 'Phụ khoa',
+      description:
+        'Chuyên khoa chăm sóc sức khỏe phụ nữ, bao gồm điều trị các bệnh lý về cơ quan sinh dục nữ.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-gynecology.jpg',
+    },
+    {
+      name: 'Da liễu',
+      description:
+        'Chuyên khoa điều trị các bệnh lý về da, tóc, móng và các bệnh lây truyền qua đường tình dục.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043352/da-lieu_w9foei.png',
+    },
+    {
+      name: 'Sản khoa',
+      description:
+        'Chuyên khoa chăm sóc phụ nữ mang thai, sinh con và hậu sản, bao gồm theo dõi thai kỳ và đỡ đẻ.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-obstetrics.jpg',
+    },
+    {
+      name: 'Tai mũi họng',
+      description:
+        'Chuyên khoa điều trị các bệnh lý về tai, mũi, họng và các cơ quan liên quan như thanh quản.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043351/tai-mui-hong_n7jmyj.png',
+    },
+    {
+      name: 'Phục hồi chức năng',
+      description:
+        'Chuyên khoa phục hồi chức năng vận động, ngôn ngữ và nhận thức cho bệnh nhân sau chấn thương hoặc bệnh tật.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043351/phuc-hoi_kgmpxy.png',
+    },
+    {
+      name: 'Bỏng',
+      description:
+        'Chuyên khoa điều trị các vết bỏng do nhiệt, hóa chất, điện và các nguyên nhân khác.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-burn.jpg',
+    },
+    {
+      name: 'Huyết học/truyền máu',
+      description:
+        'Chuyên khoa điều trị các bệnh lý về máu, cơ quan tạo máu và thực hiện truyền máu.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-hematology.jpg',
+    },
+    {
+      name: 'Tâm thần',
+      description:
+        'Chuyên khoa điều trị các rối loạn tâm thần, hành vi và các vấn đề sức khỏe tâm lý.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-psychiatry.jpg',
+    },
+    {
+      name: 'Ngoại trú chung',
+      description:
+        'Dịch vụ khám ngoại trú tổng quát cho các bệnh lý thông thường và chăm sóc sức khỏe định kỳ.',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-general-outpatient.jpg',
+    },
+    {
+      name: 'Tim mạch',
+      description:
+        'Chuyên khoa điều trị các bệnh lý về tim mạch, bao gồm các bệnh tim mạch, động mạch vành,...',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043352/tim_clspx6.png',
+    },
+    {
+      name: 'Chỉnh hình xương khớp',
+      description:
+        'Chuyên khoa điều trị các bệnh lý về chỉnh hình, bao gồm các bệnh chỉnh hình, điều trị chỉnh hình,...',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043351/chinh-hinh_fahdlq.png',
+    },
+    {
+      name: 'Tiêu hóa',
+      description:
+        'Chuyên khoa điều trị các bệnh lý về tiêu hóa, bao gồm các bệnh tiêu hóa, điều trị tiêu hóa,...',
+      imgUrl:
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043351/tieu-hoa_filenk.png',
+    },
   ];
 
   // Tạo specialty và lưu lại id theo tên
   const specialtyMap: Record<string, { id: string; name: string }> = {};
-  for (const name of specialtyNames) {
+  for (const specialty of specialties) {
     const s = await prisma.specialty.create({
       data: {
-        name,
-        specialtyCode: name.toUpperCase().replace(/\s+/g, '_'),
+        name: specialty.name,
+        specialtyCode: specialty.name.toUpperCase().replace(/\s+/g, '_'),
+        description: specialty.description,
+        imgUrl: specialty.imgUrl,
       },
     });
-    specialtyMap[name] = { id: s.id, name };
+    specialtyMap[specialty.name] = { id: s.id, name: specialty.name };
   }
 
   // 2.2. Tạo danh sách template (mapping specialtyId, templateCode, name, fields)
@@ -1073,7 +1192,9 @@ async function main() {
   if (!existedDefaultDoctor) {
     const defaultSpecialty =
       (await prisma.specialty.findFirst()) ||
-      (await prisma.specialty.create({ data: { specialtyCode: 'GEN', name: 'General' } }));
+      (await prisma.specialty.create({
+        data: { specialtyCode: 'GEN', name: 'General' },
+      }));
     await prisma.doctor.create({
       data: {
         id: doctorAuth.id, // Sử dụng cùng id với auth
@@ -1173,7 +1294,9 @@ async function main() {
     where: { authId: receptionistAuth.id },
   });
   if (!existedReceptionist) {
-    const receptionistCode = codeGen.generateReceptionistCode(receptionistAuth.name ?? 'Receptionist');
+    const receptionistCode = codeGen.generateReceptionistCode(
+      receptionistAuth.name ?? 'Receptionist',
+    );
     await prisma.receptionist.create({
       data: {
         id: receptionistAuth.id, // Sử dụng cùng id với auth

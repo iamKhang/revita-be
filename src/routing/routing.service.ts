@@ -78,7 +78,7 @@ export class RoutingService {
         id: true,
         roomCode: true,
         roomName: true,
-        specialty: { select: { name: true } },
+        specialty: { select: { name: true, description: true, imgUrl: true } },
         booth: {
           where: { isActive: true },
           select: {

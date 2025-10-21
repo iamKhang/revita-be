@@ -43,6 +43,8 @@ export class AppointmentBookingService {
         id: true,
         specialtyCode: true,
         name: true,
+        description: true,
+        imgUrl: true,
       },
       orderBy: {
         name: 'asc',
@@ -54,6 +56,8 @@ export class AppointmentBookingService {
         specialtyId: s.id,
         specialtyCode: s.specialtyCode,
         name: s.name,
+        description: s.description || undefined,
+        imgUrl: s.imgUrl || undefined,
       })),
     };
   }
