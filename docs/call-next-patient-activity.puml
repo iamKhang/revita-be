@@ -1,0 +1,93 @@
+@startuml call-next-patient-activity
+title Luồng hoạt động: Gọi bệnh nhân tiếp theo (Call Next Patient)
+
+skinparam swimlane {
+  BorderColor black
+  BorderThickness 2
+}
+
+skinparam PartitionBorderColor black
+skinparam PartitionBorderThickness 2
+
+|Nhân viên quầy|
+start
+:Nhấn nút\n"Gọi bệnh nhân tiếp theo";
+
+|Hệ thống|
+:Nhận request\ncallNextPatient(counterId);
+
+:Lấy queue cũ từ Redis\nZREVRANGE;
+
+:Lấy bệnh nhân đang phục vụ\nGET counter:current;
+
+if (Có bệnh nhân\nđang phục vụ?) then (yes)
+  :Xóa bệnh nhân hiện tại\nDEL counter:current;
+  
+  :Gửi WebSocket:\nPATIENT_SERVED;
+  
+  :Publish Redis Stream:\ntype=PATIENT_SERVED;
+endif
+
+:Lấy danh sách chờ\nZREVRANGE counterQueueZ;
+
+if (Queue rỗng?) then (yes)
+  :Reset sequence nếu cần\nDEL counter:sequence;
+  
+  |Nhân viên quầy|
+  #pink:Hiển thị:\n"Không có bệnh nhân";
+  :Xác nhận;
+  stop
+else (no)
+  |Hệ thống|
+  :Lấy bệnh nhân\nưu tiên cao nhất\nqueue[0];
+  
+  :Tạo preparingPatient:\n- status = PREPARING\n- isPriority = true\n- preparingAt = now;
+  
+  :Xóa khỏi queue\nZREM counterQueueZ;
+  
+  :Thêm lại với MAX priority\nZADD MAX_SAFE_INTEGER;
+  
+  :Gửi WebSocket:\nPATIENT_PREPARING;
+  
+  :Publish Redis Stream:\ntype=PATIENT_PREPARING;
+  
+  :Gọi callNextPatientOptimized:\n- ZPOPMAX (lấy PREPARING)\n- SET counter:current\n- status = SERVING;
+  
+  :Lấy current đã update\nGET counter:current;
+  
+  if (Có previous khác current?) then (yes)
+    :Lưu vào history\nLPUSH counter:history;
+  endif
+  
+  :Chuẩn hóa current\nstatus = SERVING;
+  
+  :Cập nhật counter:current\nSET;
+  
+  :Chọn bệnh nhân NEXT\nupdateNextPatientInQueue;
+  
+  :Lấy queue hiện tại\nZREVRANGE;
+  
+  :Tìm bệnh nhân\nưu tiên cao nhất;
+  
+  :Đánh dấu status = NEXT\nZADD;
+  
+  :Publish Redis Stream:\ntype=NEXT_PATIENT_CALLED;
+  
+  :Lấy queue mới\nZREVRANGE;
+  
+  :So sánh oldQueue\nvs newQueue;
+  
+  :Gửi WebSocket:\nqueue_position_changed\n(moved patients);
+  
+  :Tạo response\nmapTicketForFrontend;
+  
+  |Nhân viên quầy|
+  :Nhận thông tin:\n- Bệnh nhân đang phục vụ\n- Bệnh nhân tiếp theo (NEXT)\n- Danh sách chờ;
+  
+  :Hiển thị trên màn hình\nquầy tiếp nhận;
+endif
+
+stop
+
+@enduml
+

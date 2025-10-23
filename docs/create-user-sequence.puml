@@ -1,0 +1,187 @@
+@startuml createUserSequence
+
+actor "Admin" as Admin
+
+boundary "Admin UI" as UI
+control "AdminController" as Controller
+entity "CodeGeneratorService" as CodeGen
+entity "bcrypt" as Bcrypt
+entity "EmailService" as Email
+database "PostgreSQL" as DB
+
+Admin -> UI: Nhập thông tin user mới\n- name, dateOfBirth, gender\n- address, citizenId\n- email, phone, password\n- role, specialtyId, etc
+activate UI
+
+UI -> UI: Validate form data
+
+UI -> Controller: POST /admin/users\nCreateUserDto
+activate Controller
+
+Controller -> Controller: Validate required fields\nname, dateOfBirth, gender,\naddress, password, role
+
+alt Thiếu trường bắt buộc
+    Controller --> UI: 400 Missing required fields
+    deactivate Controller
+    UI --> Admin: Hiển thị lỗi
+    deactivate UI
+else Đầy đủ trường bắt buộc
+
+alt Có citizenId
+    Controller -> DB: SELECT FROM auth\nWHERE citizenId = value
+    activate DB
+    DB --> Controller: Record hoặc null
+    deactivate DB
+    
+    alt CitizenId đã tồn tại
+        Controller --> UI: 400 CitizenId already exists
+        deactivate Controller
+        UI --> Admin: Hiển thị lỗi trùng citizenId
+        deactivate UI
+    end
+end
+
+alt Có email
+    Controller -> DB: SELECT FROM auth\nWHERE email = value
+    activate DB
+    DB --> Controller: Record hoặc null
+    deactivate DB
+    
+    alt Email đã tồn tại
+        Controller --> UI: 400 Email already exists
+        deactivate Controller
+        UI --> Admin: Hiển thị lỗi trùng email
+        deactivate UI
+    end
+end
+
+alt Có phone
+    Controller -> DB: SELECT FROM auth\nWHERE phone = value
+    activate DB
+    DB --> Controller: Record hoặc null
+    deactivate DB
+    
+    alt Phone đã tồn tại
+        Controller --> UI: 400 Phone already exists
+        deactivate Controller
+        UI --> Admin: Hiển thị lỗi trùng phone
+        deactivate UI
+    end
+end
+
+Controller -> Bcrypt: hash(password, 10)
+activate Bcrypt
+Bcrypt -> Bcrypt: Generate salt\nHash password
+Bcrypt --> Controller: hashedPassword
+deactivate Bcrypt
+
+Controller -> DB: INSERT INTO auth VALUES\n(name, dateOfBirth, gender,\naddress, citizenId, avatar,\nrole, email, phone,\nhashedPassword)
+activate DB
+DB -> DB: Execute INSERT
+DB --> Controller: Auth record\n(id, name, role, email, phone, ...)
+deactivate DB
+
+alt role = DOCTOR
+    alt Thiếu specialtyId
+        Controller --> UI: 400 Missing specialtyId for DOCTOR
+        deactivate Controller
+        UI --> Admin: Hiển thị lỗi thiếu specialtyId
+        deactivate UI
+    else Có specialtyId
+        Controller -> CodeGen: generateDoctorCode(name)
+        activate CodeGen
+        CodeGen -> CodeGen: Tạo mã doctor\nformat: DOC-XXXXXX
+        CodeGen --> Controller: doctorCode
+        deactivate CodeGen
+        
+        Controller -> DB: INSERT INTO doctor VALUES\n(doctorCode, authId,\nyearsExperience, rating = 0,\nworkHistory, description,\nspecialtyId)
+        activate DB
+        DB -> DB: Execute INSERT
+        DB --> Controller: Doctor record
+        deactivate DB
+    end
+    
+else role = PATIENT
+    Controller -> CodeGen: generatePatientCode\n(name, dateOfBirth, gender)
+    activate CodeGen
+    CodeGen -> CodeGen: Tạo mã patient\nformat: PAT-XXXXXX
+    CodeGen --> Controller: patientCode
+    deactivate CodeGen
+    
+    Controller -> DB: INSERT INTO patient VALUES\n(patientCode, authId,\nloyaltyPoints)
+    activate DB
+    DB -> DB: Execute INSERT
+    DB --> Controller: Patient record
+    deactivate DB
+    
+else role = RECEPTIONIST
+    Controller -> CodeGen: generateReceptionistCode(name)
+    activate CodeGen
+    CodeGen -> CodeGen: Tạo mã receptionist\nformat: REC-XXXXXX
+    CodeGen --> Controller: receptionistCode
+    deactivate CodeGen
+    
+    Controller -> DB: INSERT INTO receptionist VALUES\n(receptionistCode, authId)
+    activate DB
+    DB -> DB: Execute INSERT
+    DB --> Controller: Receptionist record
+    deactivate DB
+    
+else role = CASHIER
+    Controller -> CodeGen: generateCashierCode(name)
+    activate CodeGen
+    CodeGen -> CodeGen: Tạo mã cashier\nformat: CAS-XXXXXX
+    CodeGen --> Controller: cashierCode
+    deactivate CodeGen
+    
+    Controller -> DB: INSERT INTO cashier VALUES\n(cashierCode, authId)
+    activate DB
+    DB -> DB: Execute INSERT
+    DB --> Controller: Cashier record
+    deactivate DB
+    
+else role = ADMIN
+    Controller -> CodeGen: generateAdminCode(name)
+    activate CodeGen
+    CodeGen -> CodeGen: Tạo mã admin\nformat: ADM-XXXXXX
+    CodeGen --> Controller: adminCode
+    deactivate CodeGen
+    
+    Controller -> DB: INSERT INTO admin VALUES\n(adminCode, authId)
+    activate DB
+    DB -> DB: Execute INSERT
+    DB --> Controller: Admin record
+    deactivate DB
+    
+else Invalid role
+    Controller --> UI: 400 Invalid role
+    deactivate Controller
+    UI --> Admin: Hiển thị lỗi role không hợp lệ
+    deactivate UI
+end
+
+alt Có email
+    Controller -> Email: sendAccountCredentials\n(email, name, username,\npassword, role)
+    activate Email
+    Email -> Email: Tạo email template\nvới thông tin đăng nhập
+    Email -> Email: Gửi email qua SMTP
+    Email --> Controller: Email sent successfully
+    deactivate Email
+end
+
+Controller -> Controller: Tạo response object\n(auth, roleRecord)
+
+Controller --> UI: 200 OK\n(auth record + role record)
+deactivate Controller
+
+UI --> Admin: Hiển thị thông báo\nUser created successfully\n- ID: xxx\n- Name: xxx\n- Role: xxx\n- Code: xxx
+deactivate UI
+
+Admin -> Admin: Xác nhận thành công
+
+alt Có email
+    Email -> Admin: User mới nhận email\nvới username và password
+end
+
+end
+
+@enduml

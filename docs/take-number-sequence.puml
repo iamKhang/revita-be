@@ -1,0 +1,135 @@
+@startuml take-number-sequence
+
+actor "Bệnh nhân" as Patient
+actor "Nhân viên\nquầy" as Staff
+
+boundary "Màn hình\nKiosk bốc số" as KioskUI
+boundary "Màn hình\nquầy tiếp nhận" as CounterUI
+boundary "Màn hình\nchờ quầy" as WaitingUI
+
+control "TakeNumberController" as Controller
+entity "TakeNumberService" as Service
+database "PostgreSQL" as DB
+database "Redis" as Redis
+queue "Redis Stream" as Stream
+queue "WebSocket\nEvents" as WS
+
+
+Patient -> KioskUI: Quét mã hồ sơ/\nlịch hẹn hoặc\nnhập thủ công
+activate KioskUI
+
+KioskUI -> Controller: POST /take-number/take\n(TakeNumberDto)
+activate Controller
+
+Controller -> Service: takeNumber(dto)
+activate Service
+
+
+alt Có patientProfileCode
+    Service -> DB: SELECT * FROM PatientProfile\nWHERE profileCode = ?
+    activate DB
+    DB --> Service: PatientProfile data
+    deactivate DB
+    Service -> Service: calculateAge(dateOfBirth)
+    
+else Có appointmentCode
+    Service -> DB: SELECT * FROM Appointment\nJOIN PatientProfile\nWHERE appointmentCode = ?
+    activate DB
+    DB --> Service: Appointment + PatientProfile
+    deactivate DB
+    Service -> Service: calculateAge(dateOfBirth)
+    Service -> Service: hasAppointment = true
+    
+else Nhập thủ công
+    Service -> Service: Tạo patientInfo tạm\ngender = UNKNOWN
+end
+
+
+Service -> Service: Xác định isPregnant, isDisabled
+
+alt Có lịch hẹn
+    Service -> Service: calculateIsOnTime()\n±20 phút
+else Không có lịch hẹn
+    Service -> Service: isOnTime = false
+end
+
+Service -> DB: SELECT * FROM Counter\nWHERE isActive = true\nAND has ACTIVE assignment
+activate DB
+DB --> Service: Counter[]
+deactivate DB
+
+loop Cho mỗi counter
+    Service -> Redis: ZCARD counterQueueZ:{counterId}
+    activate Redis
+    Redis --> Service: queueLength
+    deactivate Redis
+end
+
+Service -> Service: Sắp xếp theo queueLength\nChọn counter ít người nhất
+
+Service -> Service: calculateQueuePriority(\nage, isDisabled, isPregnant,\nhasAppointment)
+
+Service -> Redis: INCR counter:sequence:{counterId}
+activate Redis
+Redis --> Service: sequence number
+deactivate Redis
+
+Service -> Service: Tạo ticketId\nTạo queueNumber
+
+Service -> Service: Tạo QueueTicket object\nstatus = WAITING\ncallCount = 0
+
+
+Service -> Redis: ZREVRANGE counterQueueZ:{counterId}
+activate Redis
+Redis --> Service: oldQueue[]
+deactivate Redis
+
+
+Service -> Stream: XADD stream:tickets *\n<ticket data>
+activate Stream
+Stream --> Service: stream entry ID
+deactivate Stream
+
+Service -> Redis: ZADD counterQueueZ:{counterId}\n<queuePriority> <ticket JSON>
+activate Redis
+Redis --> Service: OK
+deactivate Redis
+Service -> Redis: ZREVRANGE counterQueueZ:{counterId}
+activate Redis
+Redis --> Service: newQueue[]
+deactivate Redis
+
+Service -> Service: So sánh oldQueue vs newQueue\nTìm movedPatients
+
+Service -> WS: Publish event: new_ticket\n(counterId, ticket)
+activate WS
+WS -> CounterUI: Thông báo ticket mới
+WS -> WaitingUI: Cập nhật danh sách chờ
+deactivate WS
+
+Service -> WS: Publish event:\nqueue_position_changed\n(newPatients, movedPatients)
+activate WS
+WS -> CounterUI: Cập nhật vị trí queue
+WS -> WaitingUI: Cập nhật thứ tự chờ
+deactivate WS
+
+
+Service -> Service: enrichTicketForFrontend(ticket)\nThêm flags: isOnTime,\nisElderly, isChild
+
+Service --> Controller: TakeNumberResult\n(success, ticket, patientInfo)
+deactivate Service
+
+Controller --> KioskUI: 200 OK\n(ticket info)
+deactivate Controller
+
+KioskUI --> Patient: Hiển thị:\n- Số thứ tự: <queueNumber>\n- Quầy: <counterName>\n- Thời gian bốc số
+deactivate KioskUI
+
+Staff -> CounterUI: Quan sát ticket mới
+Patient -> WaitingUI: Quan sát số thứ tự\ntrên màn hình chờ
+
+CounterUI --> Staff: Hiển thị thông tin\nbệnh nhân mới
+
+WaitingUI --> Patient: Hiển thị danh sách\nđang chờ được gọi
+
+@enduml
