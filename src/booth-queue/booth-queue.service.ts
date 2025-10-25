@@ -317,32 +317,10 @@ export class BoothQueueService {
     try {
       const queueItems = await this.getBoothQueue(boothId);
       
-      const notification = {
-        type: 'BOOTH_QUEUE_UPDATE' as const,
-        data: {
-          boothId,
-          eventType,
-          queueItem,
-          queueLength: queueItems.length,
-          queueItems: queueItems.slice(0, 10), // Chỉ gửi 10 item đầu
-        },
-        timestamp: new Date().toISOString(),
-      };
-
-      // Gửi đến booth
-      await this.webSocketService.sendToBooth(boothId, 'booth_queue_update', notification);
-
-      // Gửi đến clinic room
-      if (queueItem.patientPriorityInfo.clinicRoomId) {
-        await this.webSocketService.sendToClinicRoom(
-          queueItem.patientPriorityInfo.clinicRoomId,
-          'booth_queue_update',
-          notification
-        );
-      }
-
-      // Broadcast đến tất cả counter
-      await this.webSocketService.broadcastToAllCounters(notification);
+      console.log(`📡 Queue update: ${boothId} - ${eventType}`, {
+        queueLength: queueItems.length,
+        queueItem: queueItem.patientPriorityInfo.patientName,
+      });
 
     } catch (error) {
       console.error('Error sending queue notification:', error);

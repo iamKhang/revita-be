@@ -118,6 +118,24 @@ export class TakeNumberService {
       };
     }
 
+    // Xác định thông tin ưu tiên (mang thai/khuyết tật) dựa trên hồ sơ nếu có
+    let isPregnant = request.isPregnant ?? false;
+    let isDisabled = request.isDisabled ?? false;
+
+    if (patientInfo && typeof patientInfo.isPregnant === 'boolean') {
+      isPregnant = patientInfo.isPregnant;
+    }
+
+    if (patientInfo && typeof patientInfo.isDisabled === 'boolean') {
+      isDisabled = patientInfo.isDisabled;
+    }
+
+    patientInfo = {
+      ...patientInfo,
+      isPregnant,
+      isDisabled,
+    };
+
     // Tính toán xem bệnh nhân có đến đúng giờ không
     const isOnTime = this.calculateIsOnTime(hasAppointment, appointmentDetails);
     t = tlog('calculate on-time status', t);
@@ -129,8 +147,8 @@ export class TakeNumberService {
     // Tính toán priority score cho queue
     const queuePriority = this.calculateQueuePriority(
       patientInfo.age,
-      request.isDisabled || false,
-      request.isPregnant || false,
+      isDisabled,
+      isPregnant,
       hasAppointment,
       0, // Sẽ được cập nhật sau khi có sequence
       0, // callCount = 0 cho bệnh nhân mới
@@ -145,6 +163,7 @@ export class TakeNumberService {
       appointmentDetails,
       isOnTime,
       queuePriority,
+      { isDisabled, isPregnant },
     );
     t = tlog('create ticket', t);
 
@@ -204,6 +223,8 @@ export class TakeNumberService {
         address: true,
         emergencyContact: true,
         profileCode: true,
+        isPregnant: true,
+        isDisabled: true,
       },
     });
 
@@ -222,6 +243,8 @@ export class TakeNumberService {
       address: profile.address,
       emergencyContact: profile.emergencyContact,
       profileCode: profile.profileCode,
+      isPregnant: profile.isPregnant,
+      isDisabled: profile.isDisabled,
     };
   }
 
@@ -248,6 +271,8 @@ export class TakeNumberService {
             address: true,
             emergencyContact: true,
             profileCode: true,
+            isPregnant: true,
+            isDisabled: true,
           },
         },
         service: true,
@@ -271,6 +296,8 @@ export class TakeNumberService {
       address: appointment.patientProfile.address,
       emergencyContact: appointment.patientProfile.emergencyContact,
       profileCode: appointment.patientProfile.profileCode,
+      isPregnant: appointment.patientProfile.isPregnant,
+      isDisabled: appointment.patientProfile.isDisabled,
     };
 
     const appointmentDetails = {
@@ -369,6 +396,7 @@ export class TakeNumberService {
     appointmentDetails: any,
     isOnTime: boolean,
     queuePriority: number,
+    priorityFlags: { isDisabled: boolean; isPregnant: boolean },
   ): Promise<QueueTicket> {
     const ticketId = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const sequence = await this.getNextSequence(counter.id);
@@ -378,8 +406,8 @@ export class TakeNumberService {
     // Tính lại priority score với sequence thực tế
     const finalQueuePriority = this.calculateQueuePriority(
       patientInfo.age,
-      request.isDisabled || false,
-      request.isPregnant || false,
+      priorityFlags.isDisabled,
+      priorityFlags.isPregnant,
       !!appointmentDetails,
       sequence,
       0, // callCount = 0 cho bệnh nhân mới
@@ -404,8 +432,8 @@ export class TakeNumberService {
       callCount: 0,
       queuePriority: finalQueuePriority,
       metadata: {
-        isPregnant: request.isPregnant,
-        isDisabled: request.isDisabled,
+        isPregnant: priorityFlags.isPregnant,
+        isDisabled: priorityFlags.isDisabled,
         isChild: typeof patientInfo.age === 'number' ? patientInfo.age < 6 : false,
       },
     };

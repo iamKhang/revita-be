@@ -123,34 +123,8 @@ export class PrescriptionNotificationService {
   private async sendNotificationsToRelevantParties(event: PrescriptionStatusUpdateEvent) {
     const { data } = event;
 
-    // 1. Gửi đến booth (nếu có)
-    if (data.boothId) {
-      await this.webSocketService.sendToBooth(data.boothId, 'prescription_service_update', event);
-      console.log(`📡 Sent notification to booth ${data.boothCode}`);
-    }
-
-    // 2. Gửi đến clinic room (nếu có)
-    if (data.clinicRoomId) {
-      await this.webSocketService.sendToClinicRoom(data.clinicRoomId, 'prescription_service_update', event);
-      console.log(`📡 Sent notification to clinic room ${data.clinicRoomName}`);
-    }
-
-    // 3. Gửi đến doctor (nếu có)
-    if (data.doctorId) {
-      await this.webSocketService.sendToDoctor(data.doctorId, 'prescription_service_update', event);
-      console.log(`📡 Sent notification to doctor ${data.doctorName}`);
-    }
-
-    // 4. Gửi đến technician (nếu có)
-    if (data.technicianId) {
-      await this.webSocketService.sendToTechnician(data.technicianId, 'prescription_service_update', event);
-      console.log(`📡 Sent notification to technician ${data.technicianName}`);
-    }
-
-    // 5. Gửi thông báo đến counter để gọi bệnh nhân
-    await this.sendPatientCallNotification(event);
-
-    console.log(`📡 Sent prescription service update: ${data.prescriptionCode} - ${data.serviceName} - ${data.status}`);
+    console.log(`📡 Prescription service update: ${data.prescriptionCode} - ${data.serviceName} - ${data.status}`);
+    console.log(`📡 Related parties: Booth=${data.boothCode}, Room=${data.clinicRoomName}, Doctor=${data.doctorName}, Technician=${data.technicianName}`);
   }
 
   /**
@@ -184,31 +158,6 @@ export class PrescriptionNotificationService {
 
       if (!prescriptionService) return;
 
-      const event = {
-        type: 'SERVICE_ASSIGNED_TO_BOOTH' as const,
-        data: {
-          prescriptionId,
-          prescriptionCode: prescriptionService.prescription.prescriptionCode,
-          serviceId,
-          serviceName: prescriptionService.service.name,
-          boothId,
-          boothCode: prescriptionService.booth?.boothCode,
-          boothName: prescriptionService.booth?.name,
-          clinicRoomId: prescriptionService.clinicRoomId,
-          clinicRoomName: prescriptionService.clinicRoom?.roomName,
-          workSessionId,
-          patientName: prescriptionService.prescription.patientProfile.name,
-          timestamp: new Date().toISOString(),
-        },
-        timestamp: new Date().toISOString(),
-      };
-
-      // Gửi đến booth
-      await this.webSocketService.sendToBooth(boothId, 'service_assigned', event);
-
-      // Gửi broadcast
-      await this.webSocketService.broadcastToAllCounters(event);
-
       console.log(`📡 Service assigned to booth: ${prescriptionService.service.name} -> ${prescriptionService.booth?.boothCode}`);
 
     } catch (error) {
@@ -223,18 +172,8 @@ export class PrescriptionNotificationService {
     const { data } = event;
 
     try {
-      // Tạo thông báo gọi bệnh nhân dựa trên status
       const callNotification = this.createPatientCallNotification(data);
-
-      // Gửi đến tất cả counter để hiển thị trên màn hình gọi bệnh nhân
-      await this.webSocketService.broadcastToAllCounters(callNotification);
-
-      // Nếu có buồng cụ thể, gửi thông báo chi tiết đến buồng đó
-      if (data.boothId) {
-        await this.webSocketService.sendToBooth(data.boothId, 'patient_call', callNotification);
-      }
-
-      console.log(`📢 Patient call notification sent: ${data.patientName} - ${data.status}`);
+      console.log(`📢 Patient call notification: ${data.patientName} - ${data.status}`, callNotification.data.callMessage);
 
     } catch (error) {
       console.error('Error sending patient call notification:', error);

@@ -34,7 +34,6 @@ export class BoothWebSocketGateway implements OnGatewayConnection, OnGatewayDisc
   }
 
   handleDisconnect(client: Socket) {
-    this.webSocketService.disconnectBooth(client);
     console.log(`Booth client disconnected: ${client.id}`);
   }
 
@@ -48,7 +47,6 @@ export class BoothWebSocketGateway implements OnGatewayConnection, OnGatewayDisc
       return;
     }
 
-    this.webSocketService.connectToBooth(client, data.boothId);
     client.emit('joined_booth', { 
       boothId: data.boothId,
       message: `Connected to booth ${data.boothId}` 
@@ -57,7 +55,6 @@ export class BoothWebSocketGateway implements OnGatewayConnection, OnGatewayDisc
 
   @SubscribeMessage('leave_booth')
   handleLeaveBooth(@ConnectedSocket() client: Socket) {
-    this.webSocketService.disconnectBooth(client);
     client.emit('left_booth', { message: 'Left booth' });
   }
 
@@ -68,8 +65,7 @@ export class BoothWebSocketGateway implements OnGatewayConnection, OnGatewayDisc
 
   @SubscribeMessage('get_online_booths')
   handleGetOnlineBooths(@ConnectedSocket() client: Socket) {
-    const onlineBooths = this.webSocketService.getOnlineBooths();
-    client.emit('online_booths', { booths: onlineBooths });
+    client.emit('online_booths', { booths: [] });
   }
 
   @SubscribeMessage('booth_status_update')
@@ -82,12 +78,7 @@ export class BoothWebSocketGateway implements OnGatewayConnection, OnGatewayDisc
       return;
     }
 
-    // Broadcast status update to all clients listening to this booth
-    this.webSocketService.notifyBoothStatusUpdate(data.boothId, {
-      status: data.status,
-      workSessionId: data.workSessionId,
-      timestamp: new Date().toISOString()
-    });
+    console.log(`Booth status update: ${data.boothId} - ${data.status}`);
   }
 
   @SubscribeMessage('work_session_start')
@@ -100,12 +91,7 @@ export class BoothWebSocketGateway implements OnGatewayConnection, OnGatewayDisc
       return;
     }
 
-    this.webSocketService.notifyWorkSessionStart(data.boothId, {
-      workSessionId: data.workSessionId,
-      doctorId: data.doctorId,
-      technicianId: data.technicianId,
-      timestamp: new Date().toISOString()
-    });
+    console.log(`Work session start: ${data.boothId} - ${data.workSessionId}`);
   }
 
   @SubscribeMessage('work_session_end')
@@ -118,10 +104,7 @@ export class BoothWebSocketGateway implements OnGatewayConnection, OnGatewayDisc
       return;
     }
 
-    this.webSocketService.notifyWorkSessionEnd(data.boothId, {
-      workSessionId: data.workSessionId,
-      timestamp: new Date().toISOString()
-    });
+    console.log(`Work session end: ${data.boothId} - ${data.workSessionId}`);
   }
 }
 

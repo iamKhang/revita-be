@@ -27,10 +27,7 @@ import {
   GetAllServicesDto,
   ScanPrescriptionDto,
   UpdateServiceStatusDto,
-  UpdateServiceResultsDto,
   ScanPrescriptionResponseDto,
-  UpdateServiceStatusResponseDto,
-  UpdateResultsResponseDto,
   GetServicesDto,
   GetRoomWaitingListDto,
   GetRoomWaitingListResponseDto,
@@ -571,98 +568,6 @@ Hỗ trợ filter:
     }
   }
 
-  @Put('prescription-service/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.DOCTOR, Role.TECHNICIAN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Cập nhật trạng thái prescription service' })
-  @ApiResponse({
-    status: 200,
-    description: 'Cập nhật trạng thái thành công',
-    type: UpdateServiceStatusResponseDto,
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Không tìm thấy service',
-  })
-  async updateServiceStatus(
-    @Body() updateDto: UpdateServiceStatusDto,
-    @Request() req: any,
-  ): Promise<UpdateServiceStatusResponseDto> {
-    try {
-      const userId = req.user.id;
-      const userRole = req.user.role;
-
-      const result =
-        await this.prescriptionServiceManagement.updateServiceStatus(
-          updateDto.prescriptionId,
-          updateDto.serviceId,
-          updateDto.status,
-          userId,
-          userRole,
-          updateDto.note,
-        );
-      return result;
-    } catch (error) {
-      this.logger.error(`Update service status error: ${error.message}`);
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Lỗi khi cập nhật trạng thái service',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  @Put('prescription-service/results')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.DOCTOR, Role.TECHNICIAN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Cập nhật kết quả prescription service' })
-  @ApiResponse({
-    status: 200,
-    description: 'Cập nhật kết quả thành công',
-    type: UpdateResultsResponseDto,
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Không tìm thấy service',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Service không ở trạng thái WAITING_RESULT',
-  })
-  async updateServiceResults(
-    @Body() updateDto: UpdateServiceResultsDto,
-    @Request() req: any,
-  ): Promise<UpdateResultsResponseDto> {
-    try {
-      const userId = req.user.id;
-      const userRole = req.user.role;
-
-      const result =
-        await this.prescriptionServiceManagement.updateServiceResults(
-          updateDto.prescriptionId,
-          updateDto.serviceId,
-          updateDto.results,
-          userId,
-          userRole,
-          updateDto.note,
-        );
-      return result;
-    } catch (error) {
-      this.logger.error(`Update service results error: ${error.message}`);
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Lỗi khi cập nhật kết quả service',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
   @Get('work-session')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.DOCTOR, Role.TECHNICIAN)
@@ -745,86 +650,6 @@ Hỗ trợ filter:
       }
       throw new HttpException(
         'Lỗi khi lấy work session',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  @Post('prescription-service/start')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.DOCTOR, Role.TECHNICIAN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Bắt đầu thực hiện prescription service (SERVING)' })
-  @ApiResponse({
-    status: 200,
-    description: 'Bắt đầu service thành công',
-  })
-  async startService(
-    @Body() startDto: UpdateServiceStatusDto,
-    @Request() req: any,
-  ) {
-    try {
-      const userId = req.user.id;
-      const userRole = req.user.role;
-
-      const result =
-        await this.prescriptionServiceManagement.updateServiceStatus(
-          startDto.prescriptionId,
-          startDto.serviceId,
-          PrescriptionStatus.SERVING,
-          userId,
-          userRole,
-          'Bắt đầu thực hiện dịch vụ',
-        );
-      return result;
-    } catch (error) {
-      this.logger.error(`Start service error: ${error.message}`);
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Lỗi khi bắt đầu service',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  @Post('prescription-service/complete')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.DOCTOR, Role.TECHNICIAN)
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({
-    summary: 'Hoàn thành prescription service và chuyển sang waiting result',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Hoàn thành service thành công',
-  })
-  async completeService(
-    @Body() completeDto: UpdateServiceStatusDto,
-    @Request() req: any,
-  ) {
-    try {
-      const userId = req.user.id;
-      const userRole = req.user.role;
-
-      const result =
-        await this.prescriptionServiceManagement.updateServiceStatus(
-          completeDto.prescriptionId,
-          completeDto.serviceId,
-          PrescriptionStatus.WAITING_RESULT,
-          userId,
-          userRole,
-          'Hoàn thành thực hiện dịch vụ, chờ kết quả',
-        );
-      return result;
-    } catch (error) {
-      this.logger.error(`Complete service error: ${error.message}`);
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Lỗi khi hoàn thành service',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

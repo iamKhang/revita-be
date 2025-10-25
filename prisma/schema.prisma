@@ -131,6 +131,8 @@ model PatientProfile {
   isActive          Boolean     @default(true) @map("is_active")
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
+  isPregnant        Boolean     @default(false) @map("is_pregnant")
+  isDisabled        Boolean     @default(false) @map("is_disabled")
   patient           Patient?    @relation(fields: [patientId], references: [id]) // Quan hệ optional
   appointments      Appointment[]
   medicalRecords    MedicalRecord[]

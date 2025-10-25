@@ -852,7 +852,6 @@ export class CounterAssignmentService {
     try {
       console.log('🔄 [CounterAssignment] About to send PATIENT_PREPARING WebSocket notification');
       console.log('🔄 [CounterAssignment] Counter ID:', counterId);
-      console.log('🔄 [CounterAssignment] Patient:', preparingPatient.queueNumber);
       
       await this.webSocket.sendToCounter(counterId, 'patient_preparing', {
         type: 'PATIENT_PREPARING',

@@ -119,13 +119,6 @@ export class UpdateServiceStatusResponseDto {
   service: any;
 
   @ApiProperty({
-    description: 'Service tiếp theo đã được chuyển sang WAITING (nếu có)',
-    type: 'object',
-    additionalProperties: true,
-  })
-  nextService?: any;
-
-  @ApiProperty({
     description: 'Thông báo',
     example: 'Cập nhật trạng thái thành công',
   })
