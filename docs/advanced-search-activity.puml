@@ -1,0 +1,85 @@
+@startuml advancedSearchActivity
+
+skinparam swimlane {
+  BorderColor #000000
+  BorderThickness 1
+}
+
+skinparam PartitionBorderColor #000000
+
+|Người dùng|
+start
+:Mở trang tìm kiếm;
+:Nhập từ khóa\nvào ô tìm kiếm;
+:Chọn filter (tùy chọn):\n- Yêu cầu bác sĩ?\n- Đang hoạt động?;
+:Nhấn Tìm kiếm;
+
+|Hệ thống|
+:Nhận yêu cầu\nGET /services/advanced-search\nkeyword, limit, offset,\nrequiresDoctor, isActive;
+:Validate keyword;
+
+if (Keyword rỗng?) then (có)
+  :Trả về danh sách rỗng;
+  
+  |Người dùng|
+  :Hiển thị thông báo\nkhông có kết quả;
+  stop
+else (không)
+  |Hệ thống|
+  :Chuẩn hóa từ khóa\ntrim và lowercase;
+  
+  :Xây dựng filter conditions\ncommonServiceFilter\ncommonPackageFilter;
+  
+  if (isActive được truyền?) then (có)
+    :Áp dụng isActive filter\nvào cả service và package;
+  else (không)
+    :Mặc định isActive = true;
+  endif
+  
+  |Hệ thống|
+  if (requiresDoctor được truyền?) then (có)
+    :Áp dụng requiresDoctor filter\nvào cả service và package;
+  endif
+  
+  |Hệ thống|
+  :Tìm kiếm Priority 1\nSELECT service\nWHERE name ILIKE keyword\nAND isActive filter\nAND requiresDoctor filter\nINCLUDE category, specialty;
+  
+  :Tìm kiếm Priority 2\nSELECT package\nWHERE name ILIKE keyword\nAND isActive filter\nAND requiresDoctor filter\nINCLUDE category, specialty, items;
+  
+  :Tìm kiếm Priority 3\nSELECT package\nWHERE EXISTS item.service.name ILIKE keyword\nAND NOT name ILIKE keyword\nAND isActive filter\nAND requiresDoctor filter\nINCLUDE category, specialty, items;
+  
+  :Tìm kiếm Priority 4a\nSELECT service\nWHERE description ILIKE keyword\nAND NOT name ILIKE keyword\nAND isActive filter\nAND requiresDoctor filter\nINCLUDE category, specialty;
+  
+  :Tìm kiếm Priority 4b\nSELECT package\nWHERE description ILIKE keyword\nAND NOT (name ILIKE keyword\nOR EXISTS item.service.name ILIKE keyword)\nAND isActive filter\nAND requiresDoctor filter\nINCLUDE category, specialty, items;
+  
+  :Gộp tất cả kết quả\nvà gắn priority cho mỗi item;
+  
+  :Sắp xếp theo priority\ntừ 1 đến 4;
+  
+  :Đếm tổng số kết quả\ntotal;
+  
+  :Áp dụng pagination\nslice(offset, offset + limit);
+  
+  :Tạo response với\nresults, pagination, keyword;
+  
+  :Trả về kết quả;
+  
+  |Người dùng|
+  if (Có kết quả?) then (có)
+    :Hiển thị danh sách\nkết quả theo thứ tự priority;
+    :Hiển thị badge\ncho từng loại:\n- Dịch vụ (service)\n- Gói dịch vụ (package);
+    :Hiển thị indicator\nđộ ưu tiên;
+    
+    if (Có thêm trang?) then (có)
+      :Hiển thị nút\nXem thêm/Trang tiếp;
+    endif
+    stop
+  else (không)
+    :Hiển thị thông báo\nkhông tìm thấy kết quả\nphù hợp;
+    :Gợi ý thử từ khóa khác;
+    stop
+  endif
+endif
+
+@enduml
+

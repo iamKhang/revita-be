@@ -1,0 +1,336 @@
+@startuml payosPaymentSequence
+
+actor "Thu ngân" as Cashier
+actor "Bệnh nhân" as Patient
+
+boundary "Thu ngân UI" as UI
+control "InvoicePaymentController" as Controller
+entity "InvoicePaymentService" as Service
+entity "PayOsService" as PayOS
+entity "RoutingService" as Routing
+entity "WebSocketService" as WS
+database "PostgreSQL" as DB
+
+Cashier -> Patient: Yêu cầu phiếu chỉ định
+activate Patient
+Patient -> Cashier: Đưa phiếu chỉ định
+deactivate Patient
+
+Cashier -> UI: Quét mã phiếu chỉ định
+activate UI
+
+UI -> Controller: POST /invoice-payments/scan\nprescriptionCode
+activate Controller
+
+Controller -> Service: scanPrescription(dto)
+activate Service
+
+Service -> DB: SELECT prescription\nWHERE prescriptionCode\nINCLUDE patientProfile, doctor, services
+activate DB
+DB --> Service: Prescription data
+deactivate DB
+
+Service -> Service: Validate status not CANCELLED
+
+Service --> Controller: PrescriptionDetails\npatientProfile, services, prices
+deactivate Service
+
+Controller --> UI: 200 OK prescription details
+deactivate Controller
+
+UI --> Cashier: Hiển thị danh sách dịch vụ\nvà giá từng dịch vụ
+deactivate UI
+
+loop Chọn dịch vụ và xem tổng tiền
+    Cashier -> UI: Tích/bỏ tích dịch vụ
+    activate UI
+    
+    UI -> Controller: POST /invoice-payments/preview\nprescriptionCode, selectedServiceIds
+    activate Controller
+    
+    Controller -> Service: createPaymentPreview(dto)
+    activate Service
+    
+    Service -> Service: Lọc selectedServices
+    Service -> Service: Calculate totalAmount
+    
+    Service --> Controller: PaymentPreview\nselectedServices, totalAmount
+    deactivate Service
+    
+    Controller --> UI: 200 OK preview
+    deactivate Controller
+    
+    UI --> Cashier: Hiển thị tổng tiền
+    deactivate UI
+end
+
+Cashier -> UI: Chọn TRANSFER và nhấn Tạo hóa đơn
+activate UI
+
+UI -> Controller: POST /invoice-payments/create\nprescriptionCode, selectedServiceIds,\npaymentMethod TRANSFER,\nreturnUrl, cancelUrl
+activate Controller
+
+Controller -> Controller: Lấy cashierId từ JWT
+
+Controller -> Service: createPayment(dto)
+activate Service
+
+Service -> Service: Tạo preview để validate
+
+Service -> Routing: assignPatientToRooms\nvalidate có nhân sự
+activate Routing
+
+Routing -> DB: SELECT work sessions\nfor services
+activate DB
+DB --> Routing: Work sessions
+deactivate DB
+
+Routing --> Service: availableAssignments
+deactivate Routing
+
+alt Không có nhân sú
+    Service --> Controller: Error không có nhân sự
+    Controller --> UI: 400 Bad Request
+    UI --> Cashier: Hiển thị lỗi\nchưa có nhân sự phục vụ
+    deactivate UI
+    deactivate Controller
+    deactivate Service
+else Có nhân sự
+    Service -> Service: Generate invoiceCode
+
+    Service -> DB: BEGIN TRANSACTION
+    activate DB
+
+    Service -> DB: INSERT INTO invoice\ninvoiceCode, patientProfileId,\ncashierId, totalAmount,\npaymentMethod TRANSFER,\nisPaid false,\npaymentStatus PENDING
+
+    DB --> Service: Invoice created
+
+    Service -> DB: INSERT INTO invoiceDetail\ncho từng selectedService
+
+    DB --> Service: InvoiceDetails created
+
+    Service -> Service: Generate numeric orderCode
+
+    Service -> PayOS: createPaymentLink\norderCode, amount, description,\nreturnUrl, cancelUrl,\nbuyer info, items, metadata
+    activate PayOS
+
+    PayOS -> PayOS: Tạo payment link\nvà QR code
+
+    PayOS --> Service: PaymentLinkResult\npaymentUrl, qrCode,\ntransactionId, status,\nexpiredAt
+    deactivate PayOS
+
+    Service -> Service: Map PayOS status
+
+    Service -> DB: INSERT INTO paymentTransaction\ninvoiceId, amount, currency VND,\nstatus PENDING,\nproviderTransactionId,\norderCode, paymentUrl,\nqrCode, expiredAt,\nisVerified false
+
+    DB --> Service: Transaction created
+
+    Service -> DB: COMMIT TRANSACTION
+    deactivate DB
+
+    Service --> Controller: PaymentResult\ninvoiceCode, totalAmount,\npaymentStatus PENDING,\ntransaction with paymentUrl and qrCode
+    deactivate Service
+
+    Controller --> UI: 200 OK payment created
+    deactivate Controller
+
+    UI --> Cashier: Hiển thị mã QR code\nvà hướng dẫn
+    deactivate UI
+
+    Cashier -> Patient: Hướng dẫn quét QR\nđể thanh toán
+    activate Patient
+
+    Patient -> Patient: Mở app ngân hàng\nhoặc ví điện tử
+
+    Patient -> Patient: Quét mã QR
+
+    Patient -> PayOS: Thanh toán qua\napp ngân hàng/ví
+    activate PayOS
+
+    PayOS -> PayOS: Xử lý thanh toán\nvới ngân hàng
+
+    Patient -> Patient: Nhập PIN\nhoặc xác thực sinh trắc
+
+    Patient -> Patient: Xác nhận thanh toán
+    deactivate Patient
+
+    PayOS -> PayOS: Nhận xác nhận\ntừ ngân hàng
+
+    PayOS -> Controller: POST /invoice-payments/payos/webhook\nwith signature and payload
+    activate Controller
+
+    Controller -> Service: handlePayOsWebhook\nsignature, payload
+    activate Service
+
+    Service -> Service: Parse payload JSON
+
+    Service -> Service: Extract signature\nfrom header or payload
+
+    alt Không có signature
+        Service --> Controller: Return success\nwithout processing
+        Controller --> PayOS: 200 OK
+        deactivate Controller
+        deactivate PayOS
+        deactivate Service
+    else Có signature
+        Service -> PayOS: verifyWebhook\nsignature, payload
+
+        PayOS --> Service: Verified result\nor false
+        deactivate PayOS
+
+        alt Signature không hợp lệ
+            Service --> Controller: Error Invalid signature
+            Controller --> PayOS: 400 Bad Request
+            activate PayOS
+            deactivate Controller
+            deactivate PayOS
+            deactivate Service
+        else Signature hợp lệ
+            Service -> Service: Extract transactionId\nand orderCode from payload
+
+            Service -> DB: SELECT paymentTransaction\nWHERE providerTransactionId\nOR orderCode\nINCLUDE invoice, invoiceDetails,\npatientProfile
+            activate DB
+            DB --> Service: Transaction with invoice
+            deactivate DB
+
+            alt Transaction không tìm thấy
+                Service -> DB: Fallback lookup\nby amount and time window
+                activate DB
+                DB --> Service: Candidates
+                deactivate DB
+
+                alt Tìm thấy 1 candidate
+                    Service -> Service: Use fallback transaction
+                else Không tìm thấy
+                    Service --> Controller: Return success\nwithout invoice update
+                    Controller --> PayOS: 200 OK
+                    activate PayOS
+                    deactivate Controller
+                    deactivate PayOS
+                    deactivate Service
+                end
+            end
+
+            Service -> Service: Map status\nfrom payload
+
+            Service -> DB: BEGIN TRANSACTION
+            activate DB
+
+            Service -> DB: UPDATE paymentTransaction\nstatus, paidAt,\nproviderTransactionId,\norderCode, isVerified true,\nlastWebhookPayload,\nlastWebhookStatus,\nlastWebhookAt
+
+            DB --> Service: Transaction updated
+
+            alt Status is SUCCEEDED
+                Service -> Service: Check if invoice\nalready isPaid
+
+                alt Invoice đã isPaid
+                    Service -> DB: COMMIT TRANSACTION
+                    deactivate DB
+
+                    Service ->> WS: notifyInvoicePaymentSuccess
+                    activate WS
+                    WS ->> UI: WebSocket notification\nthanh toán thành công
+                    WS -> WS: Broadcast to clinic rooms
+                    deactivate WS
+
+                    Service --> Controller: Return success\nwith invoiceCode
+                    deactivate Service
+
+                    Controller --> PayOS: 200 OK
+                    activate PayOS
+                    deactivate Controller
+                    deactivate PayOS
+
+                    activate UI
+                    UI --> Cashier: Hiển thị notification\nthanh toán thành công
+                    deactivate UI
+                else Invoice chưa isPaid
+                    Service -> DB: UPDATE invoice\nset isPaid true,\npaymentStatus PAID,\namountPaid, changeAmount 0,\npaidAt now
+
+                    DB --> Service: Invoice updated
+
+                    Service -> DB: UPDATE prescription\nstatus PAID
+
+                    DB --> Service: Prescription updated
+
+                    Service -> DB: COMMIT TRANSACTION
+                    deactivate DB
+
+                    Service -> Routing: assignPatientToRooms\ntạo routing assignments
+                    activate Routing
+
+                    Routing -> DB: INSERT routing assignments\nfor each service
+                    activate DB
+                    DB --> Routing: Assignments created
+                    deactivate DB
+
+                    Routing --> Service: routingAssignments
+                    deactivate Routing
+
+                    Service ->> WS: notifyInvoicePaymentSuccess\nand routing created
+                    activate WS
+                    WS ->> UI: WebSocket notification\nthanh toán thành công
+                    WS -> WS: Broadcast to clinic rooms\nvới routing info
+                    deactivate WS
+
+                    Service --> Controller: Return success\nwith invoiceCode and data
+                    deactivate Service
+
+                    Controller --> PayOS: 200 OK
+                    activate PayOS
+                    deactivate Controller
+                    deactivate PayOS
+
+                    activate UI
+                    UI --> Cashier: Hiển thị notification\nthanh toán thành công
+                    deactivate UI
+
+                    Cashier -> UI: In hóa đơn
+                    activate UI
+                    UI -> UI: Generate invoice PDF
+                    UI --> Cashier: Hóa đơn in ra
+                    deactivate UI
+
+                    Cashier -> Patient: Trao hóa đơn
+                    activate Patient
+
+                    Cashier -> Patient: Hướng dẫn đến phòng khám\ntheo routing assignment
+                    deactivate Patient
+                end
+            else Status is CANCELLED or FAILED
+                Service -> DB: COMMIT TRANSACTION
+                deactivate DB
+
+                Service --> Controller: Return success\nwith status
+                deactivate Service
+
+                Controller --> PayOS: 200 OK
+                activate PayOS
+                deactivate Controller
+                deactivate PayOS
+
+                Service ->> WS: Notify payment failed
+                activate WS
+                WS ->> UI: WebSocket notification\nthanh toán thất bại
+                deactivate WS
+
+                activate UI
+                UI --> Cashier: Hiển thị thanh toán\nthất bại hoặc hủy
+                deactivate UI
+            else Status khác (PENDING/PROCESSING)
+                Service -> DB: COMMIT TRANSACTION
+                deactivate DB
+
+                Service --> Controller: Return success
+                deactivate Service
+
+                Controller --> PayOS: 200 OK
+                activate PayOS
+                deactivate Controller
+                deactivate PayOS
+            end
+        end
+    end
+end
+
+@enduml

@@ -1,0 +1,110 @@
+@startuml createPackageActivity
+
+skinparam swimlane {
+  BorderColor #000000
+  BorderThickness 1
+}
+
+skinparam PartitionBorderColor #000000
+
+|Quản lý|
+start
+:Chọn chức năng\nThêm gói dịch vụ;
+:Mở form Thêm gói dịch vụ;
+:Điền thông tin bắt buộc:\n- Tên gói\n- Giá gói;
+:Điền thông tin tùy chọn:\n- Mô tả\n- Danh mục\n- Chuyên khoa\n- Cần bác sĩ?\n- Trạng thái hoạt động;
+
+:Chọn Thêm dịch vụ vào gói;
+
+repeat
+  :Tìm kiếm và chọn dịch vụ;
+  :Điền thông tin cho từng dịch vụ:\n- Số lượng (mặc định 1)\n- Giá ghi đè (tùy chọn)\n- Bắt buộc? (mặc định true)\n- Thứ tự sắp xếp\n- Ghi chú (tùy chọn);
+  :Thêm dịch vụ vào danh sách;
+repeat while (Còn dịch vụ muốn thêm?) is (có) not (không)
+
+:Nhấn Tạo gói dịch vụ;
+
+|Hệ thống|
+:Nhận yêu cầu\nPOST /services/management/packages;
+:Validate dữ liệu đầu vào\nname bắt buộc\nprice bắt buộc;
+
+if (Dữ liệu hợp lệ?) then (không)
+  |Quản lý|
+  :Hiển thị lỗi validation\nthiếu name hoặc price;
+  stop
+else (có)
+  |Hệ thống|
+  if (Có categoryId?) then (có)
+    :SELECT category\nWHERE id = categoryId;
+    
+    if (Category tồn tại?) then (không)
+      |Quản lý|
+      :Hiển thị lỗi\ncategory không tồn tại;
+      stop
+    endif
+  endif
+  
+  |Hệ thống|
+  if (Có specialtyId?) then (có)
+    :SELECT specialty\nWHERE id = specialtyId;
+    
+    if (Specialty tồn tại?) then (không)
+      |Quản lý|
+      :Hiển thị lỗi\nspecialty không tồn tại;
+      stop
+    endif
+  endif
+  
+  |Hệ thống|
+  if (Có items?) then (có)
+    :Kiểm tra không có\nserviceId trùng lặp\ntrong items;
+    
+    if (Có trùng lặp?) then (có)
+      |Quản lý|
+      :Hiển thị lỗi\ndịch vụ trùng lặp trong gói;
+      stop
+    else (không)
+      |Hệ thống|
+      :SELECT service\nWHERE id IN (serviceIds);
+      :Kiểm tra tất cả serviceId\ncó tồn tại;
+      
+      if (Có service không tồn tại?) then (có)
+        |Quản lý|
+        :Hiển thị lỗi\ndịch vụ không tồn tại;
+        stop
+      endif
+    endif
+  endif
+  
+  |Hệ thống|
+  :Tạo packageCode\ntự động duy nhất;
+  :BEGIN TRANSACTION;
+  :INSERT INTO package\ncode, name, price,\ndescription, categoryId,\nspecialtyId, requiresDoctor,\nisActive (default true);
+  
+  if (Có items?) then (có)
+    :INSERT INTO packageItem\ncho từng service\npackageId, serviceId,\nquantity, priceOverride,\nrequired, sortOrder, notes;
+  endif
+  
+  :COMMIT TRANSACTION;
+  
+  if (Tạo thành công?) then (không)
+    :ROLLBACK TRANSACTION;
+    :Xử lý lỗi DB\ntrùng code hoặc constraint;
+    
+    |Quản lý|
+    :Hiển thị lỗi\nkhông thể tạo gói dịch vụ;
+    stop
+  else (có)
+    |Hệ thống|
+    :SELECT package vừa tạo\nvới đầy đủ thông tin\ncategory, specialty,\nitems with services;
+    :Trả về thông tin\ngói dịch vụ đã tạo;
+    
+    |Quản lý|
+    :Hiển thị thông báo\ntạo gói dịch vụ thành công;
+    :Hiển thị thông tin\ngói dịch vụ mới\nvà danh sách dịch vụ trong gói;
+    stop
+  endif
+endif
+
+@enduml
+

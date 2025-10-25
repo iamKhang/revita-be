@@ -1,0 +1,128 @@
+@startuml cash-payment-activity
+
+skinparam swimlane {
+  BorderColor black
+  BorderThickness 2
+}
+
+skinparam PartitionBorderColor black
+skinparam PartitionBorderThickness 2
+
+|Thu ngân|
+start
+:Quét phiếu chỉ định\ncủa bệnh nhân;
+
+|Hệ thống|
+:Nhận request\nPOST /invoice-payments/scan\nScanPrescriptionDto;
+
+:Tìm Prescription\ntừ prescriptionCode;
+
+if (Không tìm thấy?) then (yes)
+  |Thu ngân|
+  #pink:Hiển thị lỗi:\n"Prescription not found";
+  :Xác nhận;
+  stop
+else (no)
+  |Hệ thống|
+endif
+
+if (Status = CANCELLED?) then (yes)
+  |Thu ngân|
+  #pink:Hiển thị lỗi:\n"Prescription has been cancelled";
+  :Xác nhận;
+  stop
+else (no)
+  |Hệ thống|
+endif
+
+:Lấy thông tin đầy đủ:\n- Thông tin bệnh nhân\n- Danh sách dịch vụ\n- Giá từng dịch vụ\n- Bác sĩ chỉ định;
+
+|Thu ngân|
+:Nhận danh sách dịch vụ\ntrên màn hình;
+
+:Hiển thị:\n- Tên bệnh nhân\n- Bác sĩ chỉ định\n- Danh sách dịch vụ\n- Giá từng dịch vụ;
+
+repeat
+  :Chọn/bỏ chọn\nmột dịch vụ;
+  
+  |Hệ thống|
+  :Nhận request\nPOST /invoice-payments/preview\nCreatePaymentDto;
+  
+  
+  :Tính tổng tiền:\ntotalAmount = SUM(selectedServices.price);
+  
+  |Thu ngân|
+  :Nhận preview:\n- Danh sách dịch vụ đã chọn\n- Tổng tiền;
+  
+  :Hiển thị tổng tiền\ntrên màn hình;
+
+repeat while (Còn điều chỉnh\ndịch vụ?) is (yes)
+-> no;
+
+:Xác nhận danh sách\ndịch vụ cuối cùng;
+
+:Chọn phương thức\nthanh toán = CASH;
+
+:Nhấn nút\n"Tạo hóa đơn";
+
+|Hệ thống|
+:Nhận request\nPOST /invoice-payments/create\nCreatePaymentDto;
+
+:Tạo Invoice:\n- invoiceCode\n- patientProfileId\n- cashierId\n- totalAmount\n- paymentMethod = CASH\n- isPaid = false\n- status = PENDING;
+
+:Tạo InvoiceDetail\ncho từng dịch vụ đã chọn;
+
+:Tạo PaymentTransaction\n(nếu cần);
+
+|Thu ngân|
+:Nhận thông tin hóa đơn:\n- invoiceCode\n- totalAmount\n- Danh sách dịch vụ\n- isPaid = false;
+
+:Hiển thị hóa đơn\nchờ thanh toán;
+
+:Nhận tiền mặt\ntừ bệnh nhân;
+
+:Nhấn nút\n"Xác nhận thanh toán";
+
+|Hệ thống|
+:Nhận request\nPOST /invoice-payments/confirm\nConfirmPaymentDto;
+
+:Tìm Invoice\ntừ invoiceCode;
+
+if (Không tìm thấy?) then (yes)
+  |Thu ngân|
+  #pink:Hiển thị lỗi:\n"Invoice not found";
+  :Xác nhận;
+  stop
+else (no)
+  |Hệ thống|
+endif
+
+if (isPaid = true?) then (yes)
+  |Thu ngân|
+  #pink:Hiển thị lỗi:\n"Invoice has already been paid";
+  :Xác nhận;
+  stop
+else (no)
+  |Hệ thống|
+endif
+
+:Cập nhật Invoice:\n- isPaid = true\n- paidAt = now\n- status = PAID;
+
+if (paymentMethod = TRANSFER?) then (yes)
+  :Cập nhật PaymentTransaction:\n- status = SUCCEEDED\n- paidAt = now;
+endif
+
+:Cập nhật Prescription:\n- status = PAID;
+
+:Tạo routing assignments\ncho các dịch vụ;
+
+:Tạo response:\n- Invoice đã thanh toán\n- routingAssignments;
+
+|Thu ngân|
+:Nhận kết quả\nthanh toán thành công;
+
+:In hóa đơn\ncho bệnh nhân;
+stop
+
+@enduml
+
