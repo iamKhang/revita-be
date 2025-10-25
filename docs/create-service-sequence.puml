@@ -1,0 +1,126 @@
+@startuml createServiceSequence
+
+actor "Quản lý" as Admin
+
+boundary "Admin UI" as UI
+control "ServiceController" as Controller
+entity "ServiceService" as Service
+entity "PrismaService" as Prisma
+database "PostgreSQL" as DB
+
+
+Admin -> UI: Chọn Thêm dịch vụ
+activate UI
+
+UI --> Admin: Hiển thị form\nthêm dịch vụ
+deactivate UI
+
+Admin -> UI: Điền thông tin:\nname, price,\ndescription, durationMinutes,\nunit, currency,\ncategoryId, specialtyId,\nrequiresDoctor, isActive
+activate UI
+
+UI -> UI: Validate form\nname và price bắt buộc
+
+alt Validation thất bại
+    UI --> Admin: Hiển thị lỗi\nthiếu thông tin bắt buộc
+    deactivate UI
+else Validation thành công
+    Admin -> UI: Nhấn Tạo dịch vụ
+
+    UI -> Controller: POST /services/management/services\nCreateServiceDto
+    activate Controller
+
+    Controller -> Service: createService(dto)
+    activate Service
+
+    alt Có categoryId
+        Service -> Prisma: findUnique category
+        activate Prisma
+        Prisma -> DB: SELECT category\nWHERE id
+        activate DB
+        DB --> Prisma: Category or null
+        deactivate DB
+        Prisma --> Service: Category or null
+        deactivate Prisma
+
+        alt Category không tồn tại
+            Service --> Controller: Error category not found
+            Controller --> UI: 400 Bad Request
+            UI --> Admin: Hiển thị lỗi\ncategory không tồn tại
+            deactivate UI
+            deactivate Controller
+            deactivate Service
+        end
+    end
+
+    alt Có specialtyId
+        Service -> Prisma: findUnique specialty
+        activate Prisma
+        Prisma -> DB: SELECT specialty\nWHERE id
+        activate DB
+        DB --> Prisma: Specialty or null
+        deactivate DB
+        Prisma --> Service: Specialty or null
+        deactivate Prisma
+
+        alt Specialty không tồn tại
+            Service --> Controller: Error specialty not found
+            Controller --> UI: 400 Bad Request
+            UI --> Admin: Hiển thị lỗi\nspecialty không tồn tại
+            deactivate UI
+            deactivate Controller
+            deactivate Service
+        end
+    end
+
+    Service -> Service: generateUniqueServiceCode
+
+    Service -> Prisma: create service
+    activate Prisma
+
+    Prisma -> DB: INSERT INTO service\nserviceCode, name, price,\ndescription, durationMinutes,\nunit, currency, isActive,\ncategoryId, specialtyId,\nrequiresDoctor
+    activate DB
+
+    alt Database error
+        DB --> Prisma: Error duplicate code\nor constraint violation
+        deactivate DB
+        Prisma --> Service: Error
+        deactivate Prisma
+
+        Service --> Controller: Error cannot create service
+        deactivate Service
+
+        Controller --> UI: 500 Internal Server Error
+        deactivate Controller
+
+        UI --> Admin: Hiển thị lỗi\nkhông thể tạo dịch vụ
+        deactivate UI
+    else Success
+        DB --> Prisma: Service created
+        deactivate DB
+        Prisma --> Service: Created service
+        deactivate Prisma
+
+        Service -> Prisma: getServiceManagementById
+        activate Prisma
+
+        Prisma -> DB: SELECT service\nWHERE id\nINCLUDE category, specialty
+        activate DB
+        DB --> Prisma: Service with relations
+        deactivate DB
+
+        Prisma --> Service: Service details
+        deactivate Prisma
+
+        Service --> Controller: Service created
+        deactivate Service
+
+        Controller --> UI: 200 OK\nservice data
+        deactivate Controller
+
+        UI --> Admin: Hiển thị thông báo\ntạo dịch vụ thành công\nvà thông tin dịch vụ mới
+        deactivate UI
+    end
+end
+
+@enduml
+

@@ -1,0 +1,141 @@
+@startuml create-user-activity
+title Luồng hoạt động: Tạo User mới (Admin Create User)
+
+skinparam swimlane {
+  BorderColor black
+  BorderThickness 2
+}
+
+skinparam PartitionBorderColor black
+skinparam PartitionBorderThickness 2
+
+|Admin|
+start
+:Nhập thông tin user mới:\n- name, dateOfBirth, gender\n- address, citizenId\n- email, phone, password\n- role\n- Thông tin riêng theo role;
+
+:Gửi request\nPOST /admin/users;
+
+|Hệ thống|
+:Nhận CreateUserDto;
+
+:Validate các trường bắt buộc:\nname, dateOfBirth, gender,\naddress, password, role;
+
+if (Thiếu trường bắt buộc?) then (yes)
+  |Admin|
+  #pink:Hiển thị lỗi:\n"Missing required fields";
+  :Xác nhận;
+  stop
+else (no)
+  |Hệ thống|
+endif
+
+if (Có citizenId?) then (yes)
+  :Kiểm tra citizenId\ntrong database;
+  
+  if (CitizenId đã tồn tại?) then (yes)
+    |Admin|
+    #pink:Hiển thị lỗi:\n"CitizenId already exists";
+    :Xác nhận;
+    stop
+  else (no)
+    |Hệ thống|
+  endif
+endif
+
+if (Có email?) then (yes)
+  :Kiểm tra email\ntrong database;
+  
+  if (Email đã tồn tại?) then (yes)
+    |Admin|
+    #pink:Hiển thị lỗi:\n"Email already exists";
+    :Xác nhận;
+    stop
+  else (no)
+    |Hệ thống|
+  endif
+endif
+
+if (Có phone?) then (yes)
+  :Kiểm tra phone\ntrong database;
+  
+  if (Phone đã tồn tại?) then (yes)
+    |Admin|
+    #pink:Hiển thị lỗi:\n"Phone already exists";
+    :Xác nhận;
+    stop
+  else (no)
+    |Hệ thống|
+  endif
+endif
+
+:Hash password\nbcrypt.hash(password, 10);
+
+:Tạo Auth record:\n- name, dateOfBirth, gender\n- address, citizenId\n- email, phone\n- role, hashedPassword;
+
+:Kiểm tra role;
+
+if (Role?) then (DOCTOR)
+  if (Thiếu specialtyId?) then (yes)
+    |Admin|
+    #pink:Hiển thị lỗi:\n"Missing specialtyId for DOCTOR";
+    :Xác nhận;
+    stop
+  else (no)
+    |Hệ thống|
+    :Tạo doctorCode\ngenerateDoctorCode(name);
+    
+    :Tạo Doctor record:\n- doctorCode\n- yearsExperience\n- rating = 0\n- workHistory\n- description\n- specialtyId;
+  endif
+  
+elseif (PATIENT) then
+  :Tạo patientCode\ngeneratePatientCode(name,\ndateOfBirth, gender);
+  
+  :Tạo Patient record:\n- patientCode\n- loyaltyPoints;
+  
+elseif (RECEPTIONIST) then
+  :Tạo receptionistCode\ngenerateReceptionistCode(name);
+  
+  :Tạo Receptionist record:\n- receptionistCode;
+  
+elseif (CASHIER) then
+  :Tạo cashierCode\ngenerateCashierCode(name);
+  
+  :Tạo Cashier record:\n- cashierCode;
+  
+elseif (ADMIN) then
+  :Tạo adminCode\ngenerateAdminCode(name)\nhoặc sử dụng adminCode từ request;
+  
+  :Tạo Admin record:\n- adminCode;
+  
+else (Invalid role)
+  |Admin|
+  #pink:Hiển thị lỗi:\n"Invalid role";
+  :Xác nhận;
+  stop
+endif
+
+|Hệ thống|
+
+if (Có email?) then (yes)
+  :Gửi email thông tin tài khoản:\n- Email\n- Username (email/phone)\n- Password\n- Role;
+  
+  note right
+    EmailService.sendAccountCredentials()
+  end note
+endif
+
+:Tạo response:\n- auth record\n- roleRecord;
+
+|Admin|
+:Nhận thông tin user mới:\n- ID, name, role\n- Code tương ứng\n- Thông tin chi tiết;
+
+:Hiển thị thông báo:\n"User created successfully";
+
+if (Có email?) then (yes)
+  :User nhận email\nthông tin tài khoản;
+endif
+
+stop
+
+@enduml
+

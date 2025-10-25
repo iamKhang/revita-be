@@ -1,0 +1,184 @@
+@startuml callNextPatientSequence
+
+actor "Nhân viên\nquầy" as Staff
+actor "Bệnh nhân\nđang chờ" as Patient
+
+boundary "Màn hình\nquầy tiếp nhận" as CounterUI
+boundary "Màn hình\nchờ quầy" as WaitingUI
+
+control "CounterAssignmentController" as Controller
+entity "CounterAssignmentService" as Service
+database "Redis" as Redis
+queue "Redis Stream" as Stream
+queue "WebSocket\nEvents" as WS
+
+Staff -> CounterUI: Nhấn nút gọi bệnh nhân tiếp theo
+activate CounterUI
+
+CounterUI -> Controller: POST next-patient
+activate Controller
+
+Controller -> Service: callNextPatient
+activate Service
+
+Service -> Redis: ZREVRANGE Lấy queue cũ
+activate Redis
+Redis --> Service: oldQueue
+deactivate Redis
+
+Service -> Redis: GET Lấy bệnh nhân đang phục vụ
+activate Redis
+Redis --> Service: previousCurrent
+deactivate Redis
+
+alt Có bệnh nhân đang phục vụ SERVING
+    Service -> Redis: DEL Xóa bệnh nhân hiện tại
+    activate Redis
+    Redis --> Service: OK
+    deactivate Redis
+    
+    Service -> WS: notifyTicketCompleted
+    activate WS
+    WS -> CounterUI: Thông báo bệnh nhân đã hoàn thành
+    WS -> WaitingUI: Cập nhật trạng thái hoàn thành
+    deactivate WS
+    
+    Service -> Stream: XADD PATIENT_SERVED
+    activate Stream
+    Stream --> Service: stream entry ID
+    deactivate Stream
+end
+
+Service -> Redis: ZREVRANGE Lấy danh sách chờ
+activate Redis
+Redis --> Service: queueStatus
+deactivate Redis
+
+alt Queue rỗng
+    Service -> Redis: checkAndResetSequenceIfEmpty
+    activate Redis
+    Redis -> Redis: DEL counter sequence
+    deactivate Redis
+    
+    Service --> Controller: No patients in queue
+    deactivate Service
+    Controller --> CounterUI: Không có bệnh nhân
+    deactivate Controller
+    CounterUI --> Staff: Hiển thị Hết bệnh nhân chờ
+    deactivate CounterUI
+else Queue có bệnh nhân
+    Service -> Service: Lấy bệnh nhân ưu tiên cao nhất
+    
+    Service -> Service: Tạo preparingPatient\nstatus PREPARING\nisPriority true
+    
+    Service -> Redis: ZREM Xóa nextPatient
+    activate Redis
+    Redis --> Service: OK
+    deactivate Redis
+    
+    Service -> Redis: ZADD MAX_SAFE_INTEGER preparingPatient
+    activate Redis
+    Redis --> Service: OK
+    deactivate Redis
+    
+    Service -> WS: sendToCounter patient preparing
+    activate WS
+    WS -> CounterUI: Thông báo đang chuẩn bị
+    deactivate WS
+    
+    Service -> Stream: XADD PATIENT_PREPARING
+    activate Stream
+    Stream --> Service: stream entry ID
+    deactivate Stream
+    
+    Service -> Redis: callNextPatientOptimized
+    activate Redis
+    Redis -> Redis: ZPOPMAX Lấy PREPARING patient
+    Redis -> Redis: SET status SERVING
+    Redis --> Service: success patient
+    deactivate Redis
+    
+    Service -> Redis: GET counter current
+    activate Redis
+    Redis --> Service: updatedCurrent
+    deactivate Redis
+    
+    alt Có previousCurrent khác updatedCurrent
+        Service -> Redis: LPUSH Lưu previousCurrent
+        activate Redis
+        Redis --> Service: OK
+        deactivate Redis
+    end
+    
+    Service -> Service: Chuẩn hóa current\nstatus SERVING
+    
+    Service -> Redis: SET counter current
+    activate Redis
+    Redis --> Service: OK
+    deactivate Redis
+    
+    Service -> Service: updateNextPatientInQueue\nChọn bệnh nhân NEXT tiếp theo
+    
+    Service -> Redis: ZREVRANGE Lấy queue
+    activate Redis
+    Redis --> Service: currentQueue
+    deactivate Redis
+    
+    Service -> Service: Tìm bệnh nhân ưu tiên cao nhất\nĐánh dấu status NEXT
+    
+    Service -> Redis: ZADD nextPatient with status NEXT
+    activate Redis
+    Redis --> Service: OK
+    deactivate Redis
+    
+    Service -> Stream: XADD NEXT_PATIENT_CALLED
+    activate Stream
+    Stream --> Service: stream entry ID
+    deactivate Stream
+    
+    Service -> Redis: ZREVRANGE Lấy queue mới
+    activate Redis
+    Redis --> Service: newQueue
+    deactivate Redis
+    
+    Service -> Service: compareQueueAndNotify\nSo sánh oldQueue vs newQueue
+    
+    Service -> WS: notifyQueuePositionChanges
+    activate WS
+    WS -> CounterUI: Cập nhật Current Next Moved
+    WS -> WaitingUI: Cập nhật danh sách chờ mới
+    deactivate WS
+    
+    Service -> Service: mapTicketForFrontend
+    
+    Service --> Controller: Response ok patient data
+    deactivate Service
+    
+    Controller -> Service: getQueueStatus
+    activate Service
+    Service -> Redis: Lấy queue hiện tại
+    activate Redis
+    Redis --> Service: queueStatus
+    deactivate Redis
+    Service --> Controller: queueStatus
+    deactivate Service
+    
+    Controller -> Service: getCurrentPatient
+    activate Service
+    Service -> Redis: GET counter current
+    activate Redis
+    Redis --> Service: currentPatient
+    deactivate Redis
+    Service --> Controller: currentPatient
+    deactivate Service
+    
+    Controller --> CounterUI: Response with patient data
+    deactivate Controller
+    
+    CounterUI --> Staff: Hiển thị bệnh nhân đang phục vụ\nvà danh sách chờ
+    deactivate CounterUI
+    
+    WaitingUI --> Patient: Hiển thị số thứ tự được gọi\nvà vị trí chờ
+end
+
+@enduml

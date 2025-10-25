@@ -147,6 +147,15 @@ export class PostsController {
     return this.postsService.unlikePost(postId, userId);
   }
 
+  @Post(':postId/unlike')
+  unlikePostViaPost(@Param('postId') postId: string, @Request() req: any) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new BadRequestException('Missing user identifier');
+    }
+    return this.postsService.unlikePost(postId, userId);
+  }
+
   @Post(':postId/comments')
   createComment(
     @Param('postId') postId: string,
@@ -180,20 +189,29 @@ export class PostsController {
 
   @Get()
   @Public()
-  getPublishedPosts(@Query() query: PublishedPostsQueryDto) {
-    return this.postsService.getPublishedPosts(query);
+  getPublishedPosts(
+    @Query() query: PublishedPostsQueryDto,
+    @Request() req: any,
+  ) {
+    return this.postsService.getPublishedPosts(query, req.user?.id);
   }
 
   @Get('pinned')
   @Public()
-  getPinnedPosts(@Query() query: LimitedPostsQueryDto) {
-    return this.postsService.getPinnedPosts(query);
+  getPinnedPosts(
+    @Query() query: LimitedPostsQueryDto,
+    @Request() req: any,
+  ) {
+    return this.postsService.getPinnedPosts(query, req.user?.id);
   }
 
   @Get('top')
   @Public()
-  getTopPosts(@Query() query: LimitedPostsQueryDto) {
-    return this.postsService.getTopPosts(query);
+  getTopPosts(
+    @Query() query: LimitedPostsQueryDto,
+    @Request() req: any,
+  ) {
+    return this.postsService.getTopPosts(query, req.user?.id);
   }
 
   @Get('categories')
@@ -204,8 +222,8 @@ export class PostsController {
 
   @Get('categories/:slug')
   @Public()
-  getCategoryBySlug(@Param('slug') slug: string) {
-    return this.postsService.getCategoryBySlug(slug);
+  getCategoryBySlug(@Param('slug') slug: string, @Request() req: any) {
+    return this.postsService.getCategoryBySlug(slug, req.user?.id);
   }
 
   @Get('series')
@@ -216,8 +234,20 @@ export class PostsController {
 
   @Get('series/:slug')
   @Public()
-  getSeriesBySlug(@Param('slug') slug: string) {
-    return this.postsService.getSeriesBySlug(slug);
+  getSeriesBySlug(@Param('slug') slug: string, @Request() req: any) {
+    return this.postsService.getSeriesBySlug(slug, req.user?.id);
+  }
+
+  @Get(':postId/related')
+  @Public()
+  getRelatedPosts(@Param('postId') postId: string, @Request() req: any) {
+    return this.postsService.getRelatedPosts(postId, req.user?.id);
+  }
+
+  @Get(':postId/series')
+  @Public()
+  getSeriesPosts(@Param('postId') postId: string, @Request() req: any) {
+    return this.postsService.getSeriesPostsByPostId(postId, req.user?.id);
   }
 
   @Get(':slug')

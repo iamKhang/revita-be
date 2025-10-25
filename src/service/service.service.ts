@@ -633,4 +633,329 @@ export class ServiceService {
       .toString(36)
       .slice(2, 6)}`.toUpperCase();
   }
+
+  async advancedSearch(
+    keyword: string,
+    limit: number = 20,
+    offset: number = 0,
+    requiresDoctor?: boolean,
+    isActive?: boolean,
+  ) {
+    if (!keyword || keyword.trim().length === 0) {
+      return {
+        results: [],
+        pagination: this.buildPagination(0, limit, offset),
+      };
+    }
+
+    const searchTerm = keyword.trim();
+    const searchPattern = `%${searchTerm}%`;
+
+    // Build common filter conditions
+    const commonServiceFilter: any = {
+      name: {
+        contains: searchTerm,
+        mode: 'insensitive',
+      },
+    };
+
+    const commonPackageFilter: any = {};
+
+    // Apply isActive filter (default to true if not specified)
+    if (isActive !== undefined) {
+      commonServiceFilter.isActive = isActive;
+      commonPackageFilter.isActive = isActive;
+    } else {
+      commonServiceFilter.isActive = true;
+      commonPackageFilter.isActive = true;
+    }
+
+    // Apply requiresDoctor filter
+    if (requiresDoctor !== undefined) {
+      commonServiceFilter.requiresDoctor = requiresDoctor;
+      commonPackageFilter.requiresDoctor = requiresDoctor;
+    }
+
+    // Priority 1: Services with name containing keyword
+    const servicesWithNameMatch = await this.prisma.service.findMany({
+      where: commonServiceFilter,
+      select: {
+        id: true,
+        serviceCode: true,
+        name: true,
+        price: true,
+        description: true,
+        durationMinutes: true,
+        unit: true,
+        isActive: true,
+        requiresDoctor: true,
+        category: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+            specialtyCode: true,
+          },
+        },
+      },
+    });
+
+    // Priority 2: Packages with name containing keyword
+    const packagesWithNameMatch = await this.prisma.package.findMany({
+      where: {
+        ...commonPackageFilter,
+        name: {
+          contains: searchTerm,
+          mode: 'insensitive',
+        },
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+            specialtyCode: true,
+          },
+        },
+        items: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceCode: true,
+                name: true,
+                price: true,
+              },
+            },
+          },
+          orderBy: {
+            sortOrder: 'asc',
+          },
+        },
+      },
+    });
+
+    // Priority 3: Packages containing services with name matching keyword
+    const packagesWithServiceMatch = await this.prisma.package.findMany({
+      where: {
+        ...commonPackageFilter,
+        items: {
+          some: {
+            service: {
+              name: {
+                contains: searchTerm,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+        // Exclude packages already found in priority 2
+        NOT: {
+          name: {
+            contains: searchTerm,
+            mode: 'insensitive',
+          },
+        },
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+            specialtyCode: true,
+          },
+        },
+        items: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceCode: true,
+                name: true,
+                price: true,
+              },
+            },
+          },
+          orderBy: {
+            sortOrder: 'asc',
+          },
+        },
+      },
+    });
+
+    // Priority 4: Services and Packages with description containing keyword
+    const serviceDescFilter: any = {
+      ...commonServiceFilter,
+      description: {
+        contains: searchTerm,
+        mode: 'insensitive',
+      },
+      // Exclude services already found in priority 1
+      NOT: {
+        name: {
+          contains: searchTerm,
+          mode: 'insensitive',
+        },
+      },
+    };
+    // Remove name filter from commonServiceFilter for description search
+    delete serviceDescFilter.name;
+
+    const servicesWithDescMatch = await this.prisma.service.findMany({
+      where: serviceDescFilter,
+      select: {
+        id: true,
+        serviceCode: true,
+        name: true,
+        price: true,
+        description: true,
+        durationMinutes: true,
+        unit: true,
+        isActive: true,
+        requiresDoctor: true,
+        category: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+            specialtyCode: true,
+          },
+        },
+      },
+    });
+
+    const packagesWithDescMatch = await this.prisma.package.findMany({
+      where: {
+        ...commonPackageFilter,
+        description: {
+          contains: searchTerm,
+          mode: 'insensitive',
+        },
+        // Exclude packages already found in priority 2 and 3
+        NOT: {
+          OR: [
+            {
+              name: {
+                contains: searchTerm,
+                mode: 'insensitive',
+              },
+            },
+            {
+              items: {
+                some: {
+                  service: {
+                    name: {
+                      contains: searchTerm,
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+            specialtyCode: true,
+          },
+        },
+        items: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceCode: true,
+                name: true,
+                price: true,
+              },
+            },
+          },
+          orderBy: {
+            sortOrder: 'asc',
+          },
+        },
+      },
+    });
+
+    // Combine results with priority
+    const results = [
+      ...servicesWithNameMatch.map((s) => ({
+        type: 'service' as const,
+        priority: 1,
+        data: s,
+      })),
+      ...packagesWithNameMatch.map((p) => ({
+        type: 'package' as const,
+        priority: 2,
+        data: p,
+      })),
+      ...packagesWithServiceMatch.map((p) => ({
+        type: 'package' as const,
+        priority: 3,
+        data: p,
+      })),
+      ...servicesWithDescMatch.map((s) => ({
+        type: 'service' as const,
+        priority: 4,
+        data: s,
+      })),
+      ...packagesWithDescMatch.map((p) => ({
+        type: 'package' as const,
+        priority: 4,
+        data: p,
+      })),
+    ];
+
+    // Sort by priority and apply pagination
+    const sortedResults = results.sort((a, b) => a.priority - b.priority);
+    const total = sortedResults.length;
+    const paginatedResults = sortedResults.slice(offset, offset + limit);
+
+    return {
+      results: paginatedResults.map((r) => ({
+        type: r.type,
+        priority: r.priority,
+        ...r.data,
+      })),
+      pagination: this.buildPagination(total, limit, offset),
+      keyword: searchTerm,
+    };
+  }
 }

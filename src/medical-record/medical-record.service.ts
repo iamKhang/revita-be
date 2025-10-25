@@ -480,4 +480,237 @@ export class MedicalRecordService {
      
     return template;
   }
+
+  /**
+   * Lấy tất cả thông tin y tế của bệnh nhân và gộp thành một chuỗi
+   * Bao gồm: nội dung bệnh án, tên dịch vụ, kết quả dịch vụ, tên thuốc
+   */
+  async getPatientMedicalSummary(patientProfileId: string, user: JwtUserPayload): Promise<string> {
+    // Validate patient profile exists
+    const patientProfile = await this.prisma.patientProfile.findUnique({
+      where: { id: patientProfileId },
+      include: { patient: true },
+    });
+    
+    if (!patientProfile) {
+      throw new NotFoundException('Không tìm thấy hồ sơ bệnh nhân');
+    }
+
+    // Check permissions based on user role
+    if (user.role === Role.PATIENT) {
+      if (!user.patient?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
+      }
+      
+      // Patient can only view their own profiles
+      if (patientProfile.patientId !== user.patient.id) {
+        throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
+      }
+    }
+
+    // Lấy tất cả thông tin y tế của bệnh nhân
+    const [medicalRecords, prescriptions, medicationPrescriptions] = await Promise.all([
+      // Lấy tất cả bệnh án
+      this.prisma.medicalRecord.findMany({
+        where: { 
+          patientProfileId,
+          ...(user.role === Role.DOCTOR && user.doctor?.id ? { doctorId: user.doctor.id } : {})
+        },
+        include: {
+          template: true,
+          doctor: {
+            include: {
+              auth: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+
+      // Lấy tất cả phiếu chỉ định dịch vụ
+      this.prisma.prescription.findMany({
+        where: { 
+          patientProfileId,
+          ...(user.role === Role.DOCTOR && user.doctor?.id ? { doctorId: user.doctor.id } : {})
+        },
+        include: {
+          services: {
+            include: {
+              service: true,
+              doctor: {
+                include: {
+                  auth: {
+                    select: {
+                      name: true,
+                    },
+                  },
+                },
+              },
+              technician: {
+                include: {
+                  auth: {
+                    select: {
+                      name: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: { order: 'asc' },
+          },
+          doctor: {
+            include: {
+              auth: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+
+      // Lấy tất cả đơn thuốc
+      this.prisma.medicationPrescription.findMany({
+        where: { 
+          patientProfileId,
+          ...(user.role === Role.DOCTOR && user.doctor?.id ? { doctorId: user.doctor.id } : {})
+        },
+        include: {
+          items: {
+            include: {
+              drug: true,
+            },
+          },
+          doctor: {
+            include: {
+              auth: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    // Gộp tất cả thông tin thành một chuỗi
+    const summaryParts: string[] = [];
+
+    // Thông tin bệnh nhân
+    summaryParts.push(`Tên: ${patientProfile.name}`);
+    summaryParts.push(`Ngày sinh: ${patientProfile.dateOfBirth.toLocaleDateString('vi-VN')}`);
+    summaryParts.push(`Giới tính: ${patientProfile.gender}`);
+    if (patientProfile.address) {
+      summaryParts.push(`Địa chỉ: ${patientProfile.address}`);
+    }
+    summaryParts.push('');
+
+    // Nội dung bệnh án
+    if (medicalRecords.length > 0) {
+      medicalRecords.forEach((record, index) => {
+        summaryParts.push(`Bệnh án ${index + 1}:`);
+        summaryParts.push(`- Mã bệnh án: ${record.medicalRecordCode}`);
+        summaryParts.push(`- Bác sĩ: ${record.doctor.auth.name}`);
+        summaryParts.push(`- Ngày tạo: ${record.createdAt.toLocaleDateString('vi-VN')}`);
+        summaryParts.push(`- Trạng thái: ${record.status}`);
+        summaryParts.push(`- Nội dung: ${JSON.stringify(record.content, null, 2)}`);
+        summaryParts.push('');
+      });
+    }
+
+    // Dịch vụ và kết quả
+    if (prescriptions.length > 0) {
+      prescriptions.forEach((prescription, index) => {
+        summaryParts.push(`Phiếu chỉ định ${index + 1}:`);
+        summaryParts.push(`- Mã phiếu: ${prescription.prescriptionCode}`);
+        summaryParts.push(`- Bác sĩ: ${prescription.doctor?.auth.name || 'Không xác định'}`);
+        summaryParts.push(`- Trạng thái: ${prescription.status}`);
+        if (prescription.note) {
+          summaryParts.push(`- Ghi chú: ${prescription.note}`);
+        }
+        
+        if (prescription.services.length > 0) {
+          summaryParts.push(`Dịch vụ được chỉ định:`);
+          prescription.services.forEach((prescriptionService, serviceIndex) => {
+            summaryParts.push(`  ${serviceIndex + 1}. ${prescriptionService.service.name}`);
+            summaryParts.push(`     - Mã dịch vụ: ${prescriptionService.service.serviceCode}`);
+            summaryParts.push(`     - Trạng thái: ${prescriptionService.status}`);
+            if (prescriptionService.results && prescriptionService.results.length > 0) {
+              summaryParts.push(`     - Kết quả: ${prescriptionService.results.join(', ')}`);
+            }
+            if (prescriptionService.note) {
+              summaryParts.push(`     - Ghi chú: ${prescriptionService.note}`);
+            }
+            if (prescriptionService.doctor?.auth.name) {
+              summaryParts.push(`     - Bác sĩ thực hiện: ${prescriptionService.doctor.auth.name}`);
+            }
+            if (prescriptionService.technician?.auth.name) {
+              summaryParts.push(`     - Kỹ thuật viên: ${prescriptionService.technician.auth.name}`);
+            }
+            if (prescriptionService.completedAt) {
+              summaryParts.push(`     - Hoàn thành: ${prescriptionService.completedAt.toLocaleDateString('vi-VN')}`);
+            }
+          });
+        }
+        summaryParts.push('');
+      });
+    }
+
+    // Đơn thuốc
+    if (medicationPrescriptions.length > 0) {
+      medicationPrescriptions.forEach((medicationPrescription, index) => {
+        summaryParts.push(`Đơn thuốc ${index + 1}:`);
+        summaryParts.push(`- Mã đơn: ${medicationPrescription.code}`);
+        summaryParts.push(`- Bác sĩ: ${medicationPrescription.doctor.auth.name}`);
+        summaryParts.push(`- Ngày tạo: ${medicationPrescription.createdAt.toLocaleDateString('vi-VN')}`);
+        summaryParts.push(`- Trạng thái: ${medicationPrescription.status}`);
+        if (medicationPrescription.note) {
+          summaryParts.push(`- Ghi chú: ${medicationPrescription.note}`);
+        }
+        
+        if (medicationPrescription.items.length > 0) {
+          summaryParts.push(`- Thuốc được kê:`);
+          medicationPrescription.items.forEach((item, itemIndex) => {
+            summaryParts.push(`  ${itemIndex + 1}. ${item.name}`);
+            if (item.strength) {
+              summaryParts.push(`     - Hàm lượng: ${item.strength}`);
+            }
+            if (item.dosageForm) {
+              summaryParts.push(`     - Dạng bào chế: ${item.dosageForm}`);
+            }
+            if (item.dose && item.doseUnit) {
+              summaryParts.push(`     - Liều dùng: ${item.dose} ${item.doseUnit}`);
+            }
+            if (item.frequency) {
+              summaryParts.push(`     - Tần suất: ${item.frequency}`);
+            }
+            if (item.durationDays) {
+              summaryParts.push(`     - Thời gian: ${item.durationDays} ngày`);
+            }
+            if (item.quantity && item.quantityUnit) {
+              summaryParts.push(`     - Số lượng: ${item.quantity} ${item.quantityUnit}`);
+            }
+            if (item.instructions) {
+              summaryParts.push(`     - Hướng dẫn: ${item.instructions}`);
+            }
+          });
+        }
+        summaryParts.push('');
+      });
+    }
+
+    // Nếu không có dữ liệu
+    if (medicalRecords.length === 0 && prescriptions.length === 0 && medicationPrescriptions.length === 0) {
+      summaryParts.push(`Không có thông tin y tế nào được ghi nhận cho bệnh nhân này.`);
+    }
+
+    return summaryParts.join('\n');
+  }
 }
