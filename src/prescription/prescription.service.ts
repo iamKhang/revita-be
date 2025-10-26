@@ -14,12 +14,17 @@ import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
 import { PrescriptionStatus } from '@prisma/client';
 import { CodeGeneratorService } from '../user-management/patient-profile/code-generator.service';
 import { JwtUserPayload } from '../medical-record/dto/jwt-user-payload.dto';
+import { QueueResponseDto, QueuePatientDto } from './dto/queue-item.dto';
+import { RedisService } from '../cache/redis.service';
 
 @Injectable()
 export class PrescriptionService {
   private codeGenerator = new CodeGeneratorService();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
   async create(dto: CreatePrescriptionDto, user: JwtUserPayload) {
     const {
@@ -164,6 +169,11 @@ export class PrescriptionService {
       },
     });
 
+    // Cập nhật queue trong Redis sau khi tạo prescription
+    if (doctorId) {
+      await this.updateQueueInRedis(doctorId, 'DOCTOR');
+    }
+
     return prescription;
   }
 
@@ -286,7 +296,7 @@ export class PrescriptionService {
       await this.prisma.prescription.update({ where: { id }, data });
     }
 
-    return this.prisma.prescription.findUnique({
+    const result = await this.prisma.prescription.findUnique({
       where: { id },
       include: {
         services: { include: { service: true }, orderBy: { order: 'asc' } },
@@ -294,6 +304,13 @@ export class PrescriptionService {
         doctor: true,
       },
     });
+
+    // Cập nhật queue trong Redis sau khi cập nhật prescription
+    if (result?.doctorId) {
+      await this.updateQueueInRedis(result.doctorId, 'DOCTOR');
+    }
+
+    return result;
   }
 
   async cancel(id: string, user: JwtUserPayload) {
@@ -320,6 +337,11 @@ export class PrescriptionService {
         data: { status: PrescriptionStatus.CANCELLED },
       }),
     ]);
+
+    // Cập nhật queue trong Redis sau khi hủy prescription
+    if (existing?.doctorId) {
+      await this.updateQueueInRedis(existing.doctorId, 'DOCTOR');
+    }
 
     return { id, status: PrescriptionStatus.CANCELLED };
   }
@@ -382,6 +404,15 @@ export class PrescriptionService {
       where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
       data: { status: PrescriptionStatus.SERVING },
     });
+
+    // Cập nhật queue trong Redis
+    const prescriptionData = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      select: { doctorId: true },
+    });
+    if (prescriptionData?.doctorId) {
+      await this.updateQueueInRedis(prescriptionData.doctorId, 'DOCTOR');
+    }
   }
 
   async markServiceWaitingResult(
@@ -407,6 +438,15 @@ export class PrescriptionService {
     });
 
     await this.unlockNextPendingService(prescriptionId);
+
+    // Cập nhật queue trong Redis
+    const prescriptionData = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      select: { doctorId: true },
+    });
+    if (prescriptionData?.doctorId) {
+      await this.updateQueueInRedis(prescriptionData.doctorId, 'DOCTOR');
+    }
   }
 
   async markServiceCompleted(
@@ -441,6 +481,15 @@ export class PrescriptionService {
         where: { id: prescriptionId },
         data: { status: PrescriptionStatus.COMPLETED },
       });
+    }
+
+    // Cập nhật queue trong Redis
+    const prescriptionData = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      select: { doctorId: true },
+    });
+    if (prescriptionData?.doctorId) {
+      await this.updateQueueInRedis(prescriptionData.doctorId, 'DOCTOR');
     }
   }
 
@@ -647,5 +696,452 @@ export class PrescriptionService {
 
   private async unlockNextPendingService(prescriptionId: string) {
     await this._startFirstPendingServiceIfNoActive(prescriptionId);
+  }
+
+  /**
+   * Tính tuổi từ ngày sinh
+   */
+  private calculateAge(dateOfBirth: Date): number {
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      age--;
+    }
+
+    return age;
+  }
+
+  /**
+   * Tính toán xem bệnh nhân có đến đúng giờ không dựa trên lịch hẹn
+   */
+  private calculateIsOnTime(hasAppointment: boolean, appointmentDetails: any): boolean {
+    if (!hasAppointment || !appointmentDetails) {
+      return false; // Không có lịch hẹn thì không tính là đúng giờ
+    }
+
+    const checkInTime = new Date();
+    const [hours, minutes] = appointmentDetails.startTime.split(':');
+    const appointmentTime = new Date(appointmentDetails.date);
+    appointmentTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+    // Tính khoảng cách thời gian (tính bằng phút)
+    const timeDifferenceMinutes = Math.abs(
+      (checkInTime.getTime() - appointmentTime.getTime()) / (1000 * 60)
+    );
+
+    // Đúng giờ nếu trong khoảng ±20 phút
+    return timeDifferenceMinutes <= 20;
+  }
+
+  /**
+   * Tính toán độ ưu tiên cho dịch vụ dựa trên logic từ take-number.service.ts
+   * Thứ tự ưu tiên: 1. Đang phục vụ 2. Tiếp theo 3. Miss (1) 4. Miss (2) 5. Miss (3) ... 6. Già (>75) 7. Trẻ em (<6) 8. Khuyết tật 9. Mang thai 10. Có lịch hẹn 11. Thường
+   */
+  private calculateServicePriority(
+    status: PrescriptionStatus,
+    patientAge: number,
+    isDisabled: boolean,
+    isPregnant: boolean,
+    hasAppointment: boolean,
+    order: number,
+    startedAt: Date | null,
+  ): number {
+    let priorityScore = 0;
+
+    // 1. Đang phục vụ (SERVING) - ưu tiên cao nhất
+    if (status === PrescriptionStatus.SERVING) {
+      return 0;
+    }
+    
+    // 2. Tiếp theo (PREPARING) - ưu tiên cao thứ 2
+    if (status === PrescriptionStatus.PREPARING) {
+      return 100000;
+    }
+    
+    // 3. Chờ kết quả (WAITING_RESULT) - ưu tiên cao thứ 3
+    if (status === PrescriptionStatus.WAITING_RESULT) {
+      return 200000;
+    }
+
+    // 4. Đang trả kết quả (RETURNING) - ưu tiên cao thứ 4
+    if (status === PrescriptionStatus.RETURNING) {
+      return 300000;
+    }
+
+    // 5. Người già (>75 tuổi) - ưu tiên cao thứ 5
+    if (patientAge > 75) {
+      priorityScore = 10000000 - patientAge; // Người già hơn ưu tiên hơn
+    }
+    // 6. Trẻ em (<6 tuổi) - ưu tiên cao thứ 6
+    else if (patientAge < 6) {
+      priorityScore = 20000000 - patientAge; // Trẻ em nhỏ hơn ưu tiên hơn
+    }
+    // 7. Người khuyết tật - ưu tiên cao thứ 7
+    else if (isDisabled) {
+      priorityScore = 30000000;
+    }
+    // 8. Người mang thai - ưu tiên cao thứ 8
+    else if (isPregnant) {
+      priorityScore = 40000000;
+    }
+    // 9. Người có lịch hẹn - ưu tiên cao thứ 9
+    else if (hasAppointment) {
+      priorityScore = 50000000;
+    }
+    // 10. Người thường - ưu tiên thấp nhất
+    else {
+      priorityScore = 60000000;
+    }
+
+    // Trong cùng nhóm ưu tiên, ai đến trước (order nhỏ hơn) thì ưu tiên hơn
+    return priorityScore + order;
+  }
+
+  async getQueueForUser(user: JwtUserPayload): Promise<QueueResponseDto> {
+    // Lấy queue từ Redis cho user cụ thể
+    const userId = user.role === 'DOCTOR' ? user.doctor?.id : user.technician?.id;
+    if (!userId) {
+      return { patients: [], totalCount: 0 };
+    }
+
+    const queueKey = `prescriptionQueue:${user.role.toLowerCase()}:${userId}`;
+    
+    try {
+      // Lấy queue từ Redis ZSET (đã được sắp xếp theo priority)
+      const queueData = await this.redis.getPrescriptionQueue(userId, user.role as 'DOCTOR' | 'TECHNICIAN');
+      
+      if (!queueData || queueData.length === 0) {
+        // Nếu không có queue trong Redis, tạo queue mới từ database
+        return await this.buildQueueFromDatabase(user);
+      }
+
+      // Chuyển đổi dữ liệu từ Redis thành format response
+      const patients = queueData.map((item, index) => ({
+        patientProfileId: item.patientProfileId,
+        patientName: item.patientName,
+        prescriptionCode: item.prescriptionCode,
+        services: item.services,
+        overallStatus: item.overallStatus,
+        queueOrder: index + 1,
+      }));
+
+      return {
+        patients,
+        totalCount: patients.length,
+      };
+    } catch (error) {
+      console.warn('Error getting queue from Redis, falling back to database:', error);
+      return await this.buildQueueFromDatabase(user);
+    }
+  }
+
+  /**
+   * Xây dựng queue từ database (fallback method)
+   */
+  private async buildQueueFromDatabase(user: JwtUserPayload): Promise<QueueResponseDto> {
+    // Lấy tất cả PrescriptionService có trạng thái đang chờ
+    const queueStatuses = [
+      PrescriptionStatus.WAITING,
+      PrescriptionStatus.PREPARING, 
+      PrescriptionStatus.SERVING,
+      PrescriptionStatus.WAITING_RESULT,
+      PrescriptionStatus.RETURNING,
+    ];
+
+    const prescriptionServices = await this.prisma.prescriptionService.findMany({
+      where: {
+        status: { in: queueStatuses },
+        ...(user.role === 'DOCTOR' && user.doctor?.id
+          ? { doctorId: user.doctor.id }
+          : {}),
+        ...(user.role === 'TECHNICIAN' && user.technician?.id
+          ? { technicianId: user.technician.id }
+          : {}),
+      },
+      include: {
+        prescription: {
+          include: {
+            patientProfile: {
+              select: {
+                id: true,
+                name: true,
+                dateOfBirth: true,
+                gender: true,
+                isPregnant: true,
+                isDisabled: true,
+              },
+            },
+            medicalRecord: {
+              select: {
+                appointment: {
+                  select: {
+                    appointmentCode: true,
+                    date: true,
+                    startTime: true,
+                    endTime: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: [
+        { order: 'asc' },
+        { prescription: { id: 'asc' } },
+      ],
+    });
+
+    // Gom nhóm theo bệnh nhân và tính toán độ ưu tiên
+    const patientMap = new Map<string, any>();
+
+    prescriptionServices.forEach((ps) => {
+      const patientProfileId = ps.prescription.patientProfileId;
+      const patientName = ps.prescription.patientProfile.name;
+      const prescriptionCode = ps.prescription.prescriptionCode;
+      const patientProfile = ps.prescription.patientProfile;
+      const appointment = ps.prescription.medicalRecord?.appointment;
+
+      if (!patientMap.has(patientProfileId)) {
+        // Tính toán thông tin ưu tiên cho bệnh nhân
+        const age = this.calculateAge(patientProfile.dateOfBirth);
+        const isPregnant = patientProfile.isPregnant || false;
+        const isDisabled = patientProfile.isDisabled || false;
+        const hasAppointment = !!appointment;
+        const isOnTime = this.calculateIsOnTime(hasAppointment, appointment);
+
+        patientMap.set(patientProfileId, {
+          patientProfileId,
+          patientName,
+          prescriptionCode,
+          services: [],
+          minOrder: ps.order,
+          priorities: [],
+          // Thông tin ưu tiên
+          age,
+          isPregnant,
+          isDisabled,
+          hasAppointment,
+          isOnTime,
+          earliestStartedAt: ps.startedAt,
+        });
+      }
+
+      const patient = patientMap.get(patientProfileId);
+      patient.services.push({
+        prescriptionId: ps.prescriptionId,
+        serviceId: ps.serviceId,
+        serviceName: ps.service.name,
+        order: ps.order,
+        status: ps.status,
+        note: ps.note,
+        startedAt: ps.startedAt,
+        completedAt: ps.completedAt,
+      });
+
+      // Cập nhật order nhỏ nhất
+      if (ps.order < patient.minOrder) {
+        patient.minOrder = ps.order;
+      }
+
+      // Cập nhật thời gian bắt đầu sớm nhất
+      if (ps.startedAt && (!patient.earliestStartedAt || ps.startedAt < patient.earliestStartedAt)) {
+        patient.earliestStartedAt = ps.startedAt;
+      }
+
+      // Tính toán độ ưu tiên cho từng dịch vụ
+      const servicePriority = this.calculateServicePriority(
+        ps.status,
+        patient.age,
+        patient.isDisabled,
+        patient.isPregnant,
+        patient.hasAppointment,
+        ps.order,
+        ps.startedAt,
+      );
+
+      patient.priorities.push(servicePriority);
+    });
+
+    // Chuyển đổi thành array và sắp xếp theo độ ưu tiên
+    const patients = Array.from(patientMap.values()).map((patient) => {
+      // Lấy trạng thái có độ ưu tiên cao nhất
+      const highestPriorityStatus = Math.min(...patient.priorities);
+      const statusMap = {
+        1: 'SERVING',
+        2: 'PREPARING',
+        3: 'WAITING_RESULT',
+        4: 'RETURNING',
+        5: 'WAITING',
+      };
+
+      return {
+        patientProfileId: patient.patientProfileId,
+        patientName: patient.patientName,
+        prescriptionCode: patient.prescriptionCode,
+        services: patient.services.sort((a, b) => a.order - b.order),
+        overallStatus: (statusMap[highestPriorityStatus as keyof typeof statusMap] || 'WAITING') as QueuePatientDto['overallStatus'],
+        queueOrder: 0, // Sẽ được cập nhật sau khi sắp xếp
+        // Thông tin ưu tiên để sắp xếp
+        priorityScore: Math.min(...patient.priorities),
+        earliestStartedAt: patient.earliestStartedAt,
+        age: patient.age,
+        isPregnant: patient.isPregnant,
+        isDisabled: patient.isDisabled,
+        hasAppointment: patient.hasAppointment,
+        isOnTime: patient.isOnTime,
+      };
+    });
+
+    // Sắp xếp theo độ ưu tiên: priorityScore trước, sau đó startedAt
+    patients.sort((a, b) => {
+      // Ưu tiên theo priorityScore (số nhỏ hơn = ưu tiên cao hơn)
+      if (a.priorityScore !== b.priorityScore) {
+        return a.priorityScore - b.priorityScore;
+      }
+      
+      // Nếu cùng priorityScore, sắp xếp theo startedAt (sớm hơn = ưu tiên cao hơn)
+      if (a.earliestStartedAt && b.earliestStartedAt) {
+        return new Date(a.earliestStartedAt).getTime() - new Date(b.earliestStartedAt).getTime();
+      }
+      
+      // Nếu một trong hai không có startedAt, ưu tiên cái có startedAt
+      if (a.earliestStartedAt && !b.earliestStartedAt) return -1;
+      if (!a.earliestStartedAt && b.earliestStartedAt) return 1;
+      
+      // Nếu cả hai đều không có startedAt, sắp xếp theo patientProfileId
+      return a.patientProfileId.localeCompare(b.patientProfileId);
+    });
+
+    // Cập nhật lại queueOrder sau khi sắp xếp
+    patients.forEach((patient, index) => {
+      patient.queueOrder = index + 1;
+      // Xóa các trường tạm thời không cần thiết cho response
+      if ('priorityScore' in patient) delete (patient as any).priorityScore;
+      if ('earliestStartedAt' in patient) delete (patient as any).earliestStartedAt;
+      if ('age' in patient) delete (patient as any).age;
+      if ('isPregnant' in patient) delete (patient as any).isPregnant;
+      if ('isDisabled' in patient) delete (patient as any).isDisabled;
+      if ('hasAppointment' in patient) delete (patient as any).hasAppointment;
+      if ('isOnTime' in patient) delete (patient as any).isOnTime;
+    });
+
+    return {
+      patients,
+      totalCount: patients.length,
+    };
+  }
+
+  /**
+   * Cập nhật queue vào Redis cho user cụ thể
+   */
+  async updateQueueInRedis(userId: string, userRole: 'DOCTOR' | 'TECHNICIAN'): Promise<void> {
+    try {
+      // Lấy dữ liệu queue từ database
+      const queueData = await this.buildQueueFromDatabase({
+        id: userId,
+        role: userRole as 'DOCTOR' | 'TECHNICIAN',
+        doctor: userRole === 'DOCTOR' ? { id: userId } : undefined,
+        technician: userRole === 'TECHNICIAN' ? { id: userId } : undefined,
+      } as JwtUserPayload);
+
+      // Chuyển đổi thành format cho Redis
+      const redisQueueData = queueData.patients.map((patient, index) => ({
+        patientProfileId: patient.patientProfileId,
+        patientName: patient.patientName,
+        prescriptionCode: patient.prescriptionCode,
+        services: patient.services,
+        overallStatus: patient.overallStatus,
+        queueOrder: index + 1,
+        priorityScore: this.calculatePatientPriority(patient),
+        updatedAt: new Date().toISOString(),
+      }));
+
+      // Lưu vào Redis ZSET
+      await this.redis.updatePrescriptionQueue(userId, userRole, redisQueueData);
+    } catch (error) {
+      console.warn('Error updating queue in Redis:', error);
+    }
+  }
+
+  /**
+   * Tính toán priority cho bệnh nhân để sắp xếp trong Redis
+   */
+  private calculatePatientPriority(patient: any): number {
+    // Sử dụng logic tương tự như calculateServicePriority
+    const status = patient.overallStatus;
+    const age = patient.age || 0;
+    const isDisabled = patient.isDisabled || false;
+    const isPregnant = patient.isPregnant || false;
+    const hasAppointment = patient.hasAppointment || false;
+    const order = patient.queueOrder || 0;
+
+    return this.calculateServicePriority(
+      status as PrescriptionStatus,
+      age,
+      isDisabled,
+      isPregnant,
+      hasAppointment,
+      order,
+      null
+    );
+  }
+
+  /**
+   * Thêm bệnh nhân vào queue Redis
+   */
+  async addPatientToQueue(
+    userId: string, 
+    userRole: 'DOCTOR' | 'TECHNICIAN',
+    patientData: any
+  ): Promise<void> {
+    try {
+      await this.redis.addToPrescriptionQueue(userId, userRole, patientData);
+    } catch (error) {
+      console.warn('Error adding patient to queue:', error);
+    }
+  }
+
+  /**
+   * Xóa bệnh nhân khỏi queue Redis
+   */
+  async removePatientFromQueue(
+    userId: string,
+    userRole: 'DOCTOR' | 'TECHNICIAN', 
+    patientProfileId: string
+  ): Promise<void> {
+    try {
+      await this.redis.removeFromPrescriptionQueue(userId, userRole, patientProfileId);
+    } catch (error) {
+      console.warn('Error removing patient from queue:', error);
+    }
+  }
+
+  /**
+   * Cập nhật trạng thái bệnh nhân trong queue Redis
+   */
+  async updatePatientStatusInQueue(
+    userId: string,
+    userRole: 'DOCTOR' | 'TECHNICIAN',
+    patientProfileId: string,
+    newStatus: string
+  ): Promise<void> {
+    try {
+      await this.redis.updatePrescriptionQueueStatus(userId, userRole, patientProfileId, newStatus);
+    } catch (error) {
+      console.warn('Error updating patient status in queue:', error);
+    }
   }
 }

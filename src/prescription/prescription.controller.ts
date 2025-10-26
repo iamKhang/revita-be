@@ -18,6 +18,7 @@ import { JwtUserPayload } from 'src/medical-record/dto/jwt-user-payload.dto';
 import { PrescriptionService } from './prescription.service';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
+import { QueueResponseDto } from './dto/queue-item.dto';
 import { PrescriptionServiceManagementService } from '../service/prescription-service-management.service';
 import {
   UpdateServiceStatusDto,
@@ -76,6 +77,15 @@ export class PrescriptionController {
       patientProfileId,
       req.user,
     );
+  }
+
+  // Lấy danh sách bệnh nhân đang trong hàng chờ cho bác sĩ và kỹ thuật viên
+  @Get('queue')
+  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  async getQueue(
+    @Request() req: { user: JwtUserPayload },
+  ): Promise<QueueResponseDto> {
+    return this.prescriptionService.getQueueForUser(req.user);
   }
 
   // // OpenFDA proxy endpoints for drug lookup
