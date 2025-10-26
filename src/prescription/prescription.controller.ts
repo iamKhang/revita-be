@@ -19,6 +19,8 @@ import { PrescriptionService } from './prescription.service';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
 import { QueueResponseDto } from './dto/queue-item.dto';
+import { StartServicesDto, StartServicesResponseDto } from './dto/start-services.dto';
+import { PendingServicesResponseDto } from './dto/pending-services.dto';
 import { PrescriptionServiceManagementService } from '../service/prescription-service-management.service';
 import {
   UpdateServiceStatusDto,
@@ -86,6 +88,24 @@ export class PrescriptionController {
     @Request() req: { user: JwtUserPayload },
   ): Promise<QueueResponseDto> {
     return this.prescriptionService.getQueueForUser(req.user);
+  }
+
+  // Chuyển các PrescriptionService từ PENDING sang WAITING và thêm vào queue
+  @Post('start-services')
+  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  async startServices(
+    @Body() dto: StartServicesDto,
+    @Request() req: { user: JwtUserPayload },
+  ): Promise<StartServicesResponseDto> {
+    return this.prescriptionService.startServices(dto, req.user);
+  }
+
+  // Lấy các dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên (không cần quyền)
+  @Get('pending-services/:prescriptionCode')
+  async getPendingServices(
+    @Param('prescriptionCode') prescriptionCode: string,
+  ): Promise<PendingServicesResponseDto> {
+    return this.prescriptionService.getPendingServicesByPrescriptionCode(prescriptionCode);
   }
 
   // // OpenFDA proxy endpoints for drug lookup

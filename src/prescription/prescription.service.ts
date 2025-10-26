@@ -15,6 +15,8 @@ import { PrescriptionStatus } from '@prisma/client';
 import { CodeGeneratorService } from '../user-management/patient-profile/code-generator.service';
 import { JwtUserPayload } from '../medical-record/dto/jwt-user-payload.dto';
 import { QueueResponseDto, QueuePatientDto } from './dto/queue-item.dto';
+import { StartServicesDto, StartServicesResponseDto, ServiceToStartDto } from './dto/start-services.dto';
+import { PendingServicesResponseDto, PendingServiceDto } from './dto/pending-services.dto';
 import { RedisService } from '../cache/redis.service';
 
 @Injectable()
@@ -1143,5 +1145,254 @@ export class PrescriptionService {
     } catch (error) {
       console.warn('Error updating patient status in queue:', error);
     }
+  }
+
+  /**
+   * Chuyển các PrescriptionService từ PENDING sang WAITING và thêm vào queue
+   */
+  async startServices(dto: StartServicesDto, user: JwtUserPayload): Promise<StartServicesResponseDto> {
+    const startedServices: any[] = [];
+    const failedServices: any[] = [];
+    const startedAt = new Date();
+
+    // Xử lý từng service
+    for (const serviceToStart of dto.services) {
+      try {
+        const result = await this.startSingleService(
+          serviceToStart.prescriptionId,
+          serviceToStart.serviceId,
+          user,
+          startedAt
+        );
+
+        if (result.success) {
+          startedServices.push({
+            prescriptionId: serviceToStart.prescriptionId,
+            serviceId: serviceToStart.serviceId,
+            status: 'WAITING',
+            startedAt: startedAt.toISOString(),
+          });
+        } else {
+          failedServices.push({
+            prescriptionId: serviceToStart.prescriptionId,
+            serviceId: serviceToStart.serviceId,
+            reason: result.reason,
+          });
+        }
+      } catch (error) {
+        failedServices.push({
+          prescriptionId: serviceToStart.prescriptionId,
+          serviceId: serviceToStart.serviceId,
+          reason: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      startedServices,
+      failedServices,
+      totalStarted: startedServices.length,
+      totalFailed: failedServices.length,
+    };
+  }
+
+  /**
+   * Chuyển một PrescriptionService từ PENDING sang WAITING
+   */
+  private async startSingleService(
+    prescriptionId: string,
+    serviceId: string,
+    user: JwtUserPayload,
+    startedAt: Date
+  ): Promise<{ success: boolean; reason?: string }> {
+    try {
+      // Tìm PrescriptionService
+      const prescriptionService = await this.prisma.prescriptionService.findUnique({
+        where: {
+          prescriptionId_serviceId: {
+            prescriptionId,
+            serviceId,
+          },
+        },
+        include: {
+          prescription: {
+            select: {
+              doctorId: true,
+              patientProfileId: true,
+            },
+          },
+        },
+      });
+
+      if (!prescriptionService) {
+        return {
+          success: false,
+          reason: 'PrescriptionService not found',
+        };
+      }
+
+      // Kiểm tra quyền truy cập
+      if (user.role === 'DOCTOR' && prescriptionService.prescription.doctorId !== user.doctor?.id) {
+        return {
+          success: false,
+          reason: 'You can only start services in prescriptions you created',
+        };
+      }
+
+      if (user.role === 'TECHNICIAN' && prescriptionService.technicianId !== user.technician?.id) {
+        return {
+          success: false,
+          reason: 'You can only start services assigned to you',
+        };
+      }
+
+      // Kiểm tra trạng thái hiện tại
+      if (prescriptionService.status !== PrescriptionStatus.PENDING) {
+        return {
+          success: false,
+          reason: `Service is not in PENDING status. Current status: ${prescriptionService.status}`,
+        };
+      }
+
+      // Cập nhật trạng thái sang WAITING
+      await this.prisma.prescriptionService.update({
+        where: {
+          prescriptionId_serviceId: {
+            prescriptionId,
+            serviceId,
+          },
+        },
+        data: {
+          status: PrescriptionStatus.WAITING,
+          startedAt,
+        },
+      });
+
+      // Cập nhật queue trong Redis cho doctor
+      if (prescriptionService.prescription.doctorId) {
+        await this.updateQueueInRedis(prescriptionService.prescription.doctorId, 'DOCTOR');
+      }
+
+      // Cập nhật queue trong Redis cho technician nếu có
+      if (prescriptionService.technicianId) {
+        await this.updateQueueInRedis(prescriptionService.technicianId, 'TECHNICIAN');
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error starting service:', error);
+      return {
+        success: false,
+        reason: `Database error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  /**
+   * Lấy các dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên thực hiện
+   */
+  async getPendingServicesByPrescriptionCode(prescriptionCode: string): Promise<PendingServicesResponseDto> {
+    try {
+      // Tìm prescription theo mã
+      const prescription = await this.prisma.prescription.findFirst({
+        where: { prescriptionCode },
+        include: {
+          services: {
+            where: { status: PrescriptionStatus.PENDING },
+            include: {
+              service: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+            orderBy: { order: 'asc' },
+          },
+        },
+      });
+
+      if (!prescription) {
+        throw new NotFoundException('Prescription not found');
+      }
+
+      if (prescription.services.length === 0) {
+        return {
+          prescriptionCode,
+          services: [],
+          status: 'PENDING',
+          totalCount: 0,
+        };
+      }
+
+      // Tìm nhóm dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên
+      const consecutivePendingServices = this.findConsecutivePendingServices(prescription.services);
+
+      const services: PendingServiceDto[] = consecutivePendingServices.map(ps => ({
+        serviceId: ps.serviceId,
+        serviceName: ps.service.name,
+      }));
+
+      return {
+        prescriptionCode,
+        services,
+        status: 'PENDING',
+        totalCount: services.length,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('Error getting pending services:', error);
+      throw new BadRequestException('Failed to get pending services');
+    }
+  }
+
+  /**
+   * Tìm các dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên
+   */
+  private findConsecutivePendingServices(services: any[]): any[] {
+    if (services.length === 0) return [];
+
+    const result: any[] = [];
+    let currentGroup: any[] = [];
+    let currentDoctorId: string | null = null;
+    let currentTechnicianId: string | null = null;
+
+    for (const service of services) {
+      const serviceDoctorId = service.doctorId;
+      const serviceTechnicianId = service.technicianId;
+
+      // Kiểm tra xem có cùng bác sĩ/kỹ thuật viên với nhóm hiện tại không
+      const isSameAssignee = 
+        (serviceDoctorId && serviceDoctorId === currentDoctorId) ||
+        (serviceTechnicianId && serviceTechnicianId === currentTechnicianId) ||
+        (!serviceDoctorId && !serviceTechnicianId && !currentDoctorId && !currentTechnicianId);
+
+      if (isSameAssignee) {
+        // Thêm vào nhóm hiện tại
+        currentGroup.push(service);
+        currentDoctorId = serviceDoctorId;
+        currentTechnicianId = serviceTechnicianId;
+      } else {
+        // Nếu nhóm hiện tại có ít nhất 1 dịch vụ, lưu lại
+        if (currentGroup.length > 0) {
+          result.push(...currentGroup);
+        }
+        
+        // Bắt đầu nhóm mới
+        currentGroup = [service];
+        currentDoctorId = serviceDoctorId;
+        currentTechnicianId = serviceTechnicianId;
+      }
+    }
+
+    // Thêm nhóm cuối cùng nếu có
+    if (currentGroup.length > 0) {
+      result.push(...currentGroup);
+    }
+
+    return result;
   }
 }
