@@ -95,4 +95,95 @@ export class CounterWebSocketGateway implements OnGatewayConnection, OnGatewayDi
     const onlineCounters = this.webSocketService.getOnlineCounters();
     client.emit('online_counters', { counters: onlineCounters });
   }
+
+  // ==================== PRESCRIPTION SYSTEM EVENTS ====================
+
+  @SubscribeMessage('join_doctor')
+  handleJoinDoctor(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { doctorId: string },
+  ) {
+    if (!data.doctorId) {
+      client.emit('error', { message: 'Doctor ID is required' });
+      return;
+    }
+
+    client.join(`doctor:${data.doctorId}`);
+    client.emit('joined_doctor', { 
+      doctorId: data.doctorId,
+      message: `Connected to doctor ${data.doctorId}` 
+    });
+  }
+
+  @SubscribeMessage('leave_doctor')
+  handleLeaveDoctor(@ConnectedSocket() client: Socket) {
+    // Socket.io sẽ tự động leave room khi disconnect
+    client.emit('left_doctor', { message: 'Left doctor room' });
+  }
+
+  @SubscribeMessage('join_technician')
+  handleJoinTechnician(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { technicianId: string },
+  ) {
+    if (!data.technicianId) {
+      client.emit('error', { message: 'Technician ID is required' });
+      return;
+    }
+
+    client.join(`technician:${data.technicianId}`);
+    client.emit('joined_technician', { 
+      technicianId: data.technicianId,
+      message: `Connected to technician ${data.technicianId}` 
+    });
+  }
+
+  @SubscribeMessage('leave_technician')
+  handleLeaveTechnician(@ConnectedSocket() client: Socket) {
+    client.emit('left_technician', { message: 'Left technician room' });
+  }
+
+  @SubscribeMessage('join_booth')
+  handleJoinBooth(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { boothId: string },
+  ) {
+    if (!data.boothId) {
+      client.emit('error', { message: 'Booth ID is required' });
+      return;
+    }
+
+    client.join(`booth:${data.boothId}`);
+    client.emit('joined_booth', { 
+      boothId: data.boothId,
+      message: `Connected to booth ${data.boothId}` 
+    });
+  }
+
+  @SubscribeMessage('leave_booth')
+  handleLeaveBooth(@ConnectedSocket() client: Socket) {
+    client.emit('left_booth', { message: 'Left booth room' });
+  }
+
+  @SubscribeMessage('join_clinic_room')
+  handleJoinClinicRoom(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { clinicRoomId: string },
+  ) {
+    if (!data.clinicRoomId) {
+      client.emit('error', { message: 'Clinic Room ID is required' });
+      return;
+    }
+
+    client.join(`clinic_room:${data.clinicRoomId}`);
+    client.emit('joined_clinic_room', { 
+      clinicRoomId: data.clinicRoomId,
+      message: `Connected to clinic room ${data.clinicRoomId}` 
+    });
+  }
+
+  @SubscribeMessage('leave_clinic_room')
+  handleLeaveClinicRoom(@ConnectedSocket() client: Socket) {
+    client.emit('left_clinic_room', { message: 'Left clinic room' });
+  }
 }

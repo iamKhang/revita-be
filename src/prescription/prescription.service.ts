@@ -18,6 +18,7 @@ import { QueueResponseDto, QueuePatientDto } from './dto/queue-item.dto';
 import { StartServicesDto, StartServicesResponseDto, ServiceToStartDto } from './dto/start-services.dto';
 import { PendingServicesResponseDto, PendingServiceDto } from './dto/pending-services.dto';
 import { RedisService } from '../cache/redis.service';
+import { WebSocketService } from '../websocket/websocket.service';
 
 @Injectable()
 export class PrescriptionService {
@@ -26,6 +27,7 @@ export class PrescriptionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly webSocketService: WebSocketService,
   ) {}
 
   async create(dto: CreatePrescriptionDto, user: JwtUserPayload) {
@@ -175,6 +177,9 @@ export class PrescriptionService {
     if (doctorId) {
       await this.updateQueueInRedis(doctorId, 'DOCTOR');
     }
+
+    // Gửi WebSocket notification cho bệnh nhân mới đến
+    await this.notifyNewPatientArrival(prescription);
 
     return prescription;
   }
@@ -1604,6 +1609,16 @@ export class PrescriptionService {
       // Cập nhật queue trong Redis
       await this.updateQueueInRedis(userId, user.role as 'DOCTOR' | 'TECHNICIAN');
 
+      // Gửi WebSocket notification cho hành động gọi bệnh nhân
+      await this.notifyPatientAction({
+        action: 'CALLED',
+        currentPatient: currentServingPatient,
+        nextPatient,
+        preparingPatient,
+        doctorId: user.role === 'DOCTOR' ? userId : undefined,
+        technicianId: user.role === 'TECHNICIAN' ? userId : undefined,
+      });
+
       return {
         success: true,
         currentPatient: currentServingPatient ? {
@@ -1633,6 +1648,155 @@ export class PrescriptionService {
         success: false,
         message: `Lỗi khi gọi bệnh nhân: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
+    }
+  }
+
+  // ==================== WEBSOCKET NOTIFICATION METHODS ====================
+
+  /**
+   * Thông báo bệnh nhân mới đến
+   */
+  private async notifyNewPatientArrival(prescription: any): Promise<void> {
+    try {
+      // Lấy thông tin về các phòng và buồng liên quan
+      const serviceIds = prescription.services.map((s: any) => s.serviceId);
+      const { clinicRoomIds, boothIds } = await this.getRelatedRoomsAndBooths(serviceIds);
+
+      await this.webSocketService.notifyNewPrescriptionPatient({
+        patientProfileId: prescription.patientProfileId,
+        patientName: prescription.patientProfile.name,
+        prescriptionCode: prescription.prescriptionCode,
+        services: prescription.services,
+        doctorId: prescription.doctorId,
+        technicianId: prescription.services[0]?.technicianId,
+        serviceIds,
+        clinicRoomIds,
+        boothIds,
+      });
+    } catch (error) {
+      console.error('Error notifying new patient arrival:', error);
+    }
+  }
+
+  /**
+   * Thông báo hành động của bác sĩ/kỹ thuật viên
+   */
+  private async notifyPatientAction(actionData: {
+    action: 'CALLED' | 'SKIPPED';
+    prescriptionId?: string;
+    serviceId?: string;
+    currentPatient?: any;
+    nextPatient?: any;
+    preparingPatient?: any;
+    doctorId?: string;
+    technicianId?: string;
+  }): Promise<void> {
+    try {
+      let serviceIds: string[] = [];
+      let clinicRoomIds: string[] = [];
+      let boothIds: string[] = [];
+      let patientData: any = null;
+
+      if (actionData.prescriptionId && actionData.serviceId) {
+        // Trường hợp skip service cụ thể
+        const prescription = await this.prisma.prescription.findUnique({
+          where: { id: actionData.prescriptionId },
+          include: {
+            services: { include: { service: true } },
+            patientProfile: true,
+          },
+        });
+
+        if (prescription) {
+          serviceIds = prescription.services.map((s: any) => s.serviceId);
+          const roomsData = await this.getRelatedRoomsAndBooths(serviceIds);
+          clinicRoomIds = roomsData.clinicRoomIds;
+          boothIds = roomsData.boothIds;
+
+          patientData = {
+            patientProfileId: prescription.patientProfileId,
+            patientName: prescription.patientProfile.name,
+            prescriptionCode: prescription.prescriptionCode,
+          };
+        }
+      } else if (actionData.nextPatient) {
+        // Trường hợp gọi bệnh nhân tiếp theo
+        patientData = {
+          patientProfileId: actionData.nextPatient.patientProfileId,
+          patientName: actionData.nextPatient.patientName,
+          prescriptionCode: actionData.nextPatient.prescriptionCode,
+        };
+
+        // Lấy serviceIds từ nextPatient
+        serviceIds = actionData.nextPatient.services?.map((s: any) => s.serviceId) || [];
+        const roomsData = await this.getRelatedRoomsAndBooths(serviceIds);
+        clinicRoomIds = roomsData.clinicRoomIds;
+        boothIds = roomsData.boothIds;
+      }
+
+      if (patientData) {
+        await this.webSocketService.notifyPatientCalled({
+          ...patientData,
+          doctorId: actionData.doctorId,
+          technicianId: actionData.technicianId,
+          serviceIds,
+          clinicRoomIds,
+          boothIds,
+          action: actionData.action,
+          currentPatient: actionData.currentPatient,
+          nextPatient: actionData.nextPatient,
+          preparingPatient: actionData.preparingPatient,
+        });
+      }
+    } catch (error) {
+      console.error('Error notifying patient action:', error);
+    }
+  }
+
+  /**
+   * Lấy thông tin về các phòng và buồng liên quan đến services
+   */
+  private async getRelatedRoomsAndBooths(serviceIds: string[]): Promise<{
+    clinicRoomIds: string[];
+    boothIds: string[];
+  }> {
+    try {
+      const services = await this.prisma.service.findMany({
+        where: { id: { in: serviceIds } },
+        include: {
+          clinicRoomServices: {
+            include: {
+              clinicRoom: {
+                include: {
+                  booth: {
+                    select: { id: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const clinicRoomIds: string[] = [];
+      const boothIds: string[] = [];
+
+      services.forEach(service => {
+        service.clinicRoomServices.forEach(crs => {
+          clinicRoomIds.push(crs.clinicRoom.id);
+          crs.clinicRoom.booth.forEach(booth => {
+            boothIds.push(booth.id);
+          });
+        });
+      });
+
+      return {
+        clinicRoomIds: [...new Set(clinicRoomIds)], // Remove duplicates
+        boothIds: [...new Set(boothIds)], // Remove duplicates
+      };
+    } catch (error) {
+      console.error('Error getting related rooms and booths:', error);
+      return { clinicRoomIds: [], boothIds: [] };
     }
   }
 }
