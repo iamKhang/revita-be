@@ -784,6 +784,8 @@ export class PrescriptionService {
   /**
    * Tính toán độ ưu tiên cho dịch vụ dựa trên logic từ take-number.service.ts
    * Thứ tự ưu tiên: 1. Đang phục vụ 2. Tiếp theo 3. Bị skip (skipCount nhỏ nhất) 4. Miss (1) 5. Miss (2) 6. Miss (3) ... 7. Già (>75) 8. Trẻ em (<6) 9. Khuyết tật 10. Mang thai 11. Có lịch hẹn 12. Thường
+   * 
+   * QUAN TRỌNG: SERVING và PREPARING luôn ở vị trí đầu queue, không bị chen lên bởi bệnh nhân mới
    */
   private calculateServicePriority(
     status: PrescriptionStatus,
@@ -797,12 +799,12 @@ export class PrescriptionService {
   ): number {
     let priorityScore = 0;
 
-    // 1. Đang phục vụ (SERVING) - ưu tiên cao nhất
+    // 1. Đang phục vụ (SERVING) - ưu tiên cao nhất, KHÔNG BAO GIỜ bị chen lên
     if (status === PrescriptionStatus.SERVING) {
       return 0;
     }
     
-    // 2. Tiếp theo (PREPARING) - ưu tiên cao thứ 2
+    // 2. Tiếp theo (PREPARING) - ưu tiên cao thứ 2, KHÔNG BAO GIỜ bị chen lên
     if (status === PrescriptionStatus.PREPARING) {
       return 100000;
     }
@@ -1073,9 +1075,17 @@ export class PrescriptionService {
       };
     });
 
-    // Sắp xếp theo độ ưu tiên: priorityScore trước, sau đó startedAt
+    // Sắp xếp theo độ ưu tiên: SERVING và PREPARING luôn ở đầu, sau đó theo priorityScore
     patients.sort((a, b) => {
-      // Ưu tiên theo priorityScore (số nhỏ hơn = ưu tiên cao hơn)
+      // SERVING luôn ở vị trí đầu tiên
+      if (a.overallStatus === 'SERVING' && b.overallStatus !== 'SERVING') return -1;
+      if (b.overallStatus === 'SERVING' && a.overallStatus !== 'SERVING') return 1;
+      
+      // PREPARING luôn ở vị trí thứ 2 (sau SERVING)
+      if (a.overallStatus === 'PREPARING' && b.overallStatus !== 'PREPARING' && b.overallStatus !== 'SERVING') return -1;
+      if (b.overallStatus === 'PREPARING' && a.overallStatus !== 'PREPARING' && a.overallStatus !== 'SERVING') return 1;
+      
+      // Các trạng thái khác sắp xếp theo priorityScore
       if (a.priorityScore !== b.priorityScore) {
         return a.priorityScore - b.priorityScore;
       }
@@ -1126,17 +1136,29 @@ export class PrescriptionService {
         technician: userRole === 'TECHNICIAN' ? { id: userId } : undefined,
       } as JwtUserPayload);
 
-      // Chuyển đổi thành format cho Redis
-      const redisQueueData = queueData.patients.map((patient, index) => ({
-        patientProfileId: patient.patientProfileId,
-        patientName: patient.patientName,
-        prescriptionCode: patient.prescriptionCode,
-        services: patient.services,
-        overallStatus: patient.overallStatus,
-        queueOrder: index + 1,
-        priorityScore: this.calculatePatientPriority(patient),
-        updatedAt: new Date().toISOString(),
-      }));
+      // Chuyển đổi thành format cho Redis với priority được tính lại để đảm bảo SERVING/PREPARING ở đầu
+      const redisQueueData = queueData.patients.map((patient, index) => {
+        // Tính lại priority để đảm bảo SERVING và PREPARING luôn ở đầu
+        let redisPriority = this.calculatePatientPriority(patient);
+        
+        // Đảm bảo SERVING và PREPARING có priority cao nhất
+        if (patient.overallStatus === 'SERVING') {
+          redisPriority = 0;
+        } else if (patient.overallStatus === 'PREPARING') {
+          redisPriority = 100000;
+        }
+        
+        return {
+          patientProfileId: patient.patientProfileId,
+          patientName: patient.patientName,
+          prescriptionCode: patient.prescriptionCode,
+          services: patient.services,
+          overallStatus: patient.overallStatus,
+          queueOrder: index + 1,
+          priorityScore: redisPriority,
+          updatedAt: new Date().toISOString(),
+        };
+      });
 
       // Lưu vào Redis ZSET
       await this.redis.updatePrescriptionQueue(userId, userRole, redisQueueData);
@@ -1463,5 +1485,154 @@ export class PrescriptionService {
     }
 
     return result;
+  }
+
+  /**
+   * Gọi bệnh nhân tiếp theo trong queue
+   * Logic: 
+   * 1. Lấy bệnh nhân đầu queue
+   * 2. Nếu không phải SERVING → cập nhật thành SERVING
+   * 3. Cập nhật bệnh nhân đang SERVING thành COMPLETED và xóa khỏi queue
+   * 4. Cập nhật bệnh nhân tiếp theo thành PREPARING
+   */
+  async callNextPatient(user: JwtUserPayload): Promise<{
+    success: boolean;
+    currentPatient?: any;
+    nextPatient?: any;
+    preparingPatient?: any;
+    message: string;
+  }> {
+    try {
+      const userId = user.role === 'DOCTOR' ? user.doctor?.id : user.technician?.id;
+      if (!userId) {
+        throw new BadRequestException('User ID not found');
+      }
+
+      // Lấy queue hiện tại từ database để đảm bảo dữ liệu chính xác
+      const queueData = await this.buildQueueFromDatabase(user);
+      
+      if (queueData.patients.length === 0) {
+        return {
+          success: false,
+          message: 'Không có bệnh nhân nào trong hàng chờ',
+        };
+      }
+
+      // Lấy bệnh nhân đầu queue (ưu tiên cao nhất)
+      const nextPatient = queueData.patients[0];
+      
+      // Tìm bệnh nhân đang SERVING hiện tại
+      const currentServingPatient = queueData.patients.find(p => p.overallStatus === 'SERVING');
+      
+      // Tìm bệnh nhân tiếp theo để chuẩn bị (PREPARING)
+      // Logic: 
+      // - Nếu có bệnh nhân SERVING hiện tại: bệnh nhân tiếp theo sau SERVING sẽ là PREPARING
+      // - Nếu không có bệnh nhân SERVING: bệnh nhân đầu queue sẽ thành SERVING, bệnh nhân thứ 2 sẽ thành PREPARING
+      let preparingPatient: any = null;
+      
+      if (currentServingPatient) {
+        // Nếu có bệnh nhân SERVING, tìm bệnh nhân tiếp theo sau SERVING
+        const servingIndex = queueData.patients.findIndex(p => p.overallStatus === 'SERVING');
+        preparingPatient = queueData.patients[servingIndex + 1] || null;
+      } else {
+        // Nếu không có bệnh nhân SERVING, bệnh nhân thứ 2 sẽ là PREPARING
+        preparingPatient = queueData.patients.length > 1 ? queueData.patients[1] : null;
+      }
+
+      // Thực hiện các cập nhật trong transaction
+      await this.prisma.$transaction(async (tx) => {
+        // 1. Cập nhật bệnh nhân đang SERVING thành COMPLETED (nếu có)
+        if (currentServingPatient) {
+          for (const service of currentServingPatient.services) {
+            if (service.status === 'SERVING') {
+              await tx.prescriptionService.update({
+                where: {
+                  prescriptionId_serviceId: {
+                    prescriptionId: service.prescriptionId,
+                    serviceId: service.serviceId,
+                  },
+                },
+                data: {
+                  status: PrescriptionStatus.COMPLETED,
+                  completedAt: new Date(),
+                },
+              });
+            }
+          }
+        }
+
+        // 2. Cập nhật bệnh nhân tiếp theo thành SERVING
+        // Nếu không có bệnh nhân SERVING hiện tại, thì bệnh nhân đầu queue sẽ thành SERVING
+        // Nếu có bệnh nhân SERVING hiện tại, thì bệnh nhân đầu queue sẽ thành SERVING (thay thế)
+        for (const service of nextPatient.services) {
+          if (service.status === 'WAITING' || service.status === 'SKIPPED' || service.status === 'PREPARING') {
+            await tx.prescriptionService.update({
+              where: {
+                prescriptionId_serviceId: {
+                  prescriptionId: service.prescriptionId,
+                  serviceId: service.serviceId,
+                },
+              },
+              data: {
+                status: PrescriptionStatus.SERVING,
+                startedAt: new Date(),
+              },
+            });
+          }
+        }
+
+        // 3. Cập nhật bệnh nhân tiếp theo thành PREPARING (nếu có)
+        if (preparingPatient && preparingPatient.patientProfileId !== nextPatient.patientProfileId) {
+          for (const service of preparingPatient.services) {
+            if (service.status === 'WAITING' || service.status === 'SKIPPED') {
+              await tx.prescriptionService.update({
+                where: {
+                  prescriptionId_serviceId: {
+                    prescriptionId: service.prescriptionId,
+                    serviceId: service.serviceId,
+                  },
+                },
+                data: {
+                  status: PrescriptionStatus.PREPARING,
+                },
+              });
+            }
+          }
+        }
+      });
+
+      // Cập nhật queue trong Redis
+      await this.updateQueueInRedis(userId, user.role as 'DOCTOR' | 'TECHNICIAN');
+
+      return {
+        success: true,
+        currentPatient: currentServingPatient ? {
+          patientProfileId: currentServingPatient.patientProfileId,
+          patientName: currentServingPatient.patientName,
+          prescriptionCode: currentServingPatient.prescriptionCode,
+          status: 'COMPLETED',
+        } : null,
+        nextPatient: {
+          patientProfileId: nextPatient.patientProfileId,
+          patientName: nextPatient.patientName,
+          prescriptionCode: nextPatient.prescriptionCode,
+          status: 'SERVING',
+        },
+        preparingPatient: preparingPatient ? {
+          patientProfileId: preparingPatient.patientProfileId,
+          patientName: preparingPatient.patientName,
+          prescriptionCode: preparingPatient.prescriptionCode,
+          status: 'PREPARING',
+        } : null,
+        message: `Đã gọi bệnh nhân: ${nextPatient.patientName}`,
+      };
+
+    } catch (error) {
+      console.error('Error calling next patient:', error);
+      return {
+        success: false,
+        message: `Lỗi khi gọi bệnh nhân: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
   }
 }

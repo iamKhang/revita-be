@@ -188,4 +188,49 @@ export class PrescriptionController {
       req.user,
     );
   }
+
+  @Post('call-next-patient')
+  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  async callNextPatient(
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return this.prescriptionService.callNextPatient(req.user);
+  }
+
+  @Get('queue/status')
+  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  async getQueueStatus(
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    const queueData = await this.prescriptionService.getQueueForUser(req.user);
+    
+    // Tìm bệnh nhân đang SERVING và PREPARING
+    const servingPatient = queueData.patients.find(p => p.overallStatus === 'SERVING');
+    const preparingPatient = queueData.patients.find(p => p.overallStatus === 'PREPARING');
+    
+    return {
+      totalPatients: queueData.totalCount,
+      servingPatient: servingPatient ? {
+        patientProfileId: servingPatient.patientProfileId,
+        patientName: servingPatient.patientName,
+        prescriptionCode: servingPatient.prescriptionCode,
+        services: servingPatient.services,
+      } : null,
+      preparingPatient: preparingPatient ? {
+        patientProfileId: preparingPatient.patientProfileId,
+        patientName: preparingPatient.patientName,
+        prescriptionCode: preparingPatient.prescriptionCode,
+        services: preparingPatient.services,
+      } : null,
+      waitingPatients: queueData.patients.filter(p => 
+        p.overallStatus === 'WAITING' || p.overallStatus === 'SKIPPED'
+      ).map(p => ({
+        patientProfileId: p.patientProfileId,
+        patientName: p.patientName,
+        prescriptionCode: p.prescriptionCode,
+        overallStatus: p.overallStatus,
+        queueOrder: p.queueOrder,
+      })),
+    };
+  }
 }
