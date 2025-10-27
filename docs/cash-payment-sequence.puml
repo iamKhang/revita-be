@@ -1,19 +1,16 @@
 @startuml cashPaymentSequence
 
 actor "Thu ngân" as Cashier
-actor "Bệnh nhân" as Patient
 
 boundary "Thu ngân UI" as UI
 control "InvoicePaymentController" as Controller
 entity "InvoicePaymentService" as Service
 entity "RoutingService" as Routing
 entity "WebSocketService" as WS
-database "PostgreSQL" as DB
-
-Cashier -> Patient: Yêu cầu phiếu chỉ định
-activate Patient
-Patient -> Cashier: Đưa phiếu chỉ định
-deactivate Patient
+entity "Prescription" as Prescription
+entity "Invoice" as Invoice
+entity "InvoiceDetail" as InvoiceDetail
+entity "PrescriptionService" as PrescriptionService
 
 Cashier -> UI: Quét mã phiếu chỉ định
 activate UI
@@ -21,17 +18,17 @@ activate UI
 UI -> Controller: POST /invoice-payments/scan\nprescriptionCode
 activate Controller
 
-Controller -> Service: scanPrescription(dto)
+Controller -> Service: scanPrescription(prescriptionCode)
 activate Service
 
-Service -> DB: SELECT prescription\nWHERE prescriptionCode\nINCLUDE patientProfile, doctor, services
-activate DB
-DB --> Service: Prescription data
-deactivate DB
+Service -> Prescription: findFirst(prescriptionCode)
+activate Prescription
+Prescription --> Service: Prescription
+deactivate Prescription
 
-Service -> Service: Validate status not CANCELLED
+Service -> Service: validateStatus(status != CANCELLED)
 
-Service --> Controller: PrescriptionDetails\npatientProfile, services, prices
+Service --> Controller: PrescriptionDetails
 deactivate Service
 
 Controller --> UI: 200 OK prescription details
@@ -47,13 +44,13 @@ loop Chọn dịch vụ và xem tổng tiền
     UI -> Controller: POST /invoice-payments/preview\nprescriptionCode, selectedServiceIds
     activate Controller
     
-    Controller -> Service: createPaymentPreview(dto)
+    Controller -> Service: createPaymentPreview\n(prescriptionCode, selectedServiceIds)
     activate Service
     
-    Service -> Service: Lọc selectedServices
-    Service -> Service: Calculate totalAmount
+    Service -> Service: filterSelectedServices(selectedIds)
+    Service -> Service: calculateTotalAmount(services)
     
-    Service --> Controller: PaymentPreview\nselectedServices, totalAmount
+    Service --> Controller: PaymentPreview  totalAmount
     deactivate Service
     
     Controller --> UI: 200 OK preview
@@ -69,28 +66,25 @@ activate UI
 UI -> Controller: POST /invoice-payments/create\nprescriptionCode, selectedServiceIds,\npaymentMethod CASH
 activate Controller
 
-Controller -> Controller: Lấy cashierId từ JWT
+Controller -> Controller: extractCashierIdFromJWT()
 
-Controller -> Service: createPayment(dto)
+    Controller -> Service: createPayment(prescriptionCode,\nselectedServiceIds, paymentMethod,\ncashierId\nn
 activate Service
 
-Service -> Service: Tạo preview để validate
+Service -> Service: createPaymentPreview()
+Service -> Service: generateInvoiceCode()
 
-Service -> Service: Generate invoiceCode
+Service -> Invoice: create(invoiceCode, patientProfileId,\ncashierId,\ntotalAmount, paymentMethod)
+activate Invoice
+Invoice --> Service: Invoice created  id
+deactivate Invoice
 
-Service -> DB: BEGIN TRANSACTION
-activate DB
+Service -> InvoiceDetail: createMany(invoiceDetails)
+activate InvoiceDetail
+InvoiceDetail --> Service: InvoiceDetails created
+deactivate InvoiceDetail
 
-Service -> DB: INSERT INTO invoice\ninvoiceCode, patientProfileId,\ncashierId, totalAmount,\npaymentMethod CASH,\nisPaid false
-DB --> Service: Invoice created
-
-Service -> DB: INSERT INTO invoiceDetail\ncho từng selectedService
-DB --> Service: InvoiceDetails created
-
-Service -> DB: COMMIT TRANSACTION
-deactivate DB
-
-Service --> Controller: PaymentResult\ninvoice, isPaid false
+Service --> Controller: PaymentResult  invoiceCode, isPaid false
 deactivate Service
 
 Controller --> UI: 200 OK payment created
@@ -99,19 +93,9 @@ deactivate Controller
 UI --> Cashier: Hiển thị hóa đơn\nchờ thanh toán
 deactivate UI
 
-Cashier -> Patient: Thông báo số tiền\ncần thanh toán
-activate Patient
-
-Patient -> Cashier: Đưa tiền mặt
-deactivate Patient
-
 Cashier -> Cashier: Đếm tiền\nTính tiền thừa
 
 alt Có tiền thừa
-    Cashier -> Patient: Trả tiền thừa
-    activate Patient
-    Patient -> Patient: Nhận tiền thừa
-    deactivate Patient
 end
 
 Cashier -> UI: Nhấn Xác nhận thanh toán
@@ -120,45 +104,39 @@ activate UI
 UI -> Controller: POST /invoice-payments/confirm\ninvoiceCode
 activate Controller
 
-Controller -> Controller: Lấy cashierId từ JWT
+Controller -> Controller: extractCashierIdFromJWT()
 
-Controller -> Service: confirmPayment(dto)
+Controller -> Service: confirmPayment(invoiceCode, cashierId)
 activate Service
 
-Service -> DB: SELECT invoice\nWHERE invoiceCode
-activate DB
-DB --> Service: Invoice data
-deactivate DB
+Service -> Invoice: findFirst(invoiceCode)
+activate Invoice
+Invoice --> Service: Invoice data
+deactivate Invoice
 
-Service -> Service: Validate isPaid false
+Service -> Service: validateNotPaid(isPaid)
 
-Service -> DB: BEGIN TRANSACTION
-activate DB
+Service -> Invoice: update(id, isPaid, paymentStatus,\namountPaid, changeAmount)
+activate Invoice
+Invoice --> Service: Invoice updated
+deactivate Invoice
 
-Service -> DB: UPDATE invoice\nSET isPaid true,\npaidAt now,\nstatus PAID
-DB --> Service: Invoice updated
+Service -> PrescriptionService: updateMany(prescriptionId,\nserviceIds, status)
+activate PrescriptionService
+PrescriptionService --> Service: PrescriptionServices updated
+deactivate PrescriptionService
 
-Service -> DB: UPDATE prescription\nSET status PAID
-DB --> Service: Prescription updated
-
-Service -> DB: COMMIT TRANSACTION
-deactivate DB
-
-Service -> Routing: Tạo routing assignments\ncho các dịch vụ
+Service -> Routing: assignPatientToRooms(patientProfileId,\nserviceIds)
 activate Routing
-Routing -> DB: INSERT routing assignments
-activate DB
-DB --> Routing: Assignments created
-deactivate DB
-Routing --> Service: routingAssignments
+Routing --> Service: routingAssignments \n roomCode, boothCode, doctorId
 deactivate Routing
 
-Service -> WS: Gửi notification\nđến phòng khám
+Service -> WS: notifyCashierInvoicePaymentSuccess(\ncashierId, invoice)
 activate WS
-WS -> WS: Broadcast to clinic rooms
+WS -> WS: broadcastToClinicRooms\n(routingAssignments)
 deactivate WS
 
-Service --> Controller: PaymentResult\nisPaid true, routingAssignments
+Service --> Controller: PaymentResult \n isPaid true,\nroutingAssignments
 deactivate Service
 
 Controller --> UI: 200 OK payment confirmed
@@ -169,15 +147,9 @@ deactivate UI
 
 Cashier -> UI: In hóa đơn
 activate UI
-UI -> UI: Generate invoice PDF
+UI -> UI: generateInvoicePDF(invoiceCode)
 UI --> Cashier: Hóa đơn in ra
 deactivate UI
-
-Cashier -> Patient: Trao hóa đơn
-activate Patient
-
-Cashier -> Patient: Hướng dẫn đến phòng khám
-deactivate Patient
 
 @enduml
 
