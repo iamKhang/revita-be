@@ -11,25 +11,24 @@ entity "MedicationPrescription" as MP
 entity "PatientProfile" as PP
 entity "MedicalRecord" as MR
 entity "Drug" as DR
-database "PostgreSQL" as PG
-database "MongoDB" as MG
 
 == Bác sĩ tạo đơn thuốc ==
 
 D -> F: Chọn bệnh nhân và tạo đơn thuốc
 F -> C: POST /medication-prescription/create
+C -> C: validateCreateMedicationPrescriptionDto(dto)
 C -> M: create(createMedicationPrescriptionDto)
-M -> M: Kiểm tra items không rỗng
+M -> M: validateItemsNotEmpty(items)
 
 alt Items hợp lệ
-  M -> M: Tạo mã đơn thuốc tự động
-  M -> MP: Tạo đơn thuốc mới
-  MP -> PG: Lưu thông tin đơn thuốc
-  PG --> MP: Đơn thuốc đã tạo
+  M -> M: generatePrescriptionCode()
+  M -> MP: createPrescription(prescriptionData)
+  MP -> MP: prisma.medicationPrescription.create()
+  MP --> M: Đơn thuốc đã tạo
   
-  M -> MP: Tạo các items thuốc
-  MP -> PG: Lưu từng item thuốc
-  PG --> MP: Items đã lưu
+  M -> MP: createPrescriptionItems(prescriptionId, items)
+  MP -> MP: prisma.medicationPrescriptionItem.createMany()
+  MP --> M: Items đã lưu
   MP --> M: Trả về đơn thuốc hoàn chỉnh
   
   M --> C: Trả về đơn thuốc đã tạo
@@ -37,7 +36,7 @@ alt Items hợp lệ
   F --> D: Hiển thị thông báo tạo thành công
   
 else Items rỗng
-  M --> C: Trả về lỗi items không hợp lệ
+  M --> C: throw new BadRequestException()
   C --> F: Thông báo lỗi
   F --> D: Hiển thị thông báo lỗi
 end
@@ -46,17 +45,18 @@ end
 
 D -> F: Tìm kiếm thuốc trong catalog
 F -> C: GET /medication-prescription/search-drugs?q=xxx
+C -> C: validateSearchQuery(query)
 C -> DC: searchDrugs(query, limit, skip)
-DC -> DR: Tìm kiếm thuốc theo openfda fields
-DR -> MG: Truy vấn MongoDB với điều kiện
-MG --> DR: Danh sách thuốc phù hợp
+DC -> DR: searchDrugsByOpenFDA(query, limit, skip)
+DR -> DR: mongodb.collection.find()
 DR --> DC: Trả về kết quả tìm kiếm
+DC -> DC: formatDrugSearchResults(results)
 DC --> C: Trả về danh sách thuốc
 C --> F: Trả về kết quả tìm kiếm
 F --> D: Hiển thị danh sách thuốc để chọn
 
 D -> F: Chọn thuốc từ danh sách
-F -> F: Thêm thuốc vào danh sách items
+F -> F: addDrugToItemsList(drug)
 F --> D: Hiển thị danh sách thuốc đã chọn
 
 @enduml

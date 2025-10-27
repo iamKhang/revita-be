@@ -6,38 +6,41 @@ actor "Người Dùng" as U
 boundary "Giao Diện" as F
 control "RegisterController" as C
 control "RegisterService" as R
-entity "Auth" as A
+entity "Account" as A
 entity "Patient" as P
 entity "Redis" as RED
 entity "EmailService" as E
 entity "SmsService" as S
-database "Cơ Sở Dữ Liệu" as DB
 
 == Bước 1: Đăng ký với số điện thoại/email ==
 
 U -> F: Nhập số điện thoại hoặc email
 F -> C: POST /register/step1
+C -> C: validateRegisterDto(dto)
 C -> R: registerStep1(registerDto)
-R -> A: Kiểm tra phone/email đã tồn tại
-A -> DB: Truy vấn auth table
-DB --> A: Kết quả kiểm tra
+R -> A: checkPhoneOrEmailExists(phoneOrEmail)
+A -> A: prisma.account.findFirst()
 A --> R: Trả về kết quả
 
 alt Phone/email chưa tồn tại
-  R -> R: Tạo OTP 6 chữ số
-  R -> R: Tạo session ID
-  R -> RED: Lưu session data vào Redis
+  R -> R: generateOTP()
+  R -> R: generateSessionId()
+  R -> RED: saveSessionData(sessionId, sessionData)
+  RED -> RED: redis.setex()
   RED --> R: Xác nhận lưu session
   
-  R -> RED: Lưu OTP vào Redis (5 phút)
+  R -> RED: saveOTP(phoneOrEmail, otp, 300)
+  RED -> RED: redis.setex()
   RED --> R: Xác nhận lưu OTP
   
   alt Có số điện thoại
-    R -> S: Gửi OTP qua SMS
+    R -> S: sendSMS(phone, otp)
+    S -> S: smsProvider.send()
     S --> R: Kết quả gửi SMS
     
   else Có email
-    R -> E: Gửi OTP qua email
+    R -> E: sendEmail(email, otp)
+    E -> E: emailProvider.send()
     E --> R: Kết quả gửi email
   end
   
@@ -46,7 +49,7 @@ alt Phone/email chưa tồn tại
   F --> U: Hiển thị thông báo OTP đã gửi
   
 else Phone/email đã tồn tại
-  R --> C: Trả về lỗi conflict
+  R --> C: throw new ConflictException()
   C --> F: Thông báo lỗi
   F --> U: Hiển thị thông báo đã được đăng ký
 end
@@ -55,23 +58,28 @@ end
 
 U -> F: Nhập mã OTP
 F -> C: POST /register/verify-otp
+C -> C: validateVerifyDto(dto)
 C -> R: verifyOtp(verifyDto)
-R -> RED: Lấy session data
+R -> RED: getSessionData(sessionId)
+RED -> RED: redis.get()
 RED --> R: Session data
-R -> RED: Lấy OTP từ Redis
+R -> RED: getOTP(phoneOrEmail)
+RED -> RED: redis.get()
 RED --> R: OTP đã lưu
 
 alt OTP hợp lệ
-  R -> RED: Cập nhật session - đánh dấu đã xác thực
+  R -> RED: updateSessionVerified(sessionId)
+  RED -> RED: redis.setex()
   RED --> R: Xác nhận cập nhật
-  R -> RED: Xóa OTP đã sử dụng
+  R -> RED: deleteOTP(phoneOrEmail)
+  RED -> RED: redis.del()
   RED --> R: Xác nhận xóa OTP
   R --> C: Trả về kết quả xác thực thành công
   C --> F: Trả về kết quả
   F --> U: Hiển thị thông báo xác thực thành công, chuyển sang bước 3
   
 else OTP không hợp lệ
-  R --> C: Trả về lỗi OTP
+  R --> C: throw new BadRequestException()
   C --> F: Thông báo lỗi
   F --> U: Hiển thị thông báo OTP không chính xác
 end
@@ -80,48 +88,50 @@ end
 
 U -> F: Nhập thông tin cá nhân và mật khẩu
 F -> C: POST /register/complete
+C -> C: validateCompleteDto(dto)
 C -> R: completeRegistration(completeDto)
-R -> RED: Lấy session data
+R -> RED: getSessionData(sessionId)
+RED -> RED: redis.get()
 RED --> R: Session data
 
 alt Session hợp lệ và đã xác thực
-  R -> A: Kiểm tra citizenId nếu có
-  A -> DB: Truy vấn auth table
-  DB --> A: Kết quả kiểm tra
+  R -> A: checkCitizenIdExists(citizenId)
+  A -> A: prisma.account.findFirst()
   A --> R: Trả về kết quả
   
   alt CitizenId chưa tồn tại
-    R -> R: Hash password với bcrypt
-    R -> R: Tạo transaction để tạo auth và patient
+    R -> R: hashPassword(password)
+    R -> R: beginTransaction()
     
-    R -> A: Tạo auth record
-    A -> DB: Lưu auth record
-    DB --> A: Auth đã tạo
-    A --> R: Trả về auth
+    R -> A: createAccountRecord(accountData)
+    A -> A: prisma.account.create()
+    A --> R: Trả về account
     
-    R -> P: Tạo patient record với patient code
-    P -> DB: Lưu patient record
-    DB --> P: Patient đã tạo
+    R -> P: createPatientRecord(patientData)
+    P -> P: prisma.patient.create()
     P --> R: Trả về patient
     
-    R -> RED: Xóa session sau khi đăng ký thành công
+    R -> RED: deleteSession(sessionId)
+    RED -> RED: redis.del()
     RED --> R: Xác nhận xóa session
     
-    R -> E: Gửi email/SMS chào mừng
+    R -> E: sendWelcomeNotification(email)
+    E -> E: emailProvider.send()
     E --> R: Kết quả gửi thông báo
     
+    R -> R: commitTransaction()
     R --> C: Trả về kết quả đăng ký thành công
     C --> F: Trả về kết quả
     F --> U: Hiển thị thông báo đăng ký thành công
     
   else CitizenId đã tồn tại
-    R --> C: Trả về lỗi citizenId đã được đăng ký
+    R --> C: throw new ConflictException()
     C --> F: Thông báo lỗi
     F --> U: Hiển thị thông báo số CMND/CCCD đã được đăng ký
   end
   
 else Session không hợp lệ
-  R --> C: Trả về lỗi session
+  R --> C: throw new BadRequestException()
   C --> F: Thông báo lỗi
   F --> U: Hiển thị thông báo session không hợp lệ
 end

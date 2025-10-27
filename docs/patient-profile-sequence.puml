@@ -9,26 +9,25 @@ control "PatientProfileController" as C
 control "PatientProfileService" as PS
 entity "PatientProfile" as PP
 entity "Patient" as PAT
-database "Cơ Sở Dữ Liệu" as DB
 
 == Bác sĩ tạo hồ sơ bệnh nhân độc lập ==
 
 D -> F: Tạo hồ sơ bệnh nhân mới
 F -> C: POST /patient-profile/create-independent
+C -> C: validateCreateIndependentPatientProfileDto(dto)
 C -> PS: createIndependent(createIndependentPatientProfileDto, user)
-PS -> PS: Kiểm tra quyền staff (DOCTOR/ADMIN/RECEPTIONIST)
+PS -> PS: checkStaffPermission(user)
 
 alt Có quyền tạo
-  PS -> PP: Tạo hồ sơ bệnh nhân độc lập
-  PP -> DB: Lưu thông tin hồ sơ
-  DB --> PP: Hồ sơ đã tạo
+  PS -> PP: createIndependentProfile(profileData)
+  PP -> PP: prisma.patientProfile.create()
   PP --> PS: Trả về hồ sơ mới
   PS --> C: Trả về hồ sơ đã tạo
   C --> F: Trả về kết quả tạo hồ sơ
   F --> D: Hiển thị thông báo tạo thành công
   
 else Không có quyền
-  PS --> C: Trả về lỗi quyền truy cập
+  PS --> C: throw new ForbiddenException()
   C --> F: Thông báo lỗi
   F --> D: Hiển thị thông báo không có quyền
 end
@@ -37,25 +36,24 @@ end
 
 P -> F: Tạo hồ sơ bệnh nhân
 F -> C: POST /patient-profile/create
+C -> C: validateCreatePatientProfileDto(dto)
 C -> PS: create(createPatientProfileDto, user)
-PS -> PAT: Kiểm tra bệnh nhân tồn tại
-PAT -> DB: Truy vấn thông tin bệnh nhân
-DB --> PAT: Thông tin bệnh nhân
+PS -> PAT: validatePatientExists(user.id)
+PAT -> PAT: prisma.patient.findUnique()
 PAT --> PS: Xác nhận bệnh nhân hợp lệ
 
-PS -> PS: Kiểm tra quyền tạo cho chính mình
+PS -> PS: checkSelfCreationPermission(user, patientId)
 
 alt Có quyền tạo
-  PS -> PP: Tạo hồ sơ bệnh nhân
-  PP -> DB: Lưu thông tin hồ sơ
-  DB --> PP: Hồ sơ đã tạo
+  PS -> PP: createPatientProfile(profileData)
+  PP -> PP: prisma.patientProfile.create()
   PP --> PS: Trả về hồ sơ mới
   PS --> C: Trả về hồ sơ đã tạo
   C --> F: Trả về kết quả tạo hồ sơ
   F --> P: Hiển thị thông báo tạo thành công
   
 else Không có quyền
-  PS --> C: Trả về lỗi quyền truy cập
+  PS --> C: throw new ForbiddenException()
   C --> F: Thông báo lỗi
   F --> P: Hiển thị thông báo không có quyền
 end
@@ -64,10 +62,11 @@ end
 
 D -> F: Xem danh sách hồ sơ
 F -> C: GET /patient-profile
+C -> C: validateRequest()
 C -> PS: findAll(user)
-PS -> PP: Lấy hồ sơ theo quyền
-PP -> DB: Truy vấn patient profiles
-DB --> PP: Danh sách hồ sơ
+PS -> PS: checkViewPermission(user)
+PS -> PP: findByPermission(user)
+PP -> PP: prisma.patientProfile.findMany()
 PP --> PS: Trả về danh sách hồ sơ
 PS --> C: Trả về danh sách hồ sơ
 C --> F: Trả về kết quả
