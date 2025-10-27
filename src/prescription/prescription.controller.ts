@@ -175,4 +175,17 @@ export class PrescriptionController {
       updateDto.note,
     );
   }
+
+  @Put('prescription-service/skip')
+  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  async skipService(
+    @Body() body: { prescriptionId: string; serviceId: string },
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return this.prescriptionService.markServiceSkipped(
+      body.prescriptionId,
+      body.serviceId,
+      req.user,
+    );
+  }
 }

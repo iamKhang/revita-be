@@ -495,6 +495,46 @@ export class PrescriptionService {
     }
   }
 
+  async markServiceSkipped(
+    prescriptionId: string,
+    serviceId: string,
+    user: JwtUserPayload,
+  ) {
+    // Check if user is the doctor who created this prescription
+    const prescription = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      select: { doctorId: true },
+    });
+    if (!prescription || prescription.doctorId !== user.doctor?.id) {
+      throw new BadRequestException(
+        'You can only modify services in prescriptions you created',
+      );
+    }
+
+    // Lấy thông tin service hiện tại để tăng skipCount
+    const currentService = await this.prisma.prescriptionService.findUnique({
+      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+      select: { skipCount: true },
+    });
+
+    await this.prisma.prescriptionService.update({
+      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+      data: { 
+        status: PrescriptionStatus.SKIPPED,
+        skipCount: (currentService?.skipCount || 0) + 1,
+      },
+    });
+
+    // Cập nhật queue trong Redis
+    const prescriptionData = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      select: { doctorId: true },
+    });
+    if (prescriptionData?.doctorId) {
+      await this.updateQueueInRedis(prescriptionData.doctorId, 'DOCTOR');
+    }
+  }
+
   async getPrescriptionsByMedicalRecord(medicalRecordId: string) {
     const prescriptions = await this.prisma.prescription.findMany({
       where: { medicalRecordId },
@@ -743,7 +783,7 @@ export class PrescriptionService {
 
   /**
    * Tính toán độ ưu tiên cho dịch vụ dựa trên logic từ take-number.service.ts
-   * Thứ tự ưu tiên: 1. Đang phục vụ 2. Tiếp theo 3. Miss (1) 4. Miss (2) 5. Miss (3) ... 6. Già (>75) 7. Trẻ em (<6) 8. Khuyết tật 9. Mang thai 10. Có lịch hẹn 11. Thường
+   * Thứ tự ưu tiên: 1. Đang phục vụ 2. Tiếp theo 3. Bị skip (skipCount nhỏ nhất) 4. Miss (1) 5. Miss (2) 6. Miss (3) ... 7. Già (>75) 8. Trẻ em (<6) 9. Khuyết tật 10. Mang thai 11. Có lịch hẹn 12. Thường
    */
   private calculateServicePriority(
     status: PrescriptionStatus,
@@ -753,6 +793,7 @@ export class PrescriptionService {
     hasAppointment: boolean,
     order: number,
     startedAt: Date | null,
+    skipCount: number = 0,
   ): number {
     let priorityScore = 0;
 
@@ -766,37 +807,42 @@ export class PrescriptionService {
       return 100000;
     }
     
-    // 3. Chờ kết quả (WAITING_RESULT) - ưu tiên cao thứ 3
-    if (status === PrescriptionStatus.WAITING_RESULT) {
-      return 200000;
+    // 3. Bị skip (SKIPPED) - ưu tiên cao thứ 3, skipCount nhỏ hơn thì ưu tiên hơn
+    if (status === PrescriptionStatus.SKIPPED) {
+      return 200000 + skipCount; // skipCount nhỏ hơn = ưu tiên cao hơn
     }
-
-    // 4. Đang trả kết quả (RETURNING) - ưu tiên cao thứ 4
-    if (status === PrescriptionStatus.RETURNING) {
+    
+    // 4. Chờ kết quả (WAITING_RESULT) - ưu tiên cao thứ 4
+    if (status === PrescriptionStatus.WAITING_RESULT) {
       return 300000;
     }
 
-    // 5. Người già (>75 tuổi) - ưu tiên cao thứ 5
+    // 5. Đang trả kết quả (RETURNING) - ưu tiên cao thứ 5
+    if (status === PrescriptionStatus.RETURNING) {
+      return 400000;
+    }
+
+    // 6. Người già (>75 tuổi) - ưu tiên cao thứ 6
     if (patientAge > 75) {
       priorityScore = 10000000 - patientAge; // Người già hơn ưu tiên hơn
     }
-    // 6. Trẻ em (<6 tuổi) - ưu tiên cao thứ 6
+    // 7. Trẻ em (<6 tuổi) - ưu tiên cao thứ 7
     else if (patientAge < 6) {
       priorityScore = 20000000 - patientAge; // Trẻ em nhỏ hơn ưu tiên hơn
     }
-    // 7. Người khuyết tật - ưu tiên cao thứ 7
+    // 8. Người khuyết tật - ưu tiên cao thứ 8
     else if (isDisabled) {
       priorityScore = 30000000;
     }
-    // 8. Người mang thai - ưu tiên cao thứ 8
+    // 9. Người mang thai - ưu tiên cao thứ 9
     else if (isPregnant) {
       priorityScore = 40000000;
     }
-    // 9. Người có lịch hẹn - ưu tiên cao thứ 9
+    // 10. Người có lịch hẹn - ưu tiên cao thứ 10
     else if (hasAppointment) {
       priorityScore = 50000000;
     }
-    // 10. Người thường - ưu tiên thấp nhất
+    // 11. Người thường - ưu tiên thấp nhất
     else {
       priorityScore = 60000000;
     }
@@ -852,6 +898,7 @@ export class PrescriptionService {
       PrescriptionStatus.WAITING,
       PrescriptionStatus.PREPARING, 
       PrescriptionStatus.SERVING,
+      PrescriptionStatus.SKIPPED,
       PrescriptionStatus.WAITING_RESULT,
       PrescriptionStatus.RETURNING,
     ];
@@ -938,6 +985,7 @@ export class PrescriptionService {
           hasAppointment,
           isOnTime,
           earliestStartedAt: ps.startedAt,
+          minSkipCount: ps.skipCount || 0,
         });
       }
 
@@ -951,6 +999,7 @@ export class PrescriptionService {
         note: ps.note,
         startedAt: ps.startedAt,
         completedAt: ps.completedAt,
+        skipCount: ps.skipCount || 0,
       });
 
       // Cập nhật order nhỏ nhất
@@ -963,6 +1012,11 @@ export class PrescriptionService {
         patient.earliestStartedAt = ps.startedAt;
       }
 
+      // Cập nhật skipCount nhỏ nhất
+      if ((ps.skipCount || 0) < patient.minSkipCount) {
+        patient.minSkipCount = ps.skipCount || 0;
+      }
+
       // Tính toán độ ưu tiên cho từng dịch vụ
       const servicePriority = this.calculateServicePriority(
         ps.status,
@@ -972,6 +1026,7 @@ export class PrescriptionService {
         patient.hasAppointment,
         ps.order,
         ps.startedAt,
+        ps.skipCount || 0,
       );
 
       patient.priorities.push(servicePriority);
@@ -981,20 +1036,30 @@ export class PrescriptionService {
     const patients = Array.from(patientMap.values()).map((patient) => {
       // Lấy trạng thái có độ ưu tiên cao nhất
       const highestPriorityStatus = Math.min(...patient.priorities);
-      const statusMap = {
-        1: 'SERVING',
-        2: 'PREPARING',
-        3: 'WAITING_RESULT',
-        4: 'RETURNING',
-        5: 'WAITING',
-      };
+      
+      // Xác định overallStatus dựa trên priority score
+      let overallStatus: QueuePatientDto['overallStatus'] = 'WAITING';
+      
+      if (highestPriorityStatus === 0) {
+        overallStatus = 'SERVING';
+      } else if (highestPriorityStatus >= 100000 && highestPriorityStatus < 200000) {
+        overallStatus = 'PREPARING';
+      } else if (highestPriorityStatus >= 200000 && highestPriorityStatus < 300000) {
+        overallStatus = 'SKIPPED';
+      } else if (highestPriorityStatus >= 300000 && highestPriorityStatus < 400000) {
+        overallStatus = 'WAITING_RESULT';
+      } else if (highestPriorityStatus >= 400000 && highestPriorityStatus < 500000) {
+        overallStatus = 'RETURNING';
+      } else {
+        overallStatus = 'WAITING';
+      }
 
       return {
         patientProfileId: patient.patientProfileId,
         patientName: patient.patientName,
         prescriptionCode: patient.prescriptionCode,
         services: patient.services.sort((a, b) => a.order - b.order),
-        overallStatus: (statusMap[highestPriorityStatus as keyof typeof statusMap] || 'WAITING') as QueuePatientDto['overallStatus'],
+        overallStatus,
         queueOrder: 0, // Sẽ được cập nhật sau khi sắp xếp
         // Thông tin ưu tiên để sắp xếp
         priorityScore: Math.min(...patient.priorities),
@@ -1004,6 +1069,7 @@ export class PrescriptionService {
         isDisabled: patient.isDisabled,
         hasAppointment: patient.hasAppointment,
         isOnTime: patient.isOnTime,
+        skipCount: patient.minSkipCount,
       };
     });
 
@@ -1038,6 +1104,7 @@ export class PrescriptionService {
       if ('isDisabled' in patient) delete (patient as any).isDisabled;
       if ('hasAppointment' in patient) delete (patient as any).hasAppointment;
       if ('isOnTime' in patient) delete (patient as any).isOnTime;
+      if ('skipCount' in patient) delete (patient as any).skipCount;
     });
 
     return {
@@ -1089,6 +1156,7 @@ export class PrescriptionService {
     const isPregnant = patient.isPregnant || false;
     const hasAppointment = patient.hasAppointment || false;
     const order = patient.queueOrder || 0;
+    const skipCount = patient.skipCount || 0;
 
     return this.calculateServicePriority(
       status as PrescriptionStatus,
@@ -1097,7 +1165,8 @@ export class PrescriptionService {
       isPregnant,
       hasAppointment,
       order,
-      null
+      null,
+      skipCount
     );
   }
 
