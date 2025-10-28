@@ -19,7 +19,10 @@ import { PrescriptionService } from './prescription.service';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
 import { QueueResponseDto } from './dto/queue-item.dto';
-import { StartServicesDto, StartServicesResponseDto } from './dto/start-services.dto';
+import {
+  StartServicesDto,
+  StartServicesResponseDto,
+} from './dto/start-services.dto';
 import { PendingServicesResponseDto } from './dto/pending-services.dto';
 import { PrescriptionServiceManagementService } from '../service/prescription-service-management.service';
 import {
@@ -45,6 +48,14 @@ export class PrescriptionController {
   ) {
     const user = req.user;
     return this.prescriptionService.create(dto, user);
+  }
+  // Lấy danh sách bệnh nhân đang trong hàng chờ cho bác sĩ và kỹ thuật viên
+  @Get('queue')
+  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  async getQueue(
+    @Request() req: { user: JwtUserPayload },
+  ): Promise<QueueResponseDto> {
+    return this.prescriptionService.getQueueForUser(req.user);
   }
 
   @Get(':code')
@@ -81,15 +92,6 @@ export class PrescriptionController {
     );
   }
 
-  // Lấy danh sách bệnh nhân đang trong hàng chờ cho bác sĩ và kỹ thuật viên
-  @Get('queue')
-  @Roles(Role.DOCTOR, Role.TECHNICIAN)
-  async getQueue(
-    @Request() req: { user: JwtUserPayload },
-  ): Promise<QueueResponseDto> {
-    return this.prescriptionService.getQueueForUser(req.user);
-  }
-
   // Chuyển các PrescriptionService từ PENDING sang WAITING và thêm vào queue
   @Post('start-services')
   @Roles(Role.DOCTOR, Role.TECHNICIAN)
@@ -105,7 +107,9 @@ export class PrescriptionController {
   async getPendingServices(
     @Param('prescriptionCode') prescriptionCode: string,
   ): Promise<PendingServicesResponseDto> {
-    return this.prescriptionService.getPendingServicesByPrescriptionCode(prescriptionCode);
+    return this.prescriptionService.getPendingServicesByPrescriptionCode(
+      prescriptionCode,
+    );
   }
 
   // // OpenFDA proxy endpoints for drug lookup
@@ -191,46 +195,52 @@ export class PrescriptionController {
 
   @Post('call-next-patient')
   @Roles(Role.DOCTOR, Role.TECHNICIAN)
-  async callNextPatient(
-    @Request() req: { user: JwtUserPayload },
-  ) {
+  async callNextPatient(@Request() req: { user: JwtUserPayload }) {
     return this.prescriptionService.callNextPatient(req.user);
   }
 
   @Get('queue/status')
   @Roles(Role.DOCTOR, Role.TECHNICIAN)
-  async getQueueStatus(
-    @Request() req: { user: JwtUserPayload },
-  ) {
+  async getQueueStatus(@Request() req: { user: JwtUserPayload }) {
     const queueData = await this.prescriptionService.getQueueForUser(req.user);
-    
+
     // Tìm bệnh nhân đang SERVING và PREPARING
-    const servingPatient = queueData.patients.find(p => p.overallStatus === 'SERVING');
-    const preparingPatient = queueData.patients.find(p => p.overallStatus === 'PREPARING');
-    
+    const servingPatient = queueData.patients.find(
+      (p) => p.overallStatus === 'SERVING',
+    );
+    const preparingPatient = queueData.patients.find(
+      (p) => p.overallStatus === 'PREPARING',
+    );
+
     return {
       totalPatients: queueData.totalCount,
-      servingPatient: servingPatient ? {
-        patientProfileId: servingPatient.patientProfileId,
-        patientName: servingPatient.patientName,
-        prescriptionCode: servingPatient.prescriptionCode,
-        services: servingPatient.services,
-      } : null,
-      preparingPatient: preparingPatient ? {
-        patientProfileId: preparingPatient.patientProfileId,
-        patientName: preparingPatient.patientName,
-        prescriptionCode: preparingPatient.prescriptionCode,
-        services: preparingPatient.services,
-      } : null,
-      waitingPatients: queueData.patients.filter(p => 
-        p.overallStatus === 'WAITING' || p.overallStatus === 'SKIPPED'
-      ).map(p => ({
-        patientProfileId: p.patientProfileId,
-        patientName: p.patientName,
-        prescriptionCode: p.prescriptionCode,
-        overallStatus: p.overallStatus,
-        queueOrder: p.queueOrder,
-      })),
+      servingPatient: servingPatient
+        ? {
+            patientProfileId: servingPatient.patientProfileId,
+            patientName: servingPatient.patientName,
+            prescriptionCode: servingPatient.prescriptionCode,
+            services: servingPatient.services,
+          }
+        : null,
+      preparingPatient: preparingPatient
+        ? {
+            patientProfileId: preparingPatient.patientProfileId,
+            patientName: preparingPatient.patientName,
+            prescriptionCode: preparingPatient.prescriptionCode,
+            services: preparingPatient.services,
+          }
+        : null,
+      waitingPatients: queueData.patients
+        .filter(
+          (p) => p.overallStatus === 'WAITING' || p.overallStatus === 'SKIPPED',
+        )
+        .map((p) => ({
+          patientProfileId: p.patientProfileId,
+          patientName: p.patientName,
+          prescriptionCode: p.prescriptionCode,
+          overallStatus: p.overallStatus,
+          queueOrder: p.queueOrder,
+        })),
     };
   }
 }
