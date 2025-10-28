@@ -39,7 +39,7 @@ async function main() {
       description:
         'Chuyên khoa phẫu thuật điều trị các bệnh lý cần can thiệp ngoại khoa, bao gồm phẫu thuật tổng quát và chuyên sâu.',
       imgUrl:
-        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-surgery.jpg',
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761656623/Screenshot_2025-10-28_at_20.01.45_wuj3yl.png',
     },
     {
       specialtyCode: 'UNGBUOU',
@@ -47,7 +47,7 @@ async function main() {
       description:
         'Chuyên khoa điều trị các bệnh ung thư và khối u, bao gồm hóa trị, xạ trị và phẫu thuật ung bướu.',
       imgUrl:
-        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-oncology.jpg',
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761656623/Screenshot_2025-10-28_at_20.02.48_vxjcef.png',
     },
     {
       specialtyCode: 'TRUYENNHIEM',
@@ -55,7 +55,7 @@ async function main() {
       description:
         'Chuyên khoa điều trị các bệnh truyền nhiễm, bao gồm các bệnh do vi khuẩn, virus, ký sinh trùng và nấm.',
       imgUrl:
-        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-infectious-disease.jpg',
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761656623/Screenshot_2025-10-28_at_20.02.48_vxjcef.png',
     },
     {
       specialtyCode: 'NHIKHOA',
@@ -71,7 +71,7 @@ async function main() {
       description:
         'Chuyên khoa chăm sóc sức khỏe phụ nữ, bao gồm điều trị các bệnh lý về cơ quan sinh dục nữ.',
       imgUrl:
-        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-gynecology.jpg',
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043352/tiet-nieu_oitmi1.png',
     },
     {
       specialtyCode: 'DALIEU',
@@ -87,7 +87,7 @@ async function main() {
       description:
         'Chuyên khoa chăm sóc phụ nữ mang thai, sinh con và hậu sản, bao gồm theo dõi thai kỳ và đỡ đẻ.',
       imgUrl:
-        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-obstetrics.jpg',
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761656623/Screenshot_2025-10-28_at_20.00.44_em6non.png',
     },
     {
       specialtyCode: 'TAIMUIHONG',
@@ -111,7 +111,7 @@ async function main() {
       description:
         'Chuyên khoa điều trị các vết bỏng do nhiệt, hóa chất, điện và các nguyên nhân khác.',
       imgUrl:
-        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-burn.jpg',
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761656932/Screenshot_2025-10-28_at_20.08.44_nge5mo.png',
     },
     {
       specialtyCode: 'HUYETHOCTRUYENMAU',
@@ -119,7 +119,7 @@ async function main() {
       description:
         'Chuyên khoa điều trị các bệnh lý về máu, cơ quan tạo máu và thực hiện truyền máu.',
       imgUrl:
-        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-hematology.jpg',
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761656877/Screenshot_2025-10-28_at_20.07.50_fqislb.png',
     },
     {
       specialtyCode: 'TAMTHAN',
@@ -127,7 +127,7 @@ async function main() {
       description:
         'Chuyên khoa điều trị các rối loạn tâm thần, hành vi và các vấn đề sức khỏe tâm lý.',
       imgUrl:
-        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-psychiatry.jpg',
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761656623/Screenshot_2025-10-28_at_20.03.30_myq5cc.png',
     },
     {
       specialtyCode: 'NGOAITRUCHUNG',
@@ -135,7 +135,7 @@ async function main() {
       description:
         'Dịch vụ khám ngoại trú tổng quát cho các bệnh lý thông thường và chăm sóc sức khỏe định kỳ.',
       imgUrl:
-        'https://res.cloudinary.com/dxxsudprj/image/upload/v1733839978/specialty-general-outpatient.jpg',
+        'https://res.cloudinary.com/dxxsudprj/image/upload/v1761043352/ngoai-khoa_w3ts4p.png',
     },
     {
       specialtyCode: 'TIMMACH',
@@ -4952,6 +4952,11 @@ async function main() {
       if (booth) boothId = booth.id;
     }
 
+    // Nếu không có booth phù hợp, bỏ qua không tạo work session
+    if (!boothId) {
+      continue;
+    }
+
     const slots = [
       { start: atTime(today, 8, 0), end: atTime(today, 12, 0) },
       { start: atTime(today, 13, 30), end: atTime(today, 17, 30) },
@@ -4964,9 +4969,9 @@ async function main() {
       });
       if (existed) continue;
 
-      await prisma.workSession.create({
+      const createdWorkSession = await prisma.workSession.create({
         data: {
-          boothId: boothId ?? null,
+          boothId: boothId,
           doctorId: d.id,
           startTime: s.start,
           endTime: s.end,
@@ -4974,6 +4979,29 @@ async function main() {
           status: 'APPROVED',
         },
       });
+
+      // Gán các service trùng chuyên khoa cho work session vừa tạo
+      const specialtyServices = await prisma.service.findMany({
+        where: { specialtyId: d.specialtyId },
+        orderBy: { name: 'asc' },
+        take: 3,
+      });
+
+      for (const svc of specialtyServices) {
+        await prisma.workSessionService.upsert({
+          where: {
+            workSessionId_serviceId: {
+              workSessionId: createdWorkSession.id,
+              serviceId: svc.id,
+            },
+          },
+          create: {
+            workSessionId: createdWorkSession.id,
+            serviceId: svc.id,
+          },
+          update: {},
+        });
+      }
     }
   }
 
