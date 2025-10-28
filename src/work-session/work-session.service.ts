@@ -513,6 +513,83 @@ export class WorkSessionService {
   }
 
   /**
+   * Lấy các phiên làm việc trong ngày hiện tại cho user với nhiều trạng thái
+   */
+  async getTodayWorkSessionsByUser(
+    userType: 'DOCTOR' | 'TECHNICIAN',
+    userId: string,
+    statuses: WorkSessionStatus[] = [
+      WorkSessionStatus.APPROVED,
+      WorkSessionStatus.IN_PROGRESS,
+      WorkSessionStatus.COMPLETED,
+    ],
+  ) {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const whereClause: any = {
+      startTime: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+      status: {
+        in: statuses,
+      },
+      ...(userType === 'DOCTOR' ? { doctorId: userId } : { technicianId: userId }),
+    };
+
+    return this.prisma.workSession.findMany({
+      where: whereClause,
+      include: {
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        technician: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        booth: {
+          include: {
+            room: {
+              include: {
+                specialty: true,
+              },
+            },
+          },
+        },
+        services: {
+          include: {
+            service: true,
+          },
+        },
+      },
+      orderBy: {
+        startTime: 'asc',
+      },
+    });
+  }
+
+  /**
    * Cập nhật work session
    */
   async updateWorkSession(
