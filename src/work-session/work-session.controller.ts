@@ -93,6 +93,24 @@ export class WorkSessionController {
   }
 
   /**
+   * Lấy các phiên làm việc trong ngày hiện tại của user (APPROVED, IN_PROGRESS, COMPLETED)
+   */
+  @Get('today/my')
+  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  async getTodayMyWorkSessions(@Req() req: any) {
+    const userRole = req.user?.role as Role;
+    const authId = req.user?.sub as string;
+
+    const userInfo = await this.workSessionService["getUserInfo"](authId, userRole); // reuse resolver
+    const userType = userInfo.userType; // 'DOCTOR' | 'TECHNICIAN'
+
+    return this.workSessionService.getTodayWorkSessionsByUser(
+      userType,
+      userInfo.id,
+    );
+  }
+
+  /**
    * Lấy work sessions của một user cụ thể (chỉ ADMIN)
    */
   @Get('user/:userId')
