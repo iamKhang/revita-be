@@ -1,0 +1,113 @@
+@startuml take-number-activity
+title Luồng hoạt động: Bốc số khám bệnh (Take Number)
+
+skinparam swimlane {
+  BorderColor black
+  BorderThickness 2
+}
+
+skinparam PartitionBorderColor black
+skinparam PartitionBorderThickness 2
+
+|Bệnh nhân|
+start
+:Yêu cầu bốc số khám bệnh;
+
+if (Cách thức cung cấp\nthông tin?) then (Quét mã hồ sơ)
+  :Cung cấp\npatientProfileCode;
+elseif (Quét mã lịch hẹn) then
+  :Cung cấp\nappointmentCode;
+else (Nhập thủ công)
+  :Cung cấp thông tin:\n- patientName\n- birthYear\n- isPregnant\n- isDisabled;
+endif
+
+|Hệ thống|
+:Nhận request\n(TakeNumberDto);
+
+if (Có patientProfileCode?) then (yes)
+  :Truy vấn PatientProfile\ntừ database;
+  
+  if (Tìm thấy hồ sơ?) then (yes)
+    :Lấy thông tin:\n- name, age, gender\n- isPregnant, isDisabled\n- phone, address;
+  else (no)
+    |Bệnh nhân|
+    #pink:Hiển thị lỗi:\n"Không tìm thấy hồ sơ\nbệnh nhân";
+    :Xác nhận;
+    stop
+  endif
+  
+elseif (Có appointmentCode?) then (yes)
+  |Hệ thống|
+  :Truy vấn Appointment\nvà PatientProfile;
+  
+  if (Tìm thấy lịch hẹn?) then (yes)
+    :Lấy thông tin bệnh nhân\nvà chi tiết lịch hẹn;
+    :Đánh dấu\nhasAppointment = true;
+  else (no)
+    |Bệnh nhân|
+    #pink:Hiển thị lỗi:\n"Không tìm thấy\nlịch hẹn";
+    :Xác nhận;
+    stop
+  endif
+  
+else (Nhập thủ công)
+  |Hệ thống|
+  if (Có đủ thông tin:\npatientName?) then (yes)
+    :Tạo thông tin\nbệnh nhân tạm:\n- Tính age từ birthYear\n- gender = 'UNKNOWN'\n- isPregnant, isDisabled\ntừ request;
+  else (no)
+    |Bệnh nhân|
+    #pink:Hiển thị lỗi:\n"Thiếu thông tin\nbệnh nhân";
+    :Xác nhận;
+    stop
+  endif
+endif
+
+|Hệ thống|
+:Xác định cờ ưu tiên:\n- isPregnant\n- isDisabled;
+
+if (Có lịch hẹn?) then (yes)
+  :Tính isOnTime\n(trong khoảng ±20 phút);
+else (no)
+  :isOnTime = false;
+endif
+
+:Lấy danh sách\nquầy tiếp nhận\nđang ACTIVE;
+
+if (Có quầy tiếp nhận\nhoạt động?) then (no)
+  |Bệnh nhân|
+  #pink:Hiển thị lỗi:\n"Không có quầy tiếp nhận\nđang hoạt động";
+  :Xác nhận;
+  stop
+else (yes)
+  |Hệ thống|
+  :Đếm số người đợi\nmỗi quầy tiếp nhận;
+  :Chọn quầy tiếp nhận\ncó ít người nhất;
+endif
+
+:Tính queuePriority\ndựa trên:\n- Tuổi (già/trẻ em)\n- Khuyết tật\n- Mang thai\n- Có lịch hẹn\n- Thứ tự đến;
+
+:Lấy sequence từ Redis\ncho quầy tiếp nhận;
+
+:Tạo ticket:\n- ticketId\n- queueNumber\n- status = WAITING\n- callCount = 0\n- assignedAt;
+
+fork
+  :Lưu vào\nRedis Stream;
+fork again
+  :Thêm vào\nQueue ZSET\ncủa quầy tiếp nhận;
+fork again
+  :WebSocket:\nThông báo ticket mới\ncho quầy tiếp nhận;
+fork again
+  :WebSocket:\nCập nhật vị trí queue\ncho các bệnh nhân\nbị đẩy lùi;
+end fork
+
+:Tạo response với\nthông tin đầy đủ:\n- Số thứ tự\n- Quầy tiếp nhận\n- Thời gian\n- Thông tin ưu tiên;
+
+|Bệnh nhân|
+:Nhận thông tin ticket:\n- Số thứ tự (queueNumber)\n- Quầy tiếp nhận\n- Mã ticket\n- Thời gian bốc số;
+
+:Xác nhận thành công;
+
+stop
+
+@enduml
+

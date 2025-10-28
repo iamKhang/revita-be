@@ -227,6 +227,8 @@ model Specialty {
   id          String      @id @default(uuid()) @map("id")
   specialtyCode String      @unique @map("specialty_code")
   name        String
+  imgUrl      String?     @map("img_url")
+  description String?     @map("description")
   clinicRooms ClinicRoom[]
   appointments Appointment[]
   templates   Template[]

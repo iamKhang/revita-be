@@ -11,8 +11,6 @@ services:
       - PORT=3000
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/revita-drug}
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/revita?schema=public}
-    deploy:
-      replicas: 2
     expose:
       - "3000"
     depends_on:
@@ -20,15 +18,6 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
-
-  nginx:
-    image: nginx:1.25-alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - app
 
   mongo:
     image: mongo:6
@@ -54,5 +43,3 @@ services:
 volumes:
   mongo_data:
   postgres_data:
-
-

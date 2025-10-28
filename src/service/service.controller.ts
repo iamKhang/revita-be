@@ -23,6 +23,7 @@ import { ServiceService } from './service.service';
 import { PrescriptionServiceManagementService } from './prescription-service-management.service';
 import {
   SearchServiceDto,
+  AdvancedSearchDto,
   GetAllServicesDto,
   ScanPrescriptionDto,
   UpdateServiceStatusDto,
@@ -70,6 +71,123 @@ export class ServiceController {
         {
           success: false,
           message: 'Có lỗi xảy ra khi tìm kiếm dịch vụ',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('advanced-search')
+  @ApiOperation({
+    summary: 'Tìm kiếm nâng cao dịch vụ và gói dịch vụ',
+    description: `
+Tìm kiếm với thứ tự ưu tiên:
+1. Dịch vụ có tên chứa từ khóa
+2. Gói dịch vụ có tên chứa từ khóa
+3. Gói dịch vụ có dịch vụ chứa từ khóa
+4. Dịch vụ/Gói có mô tả chứa từ khóa
+
+Hỗ trợ filter:
+- requiresDoctor: Lọc dịch vụ/gói có yêu cầu bác sĩ
+- isActive: Lọc dịch vụ/gói đang hoạt động (mặc định: true)
+    `,
+  })
+  @ApiQuery({
+    name: 'keyword',
+    description: 'Từ khóa tìm kiếm',
+    required: true,
+    example: 'xét nghiệm',
+  })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Số lượng kết quả trả về',
+    required: false,
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'offset',
+    description: 'Vị trí bắt đầu',
+    required: false,
+    example: 0,
+  })
+  @ApiQuery({
+    name: 'requiresDoctor',
+    description: 'Lọc theo yêu cầu bác sĩ (true/false)',
+    required: false,
+    type: Boolean,
+  })
+  @ApiQuery({
+    name: 'isActive',
+    description: 'Lọc theo trạng thái hoạt động (true/false, mặc định: true)',
+    required: false,
+    type: Boolean,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tìm kiếm thành công',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            results: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  type: { type: 'string', enum: ['service', 'package'] },
+                  priority: { type: 'number' },
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  price: { type: 'number' },
+                  description: { type: 'string' },
+                  requiresDoctor: { type: 'boolean' },
+                  isActive: { type: 'boolean' },
+                },
+              },
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                limit: { type: 'number' },
+                offset: { type: 'number' },
+                hasMore: { type: 'boolean' },
+              },
+            },
+            keyword: { type: 'string' },
+          },
+        },
+      },
+    },
+  })
+  async advancedSearch(@Query() searchDto: AdvancedSearchDto) {
+    try {
+      const result = await this.serviceService.advancedSearch(
+        searchDto.keyword,
+        searchDto.limit,
+        searchDto.offset,
+        searchDto.requiresDoctor,
+        searchDto.isActive,
+      );
+      return {
+        success: true,
+        message: 'Tìm kiếm nâng cao thành công',
+        data: result,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Advanced search error: ${error.message}`,
+        error.stack,
+      );
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi tìm kiếm',
           error: error.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR,

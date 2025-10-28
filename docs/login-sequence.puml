@@ -6,66 +6,60 @@ actor "Người Dùng" as U
 boundary "Giao Diện" as F
 control "LoginController" as C
 control "LoginService" as L
-entity "Auth" as A
+entity "Account" as A
 entity "Patient" as P
 entity "Doctor" as D
 entity "Receptionist" as R
 entity "Admin" as AD
-database "Cơ Sở Dữ Liệu" as DB
 
 == Đăng nhập thông thường ==
 
 U -> F: Nhập thông tin đăng nhập
 F -> C: POST /login
+C -> C: validateLoginDto(loginDto)
 C -> L: login(loginDto)
 L -> L: validateUser(phoneOrEmail, password)
-L -> A: Tìm kiếm user theo phone/email
-A -> DB: Truy vấn auth table
-DB --> A: Thông tin auth
-A --> L: Trả về auth record
+L -> A: findByPhoneOrEmail(phoneOrEmail)
+A -> A: prisma.account.findFirst()
+A --> L: Trả về account record
 
-L -> L: So sánh mật khẩu với bcrypt
+L -> L: bcrypt.compare(password, account.password)
 alt Mật khẩu đúng
-  L -> A: Lấy thông tin user đầy đủ
-  A -> DB: Truy vấn thông tin user
-  DB --> A: Thông tin user
+  L -> A: getUserById(account.userId)
+  A -> A: prisma.account.findUnique()
   A --> L: Trả về thông tin user
   
-  L -> L: Tạo JWT payload
-  L -> L: Thêm thông tin theo role
+  L -> L: createJwtPayload(user)
+  L -> L: addRoleSpecificInfo(user)
   
   alt Role là PATIENT
-    L -> P: Lấy thông tin patient
-    P -> DB: Truy vấn patient table
-    DB --> P: Thông tin patient
+    L -> P: getPatientByUserId(user.id)
+    P -> P: prisma.patient.findUnique()
     P --> L: Trả về patient info
     
   else Role là DOCTOR
-    L -> D: Lấy thông tin doctor
-    D -> DB: Truy vấn doctor table
-    DB --> D: Thông tin doctor
+    L -> D: getDoctorByUserId(user.id)
+    D -> D: prisma.doctor.findUnique()
     D --> L: Trả về doctor info
     
   else Role là RECEPTIONIST
-    L -> R: Lấy thông tin receptionist
-    R -> DB: Truy vấn receptionist table
-    DB --> R: Thông tin receptionist
+    L -> R: getReceptionistByUserId(user.id)
+    R -> R: prisma.receptionist.findUnique()
     R --> L: Trả về receptionist info
     
   else Role là ADMIN
-    L -> AD: Lấy thông tin admin
-    AD -> DB: Truy vấn admin table
-    DB --> AD: Thông tin admin
+    L -> AD: getAdminByUserId(user.id)
+    AD -> AD: prisma.admin.findUnique()
     AD --> L: Trả về admin info
   end
   
-  L -> L: Tạo access token (15 ngày)
+  L -> L: jwt.sign(payload, secret, {expiresIn: '15d'})
   L --> C: Trả về token và user info
   C --> F: Trả về kết quả đăng nhập
   F --> U: Hiển thị thông báo thành công và chuyển trang
   
 else Mật khẩu sai
-  L --> C: Trả về lỗi xác thực
+  L --> C: throw new UnauthorizedException()
   C --> F: Thông báo lỗi
   F --> U: Hiển thị thông báo lỗi đăng nhập
 end

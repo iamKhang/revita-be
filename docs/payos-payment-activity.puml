@@ -1,0 +1,185 @@
+@startuml payosPaymentActivity
+
+skinparam swimlane {
+  BorderColor #000000
+  BorderThickness 1
+}
+
+skinparam PartitionBorderColor #000000
+
+|Bệnh nhân|
+start
+
+|Thu ngân|
+:Yêu cầu bệnh nhân đưa phiếu chỉ định;
+
+|Bệnh nhân|
+:Đưa phiếu chỉ định cho thu ngân;
+
+|Thu ngân|
+:Quét mã phiếu chỉ định trên UI;
+
+|Hệ thống|
+:Nhận yêu cầu scan\nPOST /invoice-payments/scan;
+:Truy vấn prescription từ DB\nbao gồm patientProfile,\ndoctor, services;
+
+if (Kiểm tra prescription có hợp lệ?) then (không)
+  |Thu ngân|
+  :Hiển thị lỗi\nphiếu không tồn tại\nhoặc đã hủy;
+  stop
+else (có)
+  |Hệ thống|
+  :Trả về danh sách dịch vụ\nvà giá từng dịch vụ;
+  
+  |Thu ngân|
+  :Hiển thị danh sách\ndịch vụ và giá;
+  
+  repeat
+    :Tích/bỏ tích dịch vụ\ntrên giao diện;
+    
+    |Hệ thống|
+    :Nhận yêu cầu preview\nPOST /invoice-payments/preview;
+    :Lọc các dịch vụ được chọn;
+    :Tính tổng tiền\ntotalAmount;
+    :Trả về preview\nvới totalAmount;
+    
+    |Thu ngân|
+    :Hiển thị tổng tiền;
+  repeat while (Thu ngân chọn thêm/bỏ dịch vụ?) is (có) not (không)
+  
+  |Thu ngân|
+  :Chọn phương thức TRANSFER\nvà nhấn Tạo hóa đơn;
+  
+  |Hệ thống|
+  :Nhận yêu cầu create\nPOST /invoice-payments/create\npaymentMethod: TRANSFER;
+  :Tạo preview để validate;
+  :Kiểm tra có nhân sự\ncho các dịch vụ;
+  
+  if (Có nhân sự khả dụng?) then (không)
+    |Thu ngân|
+    :Hiển thị lỗi\nchưa có nhân sự phục vụ;
+    stop
+  else (có)
+    |Hệ thống|
+    :Tạo mã hóa đơn invoiceCode;
+    :BEGIN TRANSACTION;
+    :Tạo invoice trong DB\nisPaid = false\npaymentStatus = PENDING;
+    :Tạo invoiceDetails\ncho các dịch vụ được chọn;
+    :Tạo orderCode số duy nhất;
+    :Gọi PayOS createPaymentLink\nvới orderCode, amount,\nmetadata invoiceCode;
+    :Nhận paymentUrl và qrCode\ntừ PayOS;
+    :Tạo PaymentTransaction\nstatus PENDING\nlưu orderCode, paymentUrl,\nqrCode, expiredAt;
+    :COMMIT TRANSACTION;
+    :Trả về invoiceCode,\npaymentUrl, qrCode;
+    
+    |Thu ngân|
+    :Hiển thị mã QR\ntrên màn hình;
+    :Hướng dẫn bệnh nhân\nquét mã để thanh toán;
+    
+    |Bệnh nhân|
+    :Lấy điện thoại ra;
+    :Mở app ngân hàng\nhoặc ví điện tử;
+    :Quét mã QR trên màn hình;
+    :Xác nhận thông tin\nthanh toán;
+    :Nhập PIN/xác thực\nsinh trắc học;
+    :Xác nhận thanh toán;
+    
+    note right
+      Bệnh nhân thanh toán
+      trên app của mình,
+      không qua hệ thống
+    end note
+    
+    |Hệ thống|
+    :PayOS nhận thanh toán\ntừ ngân hàng/ví;
+    :PayOS gọi webhook\nPOST /invoice-payments/payos/webhook\nvới signature, payload;
+    :Nhận webhook từ PayOS;
+    :Parse payload JSON;
+    :Lấy signature từ header\nhoặc payload;
+    
+    if (Có signature?) then (không)
+      :Log warning\ntrả về success;
+      stop
+    else (có)
+      |Hệ thống|
+      :Verify signature với PayOS;
+      
+      if (Signature hợp lệ?) then (không)
+        :Trả về lỗi\nInvalid signature;
+        stop
+      else (có)
+        |Hệ thống|
+        :Lấy transactionId\nvà orderCode từ payload;
+        :Tìm PaymentTransaction\ntrong DB theo\ntransactionId hoặc orderCode;
+        
+        if (Tìm thấy transaction?) then (không)
+          :Thử fallback lookup\ntheo amount và time window;
+          
+          if (Tìm thấy?) then (không)
+            :Log warning\ntrả về success;
+            stop
+          endif
+        endif
+        
+        |Hệ thống|
+        :Lấy status từ payload;
+        :Map status sang\nPaymentTransactionStatus;
+        :BEGIN TRANSACTION;
+        :UPDATE PaymentTransaction\nstatus, paidAt,\nisVerified = true,\nlastWebhookPayload;
+        
+        if (Status = SUCCEEDED?) then (có)
+          |Hệ thống|
+          if (Invoice đã isPaid?) then (có)
+            :Gửi WebSocket notification\nđến Thu ngân UI;
+            :COMMIT TRANSACTION;
+            :Trả về success;
+            
+            |Thu ngân|
+            :Nhận notification\nhiển thị thanh toán\nthành công;
+            :In hóa đơn cho bệnh nhân;
+            :Trao hóa đơn;
+            :Hướng dẫn đến phòng khám;
+            stop
+          else (chưa)
+            |Hệ thống|
+            :UPDATE invoice\nset isPaid = true,\npaymentStatus = PAID,\namountPaid, paidAt;
+            :UPDATE prescription\nstatus = PAID;
+            :Tạo routing assignments\ncho các dịch vụ;
+            :COMMIT TRANSACTION;
+            :Gửi WebSocket notification\nđến Thu ngân UI\nvà các phòng khám;
+            :Trả về success\nvới invoiceCode;
+            
+            |Thu ngân|
+            :Nhận notification\nhiển thị thanh toán\nthành công;
+            :In hóa đơn cho bệnh nhân;
+            
+            |Bệnh nhân|
+            :Nhận hóa đơn;
+            
+            |Thu ngân|
+            :Hướng dẫn bệnh nhân\nđến phòng khám theo\nrouting assignment;
+            
+            |Bệnh nhân|
+            stop
+          endif
+        else (không)
+          |Hệ thống|
+          :COMMIT TRANSACTION;
+          :Trả về success\nvới status;
+          
+          |Thu ngân|
+          if (Status = CANCELLED/FAILED?) then (có)
+            :Hiển thị thanh toán\nthất bại hoặc hủy;
+            :Hỏi bệnh nhân thử lại\nhoặc chọn phương thức khác;
+            stop
+          else (không)
+            :Tiếp tục chờ thanh toán;
+          endif
+        endif
+      endif
+    endif
+  endif
+endif
+
+@enduml
+

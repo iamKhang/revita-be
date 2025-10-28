@@ -103,7 +103,7 @@ export class AdminController {
       phone,
       role,
       // Doctor specific fields
-      degrees,
+      // degrees,
       yearsExperience,
       workHistory,
       description,
@@ -167,7 +167,9 @@ export class AdminController {
     switch (role) {
       case Role.DOCTOR: {
         if (!specialtyId) {
-          throw new BadRequestException('Missing required field: specialtyId for DOCTOR');
+          throw new BadRequestException(
+            'Missing required field: specialtyId for DOCTOR',
+          );
         }
         const doctorCode = this.codeGenerator.generateDoctorCode(name);
         roleRecord = await this.prisma.doctor.create({
@@ -203,7 +205,8 @@ export class AdminController {
       }
 
       case Role.RECEPTIONIST: {
-        const receptionistCode = this.codeGenerator.generateReceptionistCode(name);
+        const receptionistCode =
+          this.codeGenerator.generateReceptionistCode(name);
         roleRecord = await this.prisma.receptionist.create({
           data: {
             id: auth.id,
@@ -306,7 +309,8 @@ export class AdminController {
         if (yearsExperience) doctorUpdateData.yearsExperience = yearsExperience;
         if (workHistory) doctorUpdateData.workHistory = workHistory;
         if (description) doctorUpdateData.description = description;
-        if (specialtyId) doctorUpdateData.specialty = { connect: { id: specialtyId } };
+        if (specialtyId)
+          doctorUpdateData.specialty = { connect: { id: specialtyId } };
 
         if (Object.keys(doctorUpdateData).length > 0) {
           roleRecord = await this.prisma.doctor.update({
@@ -371,11 +375,11 @@ export class AdminController {
                 some: {
                   service: {
                     appointments: {
-                      some: { doctorId: doctorId }
-                    }
-                  }
-                }
-              }
+                      some: { doctorId: doctorId },
+                    },
+                  },
+                },
+              },
             },
           });
 
@@ -634,7 +638,10 @@ export class AdminController {
     const [total, data] = await this.prisma.$transaction([
       this.prisma.specialty.count(),
       this.prisma.specialty.findMany({
-        include: { clinicRooms: true, templates: true },
+        include: {
+          clinicRooms: true,
+          templates: true,
+        },
         orderBy: { name: 'asc' },
         skip,
         take: limitNum,

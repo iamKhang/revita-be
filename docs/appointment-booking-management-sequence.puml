@@ -9,27 +9,26 @@ control "WorkSessionService" as S
 entity "Lịch Làm Việc" as WS
 entity "Bác Sĩ" as DOC
 entity "Dịch Vụ" as SV
-database "Cơ Sở Dữ Liệu" as DB
 
 == Đăng lịch làm việc mới ==
 
 D -> F: Đăng lịch làm việc mới
 F -> C: POST /work-session/create
+C -> C: validateCreateWorkSessionDto(dto)
 C -> S: createWorkSession(createWorkSessionDto, user)
-S -> WS: Tạo work session entity
-WS -> DB: Kiểm tra lịch trùng lặp
-DB --> WS: Kết quả kiểm tra trùng lặp
+S -> WS: validateWorkSessionData(data)
+WS -> WS: checkDuplicateSchedule(data)
+WS -> WS: prisma.workSession.findFirst()
 
 alt Không có trùng lặp
-  WS -> DB: Lưu work session vào database
-  DB --> WS: Xác nhận lưu thành công
+  WS -> WS: prisma.workSession.create()
   WS --> S: Trả về work session mới
   S --> C: Trả về thông tin lịch làm việc
   C --> F: Trả về kết quả đăng lịch
   F --> D: Thông báo đăng lịch thành công
   
 else Có trùng lặp
-  WS --> S: Trả về lỗi trùng lặp
+  WS --> S: throw new ConflictException()
   S --> C: Trả về lỗi
   C --> F: Thông báo lỗi
   F --> D: Thông báo lịch trùng lặp, chỉnh sửa thời gian
@@ -39,10 +38,10 @@ end
 
 D -> F: Xem lịch làm việc đã đăng
 F -> C: GET /work-session/doctor
+C -> C: validateRequest()
 C -> S: getDoctorWorkSessions(user)
-S -> WS: Truy vấn work sessions theo bác sĩ
-WS -> DB: Lấy danh sách lịch làm việc
-DB --> WS: Danh sách work sessions
+S -> WS: findByDoctorId(user.id)
+WS -> WS: prisma.workSession.findMany()
 WS --> S: Trả về danh sách lịch làm việc
 S --> C: Trả về danh sách lịch làm việc
 C --> F: Danh sách lịch làm việc
@@ -52,21 +51,23 @@ F --> D: Hiển thị lịch làm việc đã đăng
 
 D -> F: Cập nhật lịch làm việc
 F -> C: PUT /work-session/update/:id
+C -> C: validateId(id)
+C -> C: validateUpdateWorkSessionDto(dto)
 C -> S: updateWorkSession(id, updateWorkSessionDto, user)
-S -> WS: Cập nhật thông tin work session
-WS -> DB: Kiểm tra lịch đã có bệnh nhân đặt
-DB --> WS: Kết quả kiểm tra
+S -> WS: checkWorkSessionExists(id)
+WS -> WS: prisma.workSession.findUnique()
+WS -> WS: checkHasAppointments(id)
+WS -> WS: prisma.appointment.findFirst()
 
 alt Chưa có bệnh nhân đặt
-  WS -> DB: Cập nhật work session
-  DB --> WS: Xác nhận cập nhật thành công
+  WS -> WS: prisma.workSession.update()
   WS --> S: Trả về work session đã cập nhật
   S --> C: Trả về thông tin lịch làm việc
   C --> F: Thông tin lịch làm việc đã cập nhật
   F --> D: Thông báo cập nhật thành công
   
 else Đã có bệnh nhân đặt
-  WS --> S: Trả về lỗi không thể chỉnh sửa
+  WS --> S: throw new BadRequestException()
   S --> C: Trả về lỗi
   C --> F: Thông báo lỗi
   F --> D: Thông báo không thể chỉnh sửa, liên hệ bệnh nhân
@@ -76,21 +77,22 @@ end
 
 D -> F: Hủy lịch làm việc
 F -> C: DELETE /work-session/cancel/:id
+C -> C: validateId(id)
 C -> S: cancelWorkSession(id, user)
-S -> WS: Cập nhật trạng thái work session
-WS -> DB: Kiểm tra lịch đã có bệnh nhân đặt
-DB --> WS: Kết quả kiểm tra
+S -> WS: checkWorkSessionExists(id)
+WS -> WS: prisma.workSession.findUnique()
+WS -> WS: checkHasAppointments(id)
+WS -> WS: prisma.appointment.findFirst()
 
 alt Chưa có bệnh nhân đặt
-  WS -> DB: Cập nhật trạng thái thành cancelled
-  DB --> WS: Xác nhận cập nhật thành công
+  WS -> WS: prisma.workSession.update({status: 'cancelled'})
   WS --> S: Trả về work session đã hủy
   S --> C: Trả về kết quả hủy lịch
   C --> F: Kết quả hủy lịch làm việc
   F --> D: Thông báo hủy lịch thành công
   
 else Đã có bệnh nhân đặt
-  WS --> S: Trả về lỗi không thể hủy
+  WS --> S: throw new BadRequestException()
   S --> C: Trả về lỗi
   C --> F: Thông báo lỗi
   F --> D: Thông báo không thể hủy, liên hệ bệnh nhân trước

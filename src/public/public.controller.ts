@@ -49,7 +49,7 @@ export class PublicController {
             workHistory: true,
             description: true,
             specialty: {
-              select: { id: true, specialtyCode: true, name: true },
+              select: { id: true, specialtyCode: true, name: true, description: true, imgUrl: true },
             },
           },
         },
@@ -70,6 +70,8 @@ export class PublicController {
         id: true,
         specialtyCode: true,
         name: true,
+        imgUrl: true,
+        description: true,
       },
       orderBy: { name: 'asc' },
     });

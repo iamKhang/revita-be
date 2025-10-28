@@ -1,0 +1,152 @@
+@startuml advancedSearchSequence
+
+actor "Người dùng" as User
+
+boundary "Search UI" as UI
+control "ServiceController" as Controller
+entity "ServiceService" as Service
+entity "PrismaService" as Prisma
+database "PostgreSQL" as DB
+
+User -> UI: Nhập từ khóa\nvào ô tìm kiếm
+activate UI
+
+UI --> User: Hiển thị filter options:\nYêu cầu bác sĩ?\nĐang hoạt động?
+
+User -> UI: Chọn filter (tùy chọn)
+
+UI -> UI: Validate input\nđộ dài từ khóa
+
+User -> UI: Nhấn Tìm kiếm
+
+UI -> Controller: GET /services/advanced-search\nkeyword, limit, offset,\nrequiresDoctor, isActive
+activate Controller
+
+Controller -> Service: advancedSearch\nkeyword, limit, offset,\nrequiresDoctor, isActive
+activate Service
+
+Service -> Service: Trim và chuẩn hóa\nkeyword
+
+alt Keyword rỗng
+    Service --> Controller: Return empty results
+    deactivate Service
+    
+    Controller --> UI: 200 OK\nempty results
+    deactivate Controller
+    
+    UI --> User: Hiển thị không có\nkết quả
+    deactivate UI
+else Keyword hợp lệ
+    Service -> Service: Build commonServiceFilter\nwith name ILIKE keyword
+
+    Service -> Service: Build commonPackageFilter
+
+    alt isActive được truyền
+        Service -> Service: Apply isActive filter\nto both filters
+    else isActive không truyền
+        Service -> Service: Set default\nisActive true
+    end
+
+    alt requiresDoctor được truyền
+        Service -> Service: Apply requiresDoctor filter\nto both filters
+    end
+
+    note right of Service
+        Thực hiện 5 queries với
+        filters đã áp dụng
+    end note
+
+    Service -> Prisma: findMany services\nWHERE commonServiceFilter\nname ILIKE keyword\nisActive filter\nrequiresDoctor filter
+    activate Prisma
+
+    Prisma -> DB: SELECT service\nWHERE name ILIKE keyword\nAND isActive filter\nAND requiresDoctor filter\nINCLUDE category, specialty
+    activate DB
+    DB --> Prisma: Services priority 1
+    deactivate DB
+
+    Prisma --> Service: servicesWithNameMatch
+    deactivate Prisma
+
+    Service -> Prisma: findMany packages\nWHERE commonPackageFilter\nname ILIKE keyword\nisActive filter\nrequiresDoctor filter
+    activate Prisma
+
+    Prisma -> DB: SELECT package\nWHERE name ILIKE keyword\nAND isActive filter\nAND requiresDoctor filter\nINCLUDE category, specialty, items
+    activate DB
+    DB --> Prisma: Packages priority 2
+    deactivate DB
+
+    Prisma --> Service: packagesWithNameMatch
+    deactivate Prisma
+
+    Service -> Prisma: findMany packages\nWHERE items.service.name ILIKE\nAND NOT name ILIKE\nAND filters
+    activate Prisma
+
+    Prisma -> DB: SELECT package\nWHERE EXISTS items\nWITH service.name ILIKE keyword\nAND NOT name ILIKE keyword\nAND isActive filter\nAND requiresDoctor filter\nINCLUDE category, specialty, items
+    activate DB
+    DB --> Prisma: Packages priority 3
+    deactivate DB
+
+    Prisma --> Service: packagesWithServiceMatch
+    deactivate Prisma
+
+    Service -> Prisma: findMany services\nWHERE description ILIKE\nAND NOT name ILIKE\nAND filters
+    activate Prisma
+
+    Prisma -> DB: SELECT service\nWHERE description ILIKE keyword\nAND NOT name ILIKE keyword\nAND isActive filter\nAND requiresDoctor filter\nINCLUDE category, specialty
+    activate DB
+    DB --> Prisma: Services priority 4
+    deactivate DB
+
+    Prisma --> Service: servicesWithDescMatch
+    deactivate Prisma
+
+    Service -> Prisma: findMany packages\nWHERE description ILIKE\nAND NOT (name OR items)\nAND filters
+    activate Prisma
+
+    Prisma -> DB: SELECT package\nWHERE description ILIKE keyword\nAND NOT name ILIKE keyword\nAND NOT EXISTS items with service.name\nAND isActive filter\nAND requiresDoctor filter\nINCLUDE category, specialty, items
+    activate DB
+    DB --> Prisma: Packages priority 4
+    deactivate DB
+
+    Prisma --> Service: packagesWithDescMatch
+    deactivate Prisma
+
+    Service -> Service: Combine all results\nvới priority tags
+
+    Service -> Service: Sort by priority\n1 to 4
+
+    Service -> Service: Calculate total count
+
+    Service -> Service: Apply pagination\nslice offset to offset plus limit
+
+    Service -> Service: Build response\nwith results, pagination, keyword
+
+    Service --> Controller: Search results\nwith metadata
+    deactivate Service
+
+    Controller --> UI: 200 OK\nresults array
+    deactivate Controller
+
+    alt Có kết quả
+        UI -> UI: Render danh sách\ntheo priority
+
+        UI -> UI: Hiển thị badge\nservice hoặc package
+
+        UI -> UI: Highlight từ khóa\ntrong kết quả
+
+        UI --> User: Hiển thị danh sách\nkết quả tìm kiếm
+
+        alt Có pagination hasMore
+            UI --> User: Hiển thị nút\nXem thêm
+        end
+    else Không có kết quả
+        UI --> User: Hiển thị thông báo\nkhông tìm thấy kết quả
+        
+        UI --> User: Gợi ý thử từ khóa khác
+    end
+
+    deactivate UI
+end
+
+@enduml
+

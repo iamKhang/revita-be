@@ -68,7 +68,7 @@ export class DatabaseQueryService {
     prescription: ['id', 'status', 'createdAt', 'updatedAt'],
     invoice: ['id', 'invoiceCode', 'totalAmount', 'paymentStatus', 'createdAt'],
     doctor: ['id', 'doctorCode', 'yearsExperience', 'rating'],
-    specialty: ['id', 'specialtyCode', 'name'],
+    specialty: ['id', 'specialtyCode', 'name', 'description', 'imgUrl'],
     service: ['id', 'serviceCode', 'name', 'price'],
     auth: ['id', 'name', 'avatar'], // Only for own data
   };
@@ -439,13 +439,13 @@ VÍ DỤ CHI TIẾT:
 - "Tổng doanh thu tháng này" → await this.prismaService.invoice.aggregate({where: {createdAt: {gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)}}, _sum: {totalAmount: true}})
 - "Số lịch hẹn theo trạng thái" → await this.prismaService.appointment.groupBy({by: ["status"], _count: {status: true}})
 - "Lịch hẹn của tôi" (patientProfileId = 123) → await this.prismaService.appointment.findMany({where: {patientProfileId: 123}})
- - "Các lịch hẹn của tôi trong tháng" (auto-scope bệnh nhân) → await this.prismaService.appointment.findMany({ where: { date: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1) } }, select: { id: true, date: true, startTime: true, endTime: true, status: true, doctor: { select: { id: true, auth: { select: { name: true } } } }, specialty: { select: { id: true, name: true } }, patientProfile: { select: { id: true, name: true } } } })
+ - "Các lịch hẹn của tôi trong tháng" (auto-scope bệnh nhân) → await this.prismaService.appointment.findMany({ where: { date: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1) } }, select: { id: true, date: true, startTime: true, endTime: true, status: true, doctor: { select: { id: true, auth: { select: { name: true } } } }, specialty: { select: { id: true, name: true, description: true, imgUrl: true } }, patientProfile: { select: { id: true, name: true } } } })
  - "Hồ sơ của tôi" (authId = 45) → await this.prismaService.patientProfile.findMany({where: {patient: {authId: 45}}})
- - "Tất cả lịch hẹn của tôi" (lấy tất cả lịch hẹn của tất cả hồ sơ) → await this.prismaService.appointment.findMany({ include: { patientProfile: { select: { id: true, name: true } }, doctor: { select: { id: true, auth: { select: { name: true } } } }, specialty: { select: { id: true, name: true } } } })
- - "Lịch hẹn của bác sĩ Kiên tuần này" (doctorId = 9) → await this.prismaService.appointment.findMany({where: {doctorId: 9, date: {gte: new Date(new Date().setDate(new Date().getDate()-new Date().getDay()+1)).setHours(0,0,0,0)}}, select: { id: true, date: true, startTime: true, endTime: true, specialty: { select: { name: true } }, patientProfile: { select: { id: true, name: true } } }})
+ - "Tất cả lịch hẹn của tôi" (lấy tất cả lịch hẹn của tất cả hồ sơ) → await this.prismaService.appointment.findMany({ include: { patientProfile: { select: { id: true, name: true } }, doctor: { select: { id: true, auth: { select: { name: true } } } }, specialty: { select: { id: true, name: true, description: true, imgUrl: true } } } })
+ - "Lịch hẹn của bác sĩ Kiên tuần này" (doctorId = 9) → await this.prismaService.appointment.findMany({where: {doctorId: 9, date: {gte: new Date(new Date().setDate(new Date().getDate()-new Date().getDay()+1)).setHours(0,0,0,0)}}, select: { id: true, date: true, startTime: true, endTime: true, specialty: { select: { name: true, description: true, imgUrl: true } }, patientProfile: { select: { id: true, name: true } } }})
  - "Lịch làm việc bác sĩ trong tuần này" (WorkSession) → await this.prismaService.workSession.findMany({ where: { startTime: { gte: new Date(new Date().setDate(new Date().getDate()-new Date().getDay()+1)), lt: new Date(new Date().setDate(new Date().getDate()-new Date().getDay()+8)) } }, select: { id: true, startTime: true, endTime: true, doctor: { select: { id: true, auth: { select: { name: true } } } } }, orderBy: [{ startTime: 'asc' }], take: 50, skip: 0 })
- - "Bác sĩ Kiên thuộc chuyên khoa gì" → await this.prismaService.appointment.findMany({ where: { doctor: { auth: { name: { contains: "Kiên", mode: "insensitive" } } } }, select: { specialty: { select: { id: true, name: true } } }, distinct: ["specialtyId"] })
- - "Bệnh viện có bao nhiêu chuyên khoa?, liệt kê ra" → await this.prismaService.specialty.findMany({ select: { id: true, specialtyCode: true, name: true } })
+ - "Bác sĩ Kiên thuộc chuyên khoa gì" → await this.prismaService.appointment.findMany({ where: { doctor: { auth: { name: { contains: "Kiên", mode: "insensitive" } } } }, select: { specialty: { select: { id: true, name: true, description: true, imgUrl: true } } }, distinct: ["specialtyId"] })
+ - "Bệnh viện có bao nhiêu chuyên khoa?, liệt kê ra" → await this.prismaService.specialty.findMany({ select: { id: true, specialtyCode: true, name: true, description: true, imgUrl: true } })
 
 VÍ DỤ THỐNG KÊ (CHỈ CHO ADMIN/RECEPTIONIST/DOCTOR/CASHIER/TECHNICIAN):
 - "Thống kê lịch hẹn hôm nay" → await this.getAppointmentStatsByTime('day')

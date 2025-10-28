@@ -8,6 +8,14 @@ export class CreateSpecialtyDto {
   @IsString()
   @IsNotEmpty()
   name!: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  imgUrl?: string;
 }
 
 export class UpdateSpecialtyDto {
@@ -18,12 +26,22 @@ export class UpdateSpecialtyDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  imgUrl?: string;
 }
 
 export class SpecialtyResponseDto {
   id!: string;
   specialtyCode!: string;
   name!: string;
+  description?: string;
+  imgUrl?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }

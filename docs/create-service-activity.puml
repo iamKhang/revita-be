@@ -1,0 +1,71 @@
+@startuml createServiceActivity
+
+skinparam swimlane {
+  BorderColor #000000
+  BorderThickness 1
+}
+
+skinparam PartitionBorderColor #000000
+
+|Quản lý|
+start
+:Chọn chức năng\nThêm dịch vụ;
+:Mở form Thêm dịch vụ;
+:Điền thông tin bắt buộc:\n- Tên dịch vụ\n- Giá dịch vụ;
+:Điền thông tin tùy chọn:\n- Mô tả\n- Thời gian thực hiện (phút)\n- Đơn vị\n- Loại tiền tệ\n- Danh mục\n- Chuyên khoa\n- Cần bác sĩ?\n- Trạng thái hoạt động;
+:Nhấn Tạo dịch vụ;
+
+|Hệ thống|
+:Nhận yêu cầu\nPOST /services/management/services;
+:Validate dữ liệu đầu vào\nname bắt buộc\nprice bắt buộc;
+
+if (Dữ liệu hợp lệ?) then (không)
+  |Quản lý|
+  :Hiển thị lỗi validation\nthiếu name hoặc price;
+  stop
+else (có)
+  |Hệ thống|
+  if (Có categoryId?) then (có)
+    :SELECT category\nWHERE id = categoryId;
+    
+    if (Category tồn tại?) then (không)
+      |Quản lý|
+      :Hiển thị lỗi\ncategory không tồn tại;
+      stop
+    endif
+  endif
+  
+  |Hệ thống|
+  if (Có specialtyId?) then (có)
+    :SELECT specialty\nWHERE id = specialtyId;
+    
+    if (Specialty tồn tại?) then (không)
+      |Quản lý|
+      :Hiển thị lỗi\nspecialty không tồn tại;
+      stop
+    endif
+  endif
+  
+  |Hệ thống|
+  :Tạo serviceCode\ntự động duy nhất;
+  :INSERT INTO service\nserviceCode, name, price,\ndescription, durationMinutes,\nunit, currency, categoryId,\nspecialtyId, requiresDoctor,\nisActive (default true);
+  
+  if (Tạo thành công?) then (không)
+    :Xử lý lỗi DB\ntrùng code hoặc constraint;
+    
+    |Quản lý|
+    :Hiển thị lỗi\nkhông thể tạo dịch vụ;
+    stop
+  else (có)
+    |Hệ thống|
+    :SELECT service vừa tạo\nvới đầy đủ thông tin\ncategory, specialty;
+    :Trả về thông tin\ndịch vụ đã tạo;
+    
+    |Quản lý|
+    :Hiển thị thông báo\ntạo dịch vụ thành công;
+    :Hiển thị thông tin\ndịch vụ mới;
+    stop
+  endif
+endif
+
+@enduml

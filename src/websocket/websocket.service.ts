@@ -15,6 +15,8 @@ export class WebSocketService {
   private socketToCounter: Map<string, string> = new Map(); // socketId -> counterId
   private cashierConnections: Map<string, Set<string>> = new Map(); // cashierId -> Set<socketId>
   private socketToCashier: Map<string, string> = new Map(); // socketId -> cashierId
+  private postConnections: Map<string, Set<string>> = new Map(); // postId -> Set<socketId>
+  private socketToPosts: Map<string, Set<string>> = new Map(); // socketId -> Set<postId>
 
   setServer(server: Server) {
     this.server = server;
@@ -59,6 +61,58 @@ export class WebSocketService {
   }
 
   /**
+   * Kết nối socket với bài viết
+   */
+  connectToPost(socket: Socket, postId: string) {
+    if (!postId) {
+      return;
+    }
+
+    if (!this.socketToPosts.has(socket.id)) {
+      this.socketToPosts.set(socket.id, new Set());
+    }
+    this.socketToPosts.get(socket.id)!.add(postId);
+
+    if (!this.postConnections.has(postId)) {
+      this.postConnections.set(postId, new Set());
+    }
+    this.postConnections.get(postId)!.add(socket.id);
+
+    socket.join(`post:${postId}`);
+
+    console.log(`Socket ${socket.id} connected to post ${postId}`);
+  }
+
+  /**
+   * Ngắt kết nối socket khỏi bài viết
+   */
+  disconnectFromPost(socket: Socket, postId?: string) {
+    const joinedPosts = this.socketToPosts.get(socket.id);
+    if (!joinedPosts || joinedPosts.size === 0) {
+      return;
+    }
+
+    const targetPostIds = postId ? [postId] : Array.from(joinedPosts);
+
+    targetPostIds.forEach((id) => {
+      const sockets = this.postConnections.get(id);
+      if (sockets) {
+        sockets.delete(socket.id);
+        if (sockets.size === 0) {
+          this.postConnections.delete(id);
+        }
+      }
+      joinedPosts.delete(id);
+      socket.leave(`post:${id}`);
+      console.log(`Socket ${socket.id} disconnected from post ${id}`);
+    });
+
+    if (joinedPosts.size === 0) {
+      this.socketToPosts.delete(socket.id);
+    }
+  }
+
+  /**
    * Ngắt kết nối socket
    */
   disconnect(socket: Socket) {
@@ -85,6 +139,8 @@ export class WebSocketService {
       }
       this.socketToCashier.delete(socket.id);
     }
+
+    this.disconnectFromPost(socket);
 
     console.log(`Socket ${socket.id} disconnected`);
   }
@@ -225,6 +281,104 @@ export class WebSocketService {
    */
   async sendToCashier(cashierId: string, event: string, data: any) {
     this.server.to(`cashier:${cashierId}`).emit(event, data);
+  }
+
+  /**
+   * Gửi thông báo đến bài viết cụ thể
+   */
+  sendToPost(postId: string, event: string, data: any) {
+    if (!this.server) {
+      return;
+    }
+    this.server.to(`post:${postId}`).emit(event, data);
+  }
+
+  /**
+   * Phát sự kiện khi có bình luận mới trên bài viết
+   */
+  notifyPostCommentCreated(postId: string, comment: any) {
+    const payload = {
+      type: 'POST_COMMENT_CREATED',
+      postId,
+      comment,
+      timestamp: new Date().toISOString(),
+    };
+    this.sendToPost(postId, 'post_comment_created', payload);
+  }
+
+  /**
+   * Phát sự kiện khi bình luận bị xóa
+   */
+  notifyPostCommentDeleted(postId: string, commentId: string) {
+    const payload = {
+      type: 'POST_COMMENT_DELETED',
+      postId,
+      commentId,
+      timestamp: new Date().toISOString(),
+    };
+    this.sendToPost(postId, 'post_comment_deleted', payload);
+  }
+
+  /**
+   * Phát sự kiện khi bài viết được like
+   */
+  notifyPostLiked(postId: string, data: { userId: string; likesCount: number }) {
+    const payload = {
+      type: 'POST_LIKED',
+      postId,
+      ...data,
+      timestamp: new Date().toISOString(),
+    };
+    this.sendToPost(postId, 'post_liked', payload);
+  }
+
+  /**
+   * Phát sự kiện khi bài viết bị unlike
+   */
+  notifyPostUnliked(postId: string, data: { userId: string; likesCount: number }) {
+    const payload = {
+      type: 'POST_UNLIKED',
+      postId,
+      ...data,
+      timestamp: new Date().toISOString(),
+    };
+    this.sendToPost(postId, 'post_unliked', payload);
+  }
+
+  /**
+   * Phát sự kiện khi bình luận được like
+   */
+  notifyPostCommentLiked(
+    postId: string,
+    commentId: string,
+    data: { userId: string; likeCount: number },
+  ) {
+    const payload = {
+      type: 'POST_COMMENT_LIKED',
+      postId,
+      commentId,
+      ...data,
+      timestamp: new Date().toISOString(),
+    };
+    this.sendToPost(postId, 'post_comment_liked', payload);
+  }
+
+  /**
+   * Phát sự kiện khi bình luận bị unlike
+   */
+  notifyPostCommentUnliked(
+    postId: string,
+    commentId: string,
+    data: { userId: string; likeCount: number },
+  ) {
+    const payload = {
+      type: 'POST_COMMENT_UNLIKED',
+      postId,
+      commentId,
+      ...data,
+      timestamp: new Date().toISOString(),
+    };
+    this.sendToPost(postId, 'post_comment_unliked', payload);
   }
 
   /**

@@ -1,12 +1,23 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateSpecialtyDto, UpdateSpecialtyDto, SpecialtyResponseDto } from '../dto/specialty.dto';
+import {
+  CreateSpecialtyDto,
+  UpdateSpecialtyDto,
+  SpecialtyResponseDto,
+} from '../dto/specialty.dto';
+import { Specialty } from '@prisma/client';
 
 @Injectable()
 export class SpecialtyService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createSpecialty(dto: CreateSpecialtyDto): Promise<SpecialtyResponseDto> {
+  async createSpecialty(
+    dto: CreateSpecialtyDto,
+  ): Promise<SpecialtyResponseDto> {
     // Check if specialtyCode already exists
     const existingSpecialty = await this.prisma.specialty.findUnique({
       where: { specialtyCode: dto.specialtyCode },
@@ -20,13 +31,18 @@ export class SpecialtyService {
       data: {
         specialtyCode: dto.specialtyCode,
         name: dto.name,
+        description: dto.description,
+        imgUrl: dto.imgUrl,
       },
     });
 
     return this.mapToResponseDto(specialty);
   }
 
-  async findAllSpecialties(page: number = 1, limit: number = 10): Promise<{
+  async findAllSpecialties(
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
     data: SpecialtyResponseDto[];
     meta: {
       page: number;
@@ -115,7 +131,10 @@ export class SpecialtyService {
     return this.mapToResponseDto(specialty);
   }
 
-  async updateSpecialty(id: string, dto: UpdateSpecialtyDto): Promise<SpecialtyResponseDto> {
+  async updateSpecialty(
+    id: string,
+    dto: UpdateSpecialtyDto,
+  ): Promise<SpecialtyResponseDto> {
     const existingSpecialty = await this.prisma.specialty.findUnique({
       where: { id },
     });
@@ -125,7 +144,10 @@ export class SpecialtyService {
     }
 
     // Check if specialtyCode already exists (if being updated)
-    if (dto.specialtyCode && dto.specialtyCode !== existingSpecialty.specialtyCode) {
+    if (
+      dto.specialtyCode &&
+      dto.specialtyCode !== existingSpecialty.specialtyCode
+    ) {
       const duplicateSpecialty = await this.prisma.specialty.findUnique({
         where: { specialtyCode: dto.specialtyCode },
       });
@@ -140,6 +162,8 @@ export class SpecialtyService {
       data: {
         ...(dto.specialtyCode && { specialtyCode: dto.specialtyCode }),
         ...(dto.name && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.imgUrl !== undefined && { imgUrl: dto.imgUrl }),
       },
     });
 
@@ -182,11 +206,15 @@ export class SpecialtyService {
     return { message: 'Specialty deleted successfully' };
   }
 
-  private mapToResponseDto(specialty: any): SpecialtyResponseDto {
+  private mapToResponseDto(
+    specialty: Specialty & { createdAt?: Date; updatedAt?: Date },
+  ): SpecialtyResponseDto {
     return {
       id: specialty.id,
       specialtyCode: specialty.specialtyCode,
       name: specialty.name,
+      description: specialty.description || undefined,
+      imgUrl: specialty.imgUrl || undefined,
       createdAt: specialty.createdAt,
       updatedAt: specialty.updatedAt,
     };

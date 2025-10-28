@@ -9,8 +9,6 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { WebSocketService } from './websocket.service';
-import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../login/jwt-auth.guard';
 
 @WebSocketGateway({
   cors: {
@@ -83,6 +81,41 @@ export class CounterWebSocketGateway implements OnGatewayConnection, OnGatewayDi
   handleLeaveCashier(@ConnectedSocket() client: Socket) {
     this.webSocketService.disconnect(client);
     client.emit('left_cashier', { message: 'Left cashier' });
+  }
+
+  @SubscribeMessage('join_post')
+  handleJoinPost(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { postId: string },
+  ) {
+    if (!data?.postId) {
+      client.emit('error', { message: 'Post ID is required' });
+      return;
+    }
+
+    this.webSocketService.connectToPost(client, data.postId);
+    client.emit('joined_post', {
+      postId: data.postId,
+      message: `Connected to post ${data.postId}`,
+    });
+  }
+
+  @SubscribeMessage('leave_post')
+  handleLeavePost(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data?: { postId?: string },
+  ) {
+    const postId = data?.postId;
+    if (postId) {
+      this.webSocketService.disconnectFromPost(client, postId);
+      client.emit('left_post', {
+        postId,
+        message: `Left post ${postId}`,
+      });
+    } else {
+      this.webSocketService.disconnectFromPost(client);
+      client.emit('left_post', { message: 'Left all posts' });
+    }
   }
 
   @SubscribeMessage('ping')
