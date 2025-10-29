@@ -15,6 +15,7 @@ do
   sleep $SLEEP_SECS
 done
 
+set +e
 node -e "
 (async ()=>{
   const { PrismaClient } = require('@prisma/client');
@@ -35,14 +36,22 @@ node -e "
     try { await prisma.$disconnect(); } catch(_){}
   }
 })();
-" || true
+"
 RET=$?
+set -e
+
 if [ "$RET" -eq 10 ]; then
-  echo "Database appears empty. Running prisma migrate dev and seed..."
-  npx prisma migrate dev --skip-seed
-  npm run seed
+  echo "Database appears empty. Migrations will initialize schema and seed will run."
 else
-  echo "Database already initialized. Skipping migrate dev/seed."
+  echo "Database already initialized. Applying any pending migrations."
+fi
+
+echo "Running prisma migrate deploy..."
+npx prisma migrate deploy
+
+if [ "$RET" -eq 10 ]; then
+  echo "Running npm run seed..."
+  npm run seed
 fi
 
 exec node dist/src/main.js
