@@ -10,16 +10,15 @@ entity "MedicalRecord" as MR
 entity "PatientProfile" as PP
 entity "Template" as T
 entity "MedicalRecordHistory" as MRH
-database "Cơ Sở Dữ Liệu" as DB
 
 == Tạo bệnh án mới ==
 
 D -> F: Chọn bệnh nhân
 F -> C: GET /medical-record/templates
+C -> C: validateRequest()
 C -> M: getTemplates()
-M -> T: Lấy danh sách template
-T -> DB: Truy vấn template table
-DB --> T: Danh sách template
+M -> T: findAllTemplates()
+T -> T: prisma.template.findMany()
 T --> M: Trả về danh sách template
 M --> C: Trả về danh sách template
 C --> F: Danh sách template
@@ -27,25 +26,23 @@ F --> D: Hiển thị danh sách template
 
 D -> F: Chọn template và gửi yêu cầu tạo bệnh án
 F -> C: POST /medical-record/create
+C -> C: validateCreateMedicalRecordDto(dto)
 C -> M: create(createMedicalRecordDto, user)
-M -> M: Kiểm tra quyền tạo (DOCTOR/ADMIN)
+M -> M: checkCreatePermission(user)
 
 alt Có quyền tạo
-  M -> M: Xác định doctorId từ user
-  M -> PP: Kiểm tra patient profile tồn tại
-  PP -> DB: Truy vấn patient profile
-  DB --> PP: Thông tin patient profile
+  M -> M: extractDoctorId(user)
+  M -> PP: validatePatientProfile(patientProfileId)
+  PP -> PP: prisma.patientProfile.findUnique()
   PP --> M: Xác nhận patient profile hợp lệ
   
-  M -> M: Tạo medical record code
-  M -> MR: Tạo bệnh án mới
-  MR -> DB: Lưu bệnh án vào database
-  DB --> MR: Bệnh án đã tạo
+  M -> M: generateMedicalRecordCode()
+  M -> MR: createMedicalRecord(data)
+  MR -> MR: prisma.medicalRecord.create()
   MR --> M: Trả về bệnh án mới
   
-  M -> MRH: Lưu lịch sử tạo mới
-  MRH -> DB: Lưu history record
-  DB --> MRH: History đã lưu
+  M -> MRH: createHistoryRecord(medicalRecordId, action)
+  MRH -> MRH: prisma.medicalRecordHistory.create()
   MRH --> M: Xác nhận lưu history
   
   M --> C: Trả về bệnh án đã tạo
@@ -53,7 +50,7 @@ alt Có quyền tạo
   F --> D: Hiển thị thông báo tạo thành công
   
 else Không có quyền
-  M --> C: Trả về lỗi quyền truy cập
+  M --> C: throw new ForbiddenException()
   C --> F: Thông báo lỗi
   F --> D: Hiển thị thông báo không có quyền
 end
@@ -62,24 +59,25 @@ end
 
 D -> F: Xem danh sách bệnh án
 F -> C: GET /medical-record?page=1&limit=10
+C -> C: validatePaginationParams(page, limit)
 C -> M: findAll(user, page, limit)
-M -> M: Kiểm tra role là DOCTOR
-M -> MR: Lấy bệnh án theo doctorId
-MR -> DB: Truy vấn bệnh án của bác sĩ
-DB --> MR: Danh sách bệnh án
+M -> M: checkDoctorRole(user)
+M -> MR: findByDoctorId(user.id, page, limit)
+MR -> MR: prisma.medicalRecord.findMany()
 MR --> M: Trả về danh sách bệnh án
+M -> M: formatPaginationResponse(data, page, limit)
 M --> C: Trả về danh sách với phân trang
 C --> F: Trả về kết quả
 F --> D: Hiển thị danh sách bệnh án
 
 D -> F: Chọn bệnh án để xem chi tiết
 F -> C: GET /medical-record/:id
+C -> C: validateId(id)
 C -> M: findOne(id, user)
-M -> MR: Tìm bệnh án theo ID
-MR -> DB: Truy vấn bệnh án
-DB --> MR: Thông tin bệnh án
+M -> MR: findById(id)
+MR -> MR: prisma.medicalRecord.findUnique()
 MR --> M: Trả về bệnh án
-M -> M: Kiểm tra quyền xem (doctor tạo ra)
+M -> M: checkViewPermission(medicalRecord, user)
 M --> C: Trả về chi tiết bệnh án
 C --> F: Trả về thông tin bệnh án
 F --> D: Hiển thị chi tiết bệnh án

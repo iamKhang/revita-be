@@ -435,25 +435,28 @@ export class CodeGeneratorService {
   /**
    * Tạo mã Clinic Room
    * Format: ROOM{SPECIALTY_CODE}{SEQUENCE_NUMBER}
-   * 
+   *
    * Ví dụ:
    * - ROOMCARD001 (ROOM + CARD + 001)
    * - ROOMDERM002 (ROOM + DERM + 002)
    */
-  generateClinicRoomCode(specialtyCode: string, existingCount: number = 0): string {
+  generateClinicRoomCode(
+    specialtyCode: string,
+    existingCount: number = 0,
+  ): string {
     // Lấy 4 ký tự đầu của specialty code và chuyển thành uppercase
     const specialtyPrefix = specialtyCode.substring(0, 4).toUpperCase();
-    
+
     // Tạo sequence number (3 chữ số, bắt đầu từ 001)
     const sequenceNumber = (existingCount + 1).toString().padStart(3, '0');
-    
+
     return `ROOM${specialtyPrefix}${sequenceNumber}`;
   }
 
   /**
    * Tạo mã Booth
    * Format: BOOTH{ROOM_CODE}{SEQUENCE_NUMBER}
-   * 
+   *
    * Ví dụ:
    * - BOOTHCARD001001 (BOOTH + ROOMCARD001 + 001)
    * - BOOTHCARD001002 (BOOTH + ROOMCARD001 + 002)
@@ -461,7 +464,7 @@ export class CodeGeneratorService {
   generateBoothCode(roomCode: string, existingCount: number = 0): string {
     // Tạo sequence number (3 chữ số, bắt đầu từ 001)
     const sequenceNumber = (existingCount + 1).toString().padStart(3, '0');
-    
+
     return `BOOTH${roomCode}${sequenceNumber}`;
   }
 

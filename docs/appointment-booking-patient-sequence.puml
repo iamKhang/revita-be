@@ -10,16 +10,15 @@ entity "Lịch Hẹn" as A
 entity "Bác Sĩ" as D
 entity "Chuyên Khoa" as SP
 entity "Dịch Vụ" as SV
-database "Cơ Sở Dữ Liệu" as DB
 
 == Tìm kiếm và chọn bác sĩ ==
 
 P -> F: Tìm kiếm chuyên khoa
 F -> C: GET /appointment-booking/specialties
+C -> C: validateRequest()
 C -> S: getSpecialties()
-S -> SP: Truy vấn chuyên khoa
-SP -> DB: Lấy danh sách chuyên khoa
-DB --> SP: Danh sách chuyên khoa
+S -> SP: findAllSpecialties()
+SP -> SP: prisma.specialty.findMany()
 SP --> S: Trả về danh sách chuyên khoa
 S --> C: Trả về danh sách chuyên khoa
 C --> F: Danh sách chuyên khoa
@@ -27,10 +26,10 @@ F --> P: Hiển thị danh sách chuyên khoa
 
 P -> F: Chọn chuyên khoa
 F -> C: GET /appointment-booking/doctors?specialtyId=xxx
+C -> C: validateSpecialtyId(specialtyId)
 C -> S: getDoctorsBySpecialty(specialtyId)
-S -> D: Truy vấn bác sĩ
-D -> DB: Lấy danh sách bác sĩ
-DB --> D: Danh sách bác sĩ
+S -> D: findDoctorsBySpecialty(specialtyId)
+D -> D: prisma.doctor.findMany()
 D --> S: Trả về danh sách bác sĩ
 S --> C: Trả về danh sách bác sĩ
 C --> F: Danh sách bác sĩ
@@ -40,10 +39,10 @@ F --> P: Hiển thị danh sách bác sĩ
 
 P -> F: Chọn bác sĩ và ngày
 F -> C: GET /appointment-booking/working-days?doctorId=xxx
+C -> C: validateDoctorId(doctorId)
 C -> S: getDoctorWorkingDays(doctorId)
-S -> D: Truy vấn work sessions
-D -> DB: Lấy lịch làm việc
-DB --> D: Lịch làm việc
+S -> D: getWorkSessionsByDoctor(doctorId)
+D -> D: prisma.workSession.findMany()
 D --> S: Trả về lịch làm việc
 S --> C: Trả về lịch làm việc
 C --> F: Lịch làm việc
@@ -51,13 +50,14 @@ F --> P: Hiển thị lịch làm việc
 
 P -> F: Chọn dịch vụ và khung giờ
 F -> C: GET /appointment-booking/available-slots
+C -> C: validateAvailableSlotsDto(dto)
 C -> S: getAvailableSlots(dto)
-S -> A: Tính toán slots trống
+S -> A: calculateAvailableSlots(workSessions, serviceDuration)
 
 note over S: Tính toán slots trống:\n- Duyệt work sessions\n- Tạo slots theo thời lượng\n- Kiểm tra xung đột
 
-A -> DB: Lấy dữ liệu work sessions
-DB --> A: Dữ liệu work sessions
+A -> A: generateTimeSlots(workSessions)
+A -> A: filterAvailableSlots(slots, existingAppointments)
 A --> S: Trả về danh sách lịch trống
 S --> C: Trả về danh sách lịch trống
 C --> F: Danh sách lịch trống
@@ -65,24 +65,22 @@ F --> P: Hiển thị khung giờ khả dụng
 
 P -> F: Nhập thông tin và đặt lịch
 F -> C: POST /appointment-booking/book
+C -> C: validateBookAppointmentDto(dto)
 C -> S: bookAppointment(bookAppointmentDto, user)
 
-S -> A: Kiểm tra xung đột
-A -> DB: Kiểm tra xung đột
-DB --> A: Kết quả kiểm tra
+S -> A: checkSlotConflict(appointmentData)
+A -> A: prisma.appointment.findFirst()
 
 alt Không có xung đột
-  S -> A: Tạo lịch hẹn mới
-  A -> DB: Lưu lịch hẹn
-  DB --> A: Lịch hẹn đã tạo
-  
+  S -> A: createAppointment(appointmentData)
+  A -> A: prisma.appointment.create()
   A --> S: Trả về lịch hẹn mới
   S --> C: Trả về thông tin lịch hẹn
   C --> F: Thông tin lịch hẹn đã tạo
   F --> P: Gửi mã lịch hẹn và thông báo thành công
   
 else Có xung đột
-  S --> C: Trả về lỗi xung đột
+  S --> C: throw new ConflictException()
   C --> F: Thông báo lỗi
   F --> P: Thông báo lịch đã được đặt, chọn khung giờ khác
 end
