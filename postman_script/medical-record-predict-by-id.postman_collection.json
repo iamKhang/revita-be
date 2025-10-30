@@ -1,0 +1,67 @@
+{
+  "info": {
+    "_postman_id": "6cdad110-743d-4eb9-963b-99b691860aba",
+    "name": "Medical Record - Predict by ID",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Predict Disease by MedicalRecord ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwtToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/medical-records/{{medicalRecordId}}/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "medical-records",
+            "{{medicalRecordId}}",
+            "predict"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Should return predictions array', function () {",
+              "  var data = pm.response.json();",
+              "  pm.expect(Array.isArray(data.predictions)).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "medicalRecordId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

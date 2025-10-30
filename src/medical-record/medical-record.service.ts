@@ -1,6 +1,8 @@
 /* eslint-disable */
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TranslationService } from './translation.service';
+import axios from 'axios';
 import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
 import { UpdateMedicalRecordDto } from './dto/update-medical-record.dto';
 import { JwtUserPayload } from './dto/jwt-user-payload.dto';
@@ -12,7 +14,10 @@ import { CodeGeneratorService } from '../user-management/patient-profile/code-ge
 export class MedicalRecordService {
   private codeGenerator = new CodeGeneratorService();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly translationService: TranslationService,
+  ) {}
 
   async create(dto: CreateMedicalRecordDto, user: JwtUserPayload) {
     if (
@@ -128,6 +133,177 @@ export class MedicalRecordService {
     return created;
   }
 
+  /**
+   * Gọi hệ thống gợi ý bệnh dựa trên mã bệnh án (medicalRecordCode)
+   * - Tính tuổi từ ngày sinh, chuẩn hóa giới tính (M/F/O)
+   * - notes: chuỗi hóa nội dung bệnh án
+   * - Gọi {{RECOMMENDER_BASE_URL}}/predict
+   * - Sắp xếp theo probability giảm dần, dịch disease_name EN->VI
+   */
+  async predictDiseasesByMedicalRecordCode(
+    code: string,
+    user: JwtUserPayload,
+  ): Promise<{ predictions: Array<{ icd_code?: string; probability: number; disease_name_en: string; disease_name_vi: string }>; patient_info: { age: number; gender: 'M' | 'F' | 'O'; notes: string } }> {
+    // Tìm hồ sơ theo mã
+    const record = await this.prisma.medicalRecord.findFirst({
+      where: { medicalRecordCode: code },
+      include: {
+        patientProfile: true,
+      },
+    });
+    if (!record) throw new NotFoundException('Không tìm thấy hồ sơ bệnh án');
+
+    // Quyền truy cập: bệnh nhân chỉ xem hồ sơ của mình, bác sĩ chỉ xem hồ sơ do mình tạo
+    if (user.role === Role.PATIENT) {
+      if (!user.patient?.id) throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
+      if (record.patientProfile.patientId !== user.patient.id) {
+        throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
+      }
+    }
+    if (user.role === Role.DOCTOR) {
+      if (!user.doctor?.id) throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      if (record.doctorId !== user.doctor.id) {
+        throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
+      }
+    }
+
+    // Tính tuổi
+    const dob = record.patientProfile.dateOfBirth as unknown as Date;
+    const now = new Date();
+    let age = now.getFullYear() - dob.getFullYear();
+    const m = now.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
+    if (age < 0) age = 0;
+
+    // Giới tính -> M/F/O
+    const rawGender = (record.patientProfile.gender || '').toString().toLowerCase();
+    let gender: 'M' | 'F' | 'O' = 'O';
+    if (['male', 'nam', 'm'].includes(rawGender)) gender = 'M';
+    else if (['female', 'nữ', 'nu', 'f'].includes(rawGender)) gender = 'F';
+
+    // Notes từ content (rút gọn thành chuỗi)
+    const notes = JSON.stringify(record.content || {});
+
+    const baseUrl = process.env.RECOMMENDER_BASE_URL;
+    if (!baseUrl) {
+      throw new BadRequestException('Thiếu cấu hình RECOMMENDER_BASE_URL');
+    }
+
+    // Gọi API dự đoán
+    const payload = { age, gender, notes };
+    const { data } = await axios.post(`${baseUrl}/predict`, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 20000,
+    });
+
+    const predictions = Array.isArray(data?.predictions) ? data.predictions as Array<{ icd_code?: string; probability: number; disease_name: string }> : [];
+    // Sắp xếp theo probability giảm dần
+    predictions.sort((a, b) => (b.probability ?? 0) - (a.probability ?? 0));
+
+    // Dịch danh sách disease_name EN -> VI theo từng dòng để tối ưu gọi dịch
+    const englishNames = predictions.map((p) => p.disease_name ?? '');
+    const joined = englishNames.join('\n');
+    const viJoined = await this.translationService.translateEnToVi(joined);
+    const viNames = viJoined.split('\n');
+
+    const mapped = predictions.map((p, idx) => ({
+      icd_code: p.icd_code,
+      probability: p.probability,
+      disease_name_en: p.disease_name,
+      disease_name_vi: viNames[idx] ?? p.disease_name,
+    }));
+
+    return {
+      predictions: mapped,
+      patient_info: { age, gender, notes },
+    };
+  }
+
+  /**
+   * Gọi hệ thống gợi ý bệnh dựa trên id bệnh án
+   * - Tính tuổi từ ngày sinh, chuẩn hóa giới tính (M/F/O)
+   * - notes: chuỗi hóa nội dung bệnh án
+   * - Gọi {{RECOMMENDER_BASE_URL}}/predict
+   * - Sắp xếp theo probability giảm dần, dịch disease_name EN->VI
+   */
+  async predictDiseasesByMedicalRecordId(
+    id: string,
+    user: JwtUserPayload,
+  ): Promise<{ predictions: Array<{ icd_code?: string; probability: number; disease_name_en: string; disease_name_vi: string }>; patient_info: { age: number; gender: 'M' | 'F' | 'O'; notes: string } }> {
+    // Tìm hồ sơ theo id
+    const record = await this.prisma.medicalRecord.findUnique({
+      where: { id },
+      include: {
+        patientProfile: true,
+      },
+    });
+    if (!record) throw new NotFoundException('Không tìm thấy hồ sơ bệnh án');
+
+    // Quyền truy cập: bệnh nhân chỉ xem hồ sơ của mình, bác sĩ chỉ xem hồ sơ do mình tạo
+    if (user.role === Role.PATIENT) {
+      if (!user.patient?.id) throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
+      if (record.patientProfile.patientId !== user.patient.id) {
+        throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
+      }
+    }
+    if (user.role === Role.DOCTOR) {
+      if (!user.doctor?.id) throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      if (record.doctorId !== user.doctor.id) {
+        throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
+      }
+    }
+
+    // Tính tuổi
+    const dob = record.patientProfile.dateOfBirth as unknown as Date;
+    const now = new Date();
+    let age = now.getFullYear() - dob.getFullYear();
+    const m = now.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
+    if (age < 0) age = 0;
+
+    // Giới tính -> M/F/O
+    const rawGender = (record.patientProfile.gender || '').toString().toLowerCase();
+    let gender: 'M' | 'F' | 'O' = 'O';
+    if (['male', 'nam', 'm'].includes(rawGender)) gender = 'M';
+    else if (['female', 'nữ', 'nu', 'f'].includes(rawGender)) gender = 'F';
+
+    // Notes từ content (rút gọn thành chuỗi)
+    const notes = JSON.stringify(record.content || {});
+
+    const baseUrl = process.env.RECOMMENDER_BASE_URL;
+    if (!baseUrl) {
+      throw new BadRequestException('Thiếu cấu hình RECOMMENDER_BASE_URL');
+    }
+
+    // Gọi API dự đoán
+    const payload = { age, gender, notes };
+    const { data } = await axios.post(`${baseUrl}/predict`, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 20000,
+    });
+
+    const predictions = Array.isArray(data?.predictions) ? data.predictions as Array<{ icd_code?: string; probability: number; disease_name: string }> : [];
+    // Sắp xếp theo probability giảm dần
+    predictions.sort((a, b) => (b.probability ?? 0) - (a.probability ?? 0));
+
+    // Dịch danh sách disease_name EN -> VI theo từng dòng để tối ưu gọi dịch
+    const englishNames = predictions.map((p) => p.disease_name ?? '');
+    const joined = englishNames.join('\n');
+    const viJoined = await this.translationService.translateEnToVi(joined);
+    const viNames = viJoined.split('\n');
+
+    const mapped = predictions.map((p, idx) => ({
+      icd_code: p.icd_code,
+      probability: p.probability,
+      disease_name_en: p.disease_name,
+      disease_name_vi: viNames[idx] ?? p.disease_name,
+    }));
+
+    return {
+      predictions: mapped,
+      patient_info: { age, gender, notes },
+    };
+  }
   async findAll(user: JwtUserPayload, page: string = '1', limit: string = '10') {
     const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
     const limitNum = Math.min(
@@ -483,7 +659,7 @@ export class MedicalRecordService {
 
   /**
    * Lấy tất cả thông tin y tế của bệnh nhân và gộp thành một chuỗi
-   * Bao gồm: nội dung bệnh án, tên dịch vụ, kết quả dịch vụ, tên thuốc
+   * Bao gồm: nội dung bệnh án, tên dịch vụ, kết quả dịch vụ
    */
   async getPatientMedicalSummary(patientProfileId: string, user: JwtUserPayload): Promise<string> {
     // Validate patient profile exists
@@ -508,8 +684,8 @@ export class MedicalRecordService {
       }
     }
 
-    // Lấy tất cả thông tin y tế của bệnh nhân
-    const [medicalRecords, prescriptions, medicationPrescriptions] = await Promise.all([
+    // Lấy tất cả thông tin y tế của bệnh nhân (không bao gồm đơn thuốc)
+    const [medicalRecords, prescriptions] = await Promise.all([
       // Lấy tất cả bệnh án
       this.prisma.medicalRecord.findMany({
         where: { 
@@ -573,53 +749,15 @@ export class MedicalRecordService {
           },
         },
       }),
-
-      // Lấy tất cả đơn thuốc
-      this.prisma.medicationPrescription.findMany({
-        where: { 
-          patientProfileId,
-          ...(user.role === Role.DOCTOR && user.doctor?.id ? { doctorId: user.doctor.id } : {})
-        },
-        include: {
-          items: {
-            include: {
-              drug: true,
-            },
-          },
-          doctor: {
-            include: {
-              auth: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
     ]);
 
-    // Gộp tất cả thông tin thành một chuỗi
+    // Gộp tất cả thông tin thành một chuỗi (rút gọn)
     const summaryParts: string[] = [];
-
-    // Thông tin bệnh nhân
-    summaryParts.push(`Tên: ${patientProfile.name}`);
-    summaryParts.push(`Ngày sinh: ${patientProfile.dateOfBirth.toLocaleDateString('vi-VN')}`);
-    summaryParts.push(`Giới tính: ${patientProfile.gender}`);
-    if (patientProfile.address) {
-      summaryParts.push(`Địa chỉ: ${patientProfile.address}`);
-    }
-    summaryParts.push('');
 
     // Nội dung bệnh án
     if (medicalRecords.length > 0) {
       medicalRecords.forEach((record, index) => {
         summaryParts.push(`Bệnh án ${index + 1}:`);
-        summaryParts.push(`- Mã bệnh án: ${record.medicalRecordCode}`);
-        summaryParts.push(`- Bác sĩ: ${record.doctor.auth.name}`);
-        summaryParts.push(`- Ngày tạo: ${record.createdAt.toLocaleDateString('vi-VN')}`);
-        summaryParts.push(`- Trạng thái: ${record.status}`);
         summaryParts.push(`- Nội dung: ${JSON.stringify(record.content, null, 2)}`);
         summaryParts.push('');
       });
@@ -629,13 +767,94 @@ export class MedicalRecordService {
     if (prescriptions.length > 0) {
       prescriptions.forEach((prescription, index) => {
         summaryParts.push(`Phiếu chỉ định ${index + 1}:`);
-        summaryParts.push(`- Mã phiếu: ${prescription.prescriptionCode}`);
-        summaryParts.push(`- Bác sĩ: ${prescription.doctor?.auth.name || 'Không xác định'}`);
-        summaryParts.push(`- Trạng thái: ${prescription.status}`);
-        if (prescription.note) {
-          summaryParts.push(`- Ghi chú: ${prescription.note}`);
+        if (prescription.services.length > 0) {
+          summaryParts.push(`Dịch vụ được chỉ định:`);
+          prescription.services.forEach((prescriptionService, serviceIndex) => {
+            summaryParts.push(`  ${serviceIndex + 1}. ${prescriptionService.service.name}`);
+          });
         }
-        
+        summaryParts.push('');
+      });
+    }
+
+    // Nếu không có dữ liệu
+    if (medicalRecords.length === 0 && prescriptions.length === 0) {
+      summaryParts.push(`Không có thông tin y tế nào được ghi nhận cho bệnh nhân này.`);
+    }
+
+    const vi = summaryParts.join('\n');
+    // Translate to English with chunking and graceful fallback
+    const en = await this.translationService.translateViToEn(vi);
+    return en;
+  }
+
+  /**
+   * Lấy thông tin summary cho một bệnh án theo mã (medicalRecordCode)
+   * Bao gồm: thông tin bệnh nhân, thông tin bệnh án (1), phiếu chỉ định liên quan
+   * Trả về chuỗi đã được dịch sang tiếng Anh
+   */
+  async getMedicalRecordSummaryByCode(
+    code: string,
+    user: JwtUserPayload
+  ): Promise<string> {
+    // 1. Tìm hồ sơ bệnh án (bao gồm patientProfile và doctor)
+    const record = await this.prisma.medicalRecord.findFirst({
+      where: { medicalRecordCode: code },
+      include: {
+        patientProfile: { include: { patient: true } },
+        doctor: { include: { auth: { select: { name: true } } } },
+      },
+    });
+    if (!record) throw new NotFoundException('Không tìm thấy hồ sơ bệnh án');
+
+    // 2. Kiểm tra quyền access tương tự findOne
+    if (user.role === Role.PATIENT) {
+      if (!user.patient?.id) throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
+      if (record.patientProfile.patientId !== user.patient.id) {
+        throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
+      }
+    }
+    if (user.role === Role.DOCTOR) {
+      if (!user.doctor?.id) throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      if (record.doctorId !== user.doctor.id) {
+        throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
+      }
+    }
+
+    // 3. Tìm các phiếu chỉ định dịch vụ liên quan đến hồ sơ này
+    const prescriptions = await this.prisma.prescription.findMany({
+      where: { medicalRecordId: record.id },
+      include: {
+        services: {
+          include: {
+            service: true,
+            doctor: {
+              include: { auth: { select: { name: true } } },
+            },
+            technician: {
+              include: { auth: { select: { name: true } } },
+            },
+          },
+          orderBy: { order: 'asc' },
+        },
+        doctor: { include: { auth: { select: { name: true } } } },
+      },
+    });
+
+    // 4. Ghép summary
+    const summaryParts: string[] = [];
+    // Thông tin bệnh nhân
+    summaryParts.push(`Tên: ${record.patientProfile.name}`);
+    // Thông tin bệnh án
+    summaryParts.push(`Bệnh án:`);
+    summaryParts.push(`- Nội dung: ${JSON.stringify(record.content, null, 2)}`);
+    summaryParts.push('');
+    // Dịch vụ và kết quả nếu có
+    if (prescriptions.length > 0) {
+      prescriptions.forEach((prescription, index) => {
+        summaryParts.push(`Phiếu chỉ định ${index + 1}:`);
+        summaryParts.push(`- Mã phiếu: ${prescription.prescriptionCode}`);
+        if (prescription.note) summaryParts.push(`- Ghi chú: ${prescription.note}`);
         if (prescription.services.length > 0) {
           summaryParts.push(`Dịch vụ được chỉ định:`);
           prescription.services.forEach((prescriptionService, serviceIndex) => {
@@ -648,69 +867,102 @@ export class MedicalRecordService {
             if (prescriptionService.note) {
               summaryParts.push(`     - Ghi chú: ${prescriptionService.note}`);
             }
-            if (prescriptionService.doctor?.auth.name) {
-              summaryParts.push(`     - Bác sĩ thực hiện: ${prescriptionService.doctor.auth.name}`);
-            }
-            if (prescriptionService.technician?.auth.name) {
-              summaryParts.push(`     - Kỹ thuật viên: ${prescriptionService.technician.auth.name}`);
-            }
-            if (prescriptionService.completedAt) {
-              summaryParts.push(`     - Hoàn thành: ${prescriptionService.completedAt.toLocaleDateString('vi-VN')}`);
-            }
           });
         }
         summaryParts.push('');
       });
     }
+    // Nếu không có dịch vụ
+    if (prescriptions.length === 0) {
+      summaryParts.push(`Hồ sơ này không có phiếu chỉ định dịch vụ liên quan.`);
+    }
+    const vi = summaryParts.join('\n');
+    const en = await this.translationService.translateViToEn(vi);
+    return en;
+  }
 
-    // Đơn thuốc
-    if (medicationPrescriptions.length > 0) {
-      medicationPrescriptions.forEach((medicationPrescription, index) => {
-        summaryParts.push(`Đơn thuốc ${index + 1}:`);
-        summaryParts.push(`- Mã đơn: ${medicationPrescription.code}`);
-        summaryParts.push(`- Bác sĩ: ${medicationPrescription.doctor.auth.name}`);
-        summaryParts.push(`- Ngày tạo: ${medicationPrescription.createdAt.toLocaleDateString('vi-VN')}`);
-        summaryParts.push(`- Trạng thái: ${medicationPrescription.status}`);
-        if (medicationPrescription.note) {
-          summaryParts.push(`- Ghi chú: ${medicationPrescription.note}`);
+  /**
+   * Lấy thông tin summary cho một bệnh án theo id (medicalRecord.id)
+   * Bao gồm: thông tin bệnh nhân, nội dung bệnh án, và các phiếu chỉ định liên quan
+   * Trả về chuỗi đã được dịch sang tiếng Anh
+   */
+  async getMedicalRecordSummaryById(
+    id: string,
+    user: JwtUserPayload,
+  ): Promise<string> {
+    // 1. Tìm hồ sơ bệnh án theo id
+    const record = await this.prisma.medicalRecord.findUnique({
+      where: { id },
+      include: {
+        patientProfile: { include: { patient: true } },
+        doctor: { include: { auth: { select: { name: true } } } },
+      },
+    });
+    if (!record) throw new NotFoundException('Không tìm thấy hồ sơ bệnh án');
+
+    // 2. Kiểm tra quyền
+    if (user.role === Role.PATIENT) {
+      if (!user.patient?.id) throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
+      if (record.patientProfile.patientId !== user.patient.id) {
+        throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
+      }
+    }
+    if (user.role === Role.DOCTOR) {
+      if (!user.doctor?.id) throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      if (record.doctorId !== user.doctor.id) {
+        throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
+      }
+    }
+
+    // 3. Lấy phiếu chỉ định dịch vụ liên quan
+    const prescriptions = await this.prisma.prescription.findMany({
+      where: { medicalRecordId: record.id },
+      include: {
+        services: {
+          include: {
+            service: true,
+            doctor: { include: { auth: { select: { name: true } } } },
+            technician: { include: { auth: { select: { name: true } } } },
+          },
+          orderBy: { order: 'asc' },
+        },
+        doctor: { include: { auth: { select: { name: true } } } },
+      },
+    });
+
+    // 4. Ghép summary (rút gọn tối đa)
+    const summaryParts: string[] = [];
+    // Thông tin bệnh án
+    summaryParts.push(`Bệnh án:`);
+    summaryParts.push(`- Nội dung: ${JSON.stringify(record.content, null, 2)}`);
+    summaryParts.push('');
+    // Dịch vụ và kết quả nếu có
+    if (prescriptions.length > 0) {
+      prescriptions.forEach((prescription, index) => {
+        summaryParts.push(`Phiếu chỉ định ${index + 1}:`);
+        if (prescription.note) {
+          summaryParts.push(`- Ghi chú: ${prescription.note}`);
         }
-        
-        if (medicationPrescription.items.length > 0) {
-          summaryParts.push(`- Thuốc được kê:`);
-          medicationPrescription.items.forEach((item, itemIndex) => {
-            summaryParts.push(`  ${itemIndex + 1}. ${item.name}`);
-            if (item.strength) {
-              summaryParts.push(`     - Hàm lượng: ${item.strength}`);
-            }
-            if (item.dosageForm) {
-              summaryParts.push(`     - Dạng bào chế: ${item.dosageForm}`);
-            }
-            if (item.dose && item.doseUnit) {
-              summaryParts.push(`     - Liều dùng: ${item.dose} ${item.doseUnit}`);
-            }
-            if (item.frequency) {
-              summaryParts.push(`     - Tần suất: ${item.frequency}`);
-            }
-            if (item.durationDays) {
-              summaryParts.push(`     - Thời gian: ${item.durationDays} ngày`);
-            }
-            if (item.quantity && item.quantityUnit) {
-              summaryParts.push(`     - Số lượng: ${item.quantity} ${item.quantityUnit}`);
-            }
-            if (item.instructions) {
-              summaryParts.push(`     - Hướng dẫn: ${item.instructions}`);
+        if (prescription.services.length > 0) {
+          summaryParts.push(`Dịch vụ được chỉ định:`);
+          prescription.services.forEach((prescriptionService, serviceIndex) => {
+            summaryParts.push(`  ${serviceIndex + 1}. ${prescriptionService.service.name}`);
+            if (prescriptionService.note) {
+              summaryParts.push(`     - Ghi chú: ${prescriptionService.note}`);
             }
           });
         }
         summaryParts.push('');
       });
+    } else {
+      summaryParts.push('Hồ sơ này không có phiếu chỉ định dịch vụ liên quan.');
     }
 
-    // Nếu không có dữ liệu
-    if (medicalRecords.length === 0 && prescriptions.length === 0 && medicationPrescriptions.length === 0) {
-      summaryParts.push(`Không có thông tin y tế nào được ghi nhận cho bệnh nhân này.`);
-    }
+    const vi = summaryParts.join('\n');
+    const en = await this.translationService.translateViToEn(vi);
 
-    return summaryParts.join('\n');
+    console.log(vi);
+    console.log(en);
+    return en;
   }
 }
