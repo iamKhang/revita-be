@@ -1,44 +1,42 @@
-# === 1) Install deps & generate Prisma Client (with dev deps) ===
+# === 1) Install all deps & generate Prisma Client ===
 FROM node:20-alpine AS deps
 WORKDIR /app
-
-# Copy manifests & install all deps (cần dev deps để prisma generate)
 COPY package*.json ./
 RUN npm ci
-
-# Copy Prisma schema và generate client
 COPY prisma ./prisma
-RUN npx prisma generate
+RUN npx prisma generate   # generate client at build-time
 
-# Prune dev deps để node_modules gọn cho production
-RUN npm prune --omit=dev
-
-# === 2) Build TypeScript (NestJS) ===
+# === 2) Build (needs devDependencies: @nestjs/cli, typescript, etc.) ===
 FROM node:20-alpine AS builder
 WORKDIR /app
-
 COPY package*.json ./
 COPY tsconfig*.json ./
 COPY nest-cli.json ./
-# Reuse node_modules (đã có @prisma/client đã generate)
 COPY --from=deps /app/node_modules ./node_modules
-
 COPY src ./src
 COPY prisma ./prisma
-RUN npm run build
+RUN npm run build         # nest build
 
-# === 3) Runtime image (no migrate/seed) ===
+# === 3) Production deps only (no dev) ===
+FROM node:20-alpine AS prod-deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev     # install production deps
+
+# === 4) Runtime image (no migrate/seed) ===
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Lấy node_modules đã prune + prisma binaries/client
-COPY --from=deps /app/node_modules ./node_modules
-# (Tùy chọn) copy prisma/ để tiện debug, không bắt buộc
-COPY prisma ./prisma
+# Prod node_modules
+COPY --from=prod-deps /app/node_modules ./node_modules
+# Prisma Client artifacts
+COPY --from=deps /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=deps /app/node_modules/@prisma ./node_modules/@prisma
 
 # App artifacts
 COPY --from=builder /app/dist ./dist
+COPY prisma ./prisma
 COPY package*.json ./
 COPY tsconfig*.json ./
 COPY nest-cli.json ./
