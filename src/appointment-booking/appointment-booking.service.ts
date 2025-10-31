@@ -77,16 +77,18 @@ export class AppointmentBookingService {
       throw new NotFoundException('Specialty not found');
     }
 
-    // Lấy danh sách bác sĩ có work sessions trong tương lai
+    // Lấy danh sách bác sĩ thuộc chuyên khoa và có work sessions trong tương lai
     const doctors = await this.prisma.doctor.findMany({
       where: {
+        specialtyId: specialtyId,
+        isActive: true,
         workSessions: {
           some: {
             startTime: {
               gte: new Date(), // Chỉ lấy work sessions trong tương lai
             },
             status: {
-              in: ['APPROVED', 'IN_PROGRESS'], // Chỉ lấy work sessions đã được chấp nhận // Các trạng thái active
+              in: ['APPROVED', 'IN_PROGRESS'], // Chỉ lấy work sessions đã được chấp nhận
             },
           },
         },
@@ -140,11 +142,16 @@ export class AppointmentBookingService {
       throw new NotFoundException('Specialty not found');
     }
 
-    // Lấy work sessions của bác sĩ trong ngày đó
+    // Lấy work sessions của bác sĩ trong ngày đó và thuộc đúng chuyên khoa
     const workSessions = await this.prisma.workSession.findMany({
       where: {
         doctorId: {
           not: null, // Chỉ lấy work sessions của doctor
+        },
+        // Chỉ lấy bác sĩ thuộc chuyên khoa được yêu cầu
+        doctor: {
+          specialtyId: specialtyId,
+          isActive: true,
         },
         startTime: {
           gte: startOfDay,
