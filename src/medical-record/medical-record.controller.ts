@@ -275,6 +275,19 @@ export class MedicalRecordController {
     return await this.medicalRecordService.findOne(id, req.user);
   }
 
+  @Get(':id/predict')
+  @ApiOperation({ summary: 'Dự đoán bệnh từ hồ sơ bệnh án theo id' })
+  @ApiResponse({ status: 200, description: 'Danh sách dự đoán đã dịch sang tiếng Việt' })
+  async predictByMedicalRecordId(
+    @Param('id') id: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return await this.medicalRecordService.predictDiseasesByMedicalRecordId(
+      id,
+      req.user,
+    );
+  }
+
   @Patch(':id')
   @UseInterceptors(FilesInterceptor('files'))
   @ApiOperation({
