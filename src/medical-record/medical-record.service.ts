@@ -267,8 +267,9 @@ export class MedicalRecordService {
     if (['male', 'nam', 'm'].includes(rawGender)) gender = 'M';
     else if (['female', 'nữ', 'nu', 'f'].includes(rawGender)) gender = 'F';
 
-    // Notes từ content (rút gọn thành chuỗi)
-    const notes = JSON.stringify(record.content || {});
+    // Notes từ content (rút gọn thành chuỗi) và dịch VI -> EN cho recommender
+    const notesVi = JSON.stringify(record.content || {});
+    const notes = await this.translationService.translateViToEn(notesVi);
 
     const baseUrl = process.env.RECOMMENDER_BASE_URL;
     if (!baseUrl) {
