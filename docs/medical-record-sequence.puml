@@ -1,9 +1,9 @@
 @startuml Medical Record Sequence Diagram
 !theme plain
-title Tương Tác Tạo và Quản Lý Bệnh Án - Luồng Bác Sĩ
+title Medical Record Sequence
 
-actor "Bác Sĩ" as D
-boundary "Giao Diện" as F
+actor "Doctor" as D
+boundary "Frontend" as F
 control "MedicalRecordController" as C
 control "MedicalRecordService" as M
 entity "MedicalRecord" as MR
@@ -11,76 +11,76 @@ entity "PatientProfile" as PP
 entity "Template" as T
 entity "MedicalRecordHistory" as MRH
 
-== Tạo bệnh án mới ==
+== Create Medical Record ==
 
-D -> F: Chọn bệnh nhân
+D -> F: Select patient
 F -> C: GET /medical-record/templates
 C -> C: validateRequest()
 C -> M: getTemplates()
 M -> T: findAllTemplates()
 T -> T: prisma.template.findMany()
-T --> M: Trả về danh sách template
-M --> C: Trả về danh sách template
-C --> F: Danh sách template
-F --> D: Hiển thị danh sách template
+T --> M: templates\n(all available templates with fields)
+M --> C: response\n(templates list with specialty info)
+C --> F: response\n(templates array)
+F --> D: Display templates list
 
-D -> F: Chọn template và gửi yêu cầu tạo bệnh án
+D -> F: Select template and create record
 F -> C: POST /medical-record/create
+note right: CreateMedicalRecordDto
 C -> C: validateCreateMedicalRecordDto(dto)
 C -> M: create(createMedicalRecordDto, user)
 M -> M: checkCreatePermission(user)
 
-alt Có quyền tạo
+alt Has permission
   M -> M: extractDoctorId(user)
   M -> PP: validatePatientProfile(patientProfileId)
   PP -> PP: prisma.patientProfile.findUnique()
-  PP --> M: Xác nhận patient profile hợp lệ
+  PP --> M: patientProfile\n(patient profile details)
   
   M -> M: generateMedicalRecordCode()
   M -> MR: createMedicalRecord(data)
   MR -> MR: prisma.medicalRecord.create()
-  MR --> M: Trả về bệnh án mới
+  MR --> M: medicalRecord\n(new medical record with content)
   
   M -> MRH: createHistoryRecord(medicalRecordId, action)
   MRH -> MRH: prisma.medicalRecordHistory.create()
-  MRH --> M: Xác nhận lưu history
+  MRH --> M: history\n(history entry for audit trail)
   
-  M --> C: Trả về bệnh án đã tạo
-  C --> F: Trả về kết quả tạo bệnh án
-  F --> D: Hiển thị thông báo tạo thành công
+  M --> C: response\n(created medical record with all details)
+  C --> F: response\n(medical record data)
+  F --> D: Display success message
   
-else Không có quyền
-  M --> C: throw new ForbiddenException()
-  C --> F: Thông báo lỗi
-  F --> D: Hiển thị thông báo không có quyền
+else No permission
+  M --> C: throw ForbiddenException()
+  C --> F: error\n(insufficient permissions message)
+  F --> D: Display permission error
 end
 
-== Xem và quản lý bệnh án ==
+== View and Manage Records ==
 
-D -> F: Xem danh sách bệnh án
+D -> F: View medical records
 F -> C: GET /medical-record?page=1&limit=10
 C -> C: validatePaginationParams(page, limit)
 C -> M: findAll(user, page, limit)
 M -> M: checkDoctorRole(user)
 M -> MR: findByDoctorId(user.id, page, limit)
 MR -> MR: prisma.medicalRecord.findMany()
-MR --> M: Trả về danh sách bệnh án
+MR --> M: medicalRecords\n(doctor's medical records)
 M -> M: formatPaginationResponse(data, page, limit)
-M --> C: Trả về danh sách với phân trang
-C --> F: Trả về kết quả
-F --> D: Hiển thị danh sách bệnh án
+M --> C: response\n(paginated records with total count)
+C --> F: response\n(medical records with pagination)
+F --> D: Display medical records list
 
-D -> F: Chọn bệnh án để xem chi tiết
+D -> F: Select record to view details
 F -> C: GET /medical-record/:id
 C -> C: validateId(id)
 C -> M: findOne(id, user)
 M -> MR: findById(id)
 MR -> MR: prisma.medicalRecord.findUnique()
-MR --> M: Trả về bệnh án
+MR --> M: medicalRecord\n(medical record with template and content)
 M -> M: checkViewPermission(medicalRecord, user)
-M --> C: Trả về chi tiết bệnh án
-C --> F: Trả về thông tin bệnh án
-F --> D: Hiển thị chi tiết bệnh án
-
+M --> C: response\n(medical record details with history)
+C --> F: response\n(complete medical record)
+F --> D: Display medical record details
 
 @enduml

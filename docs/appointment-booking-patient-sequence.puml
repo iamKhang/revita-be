@@ -1,69 +1,69 @@
 @startuml Appointment Booking - Patient Sequence Diagram
 !theme plain
-title Tương Tác Đặt Lịch Khám Bệnh - Luồng Bệnh Nhân
+title Patient Appointment Booking Sequence
 
-actor "Bệnh Nhân" as P
-boundary "Giao Diện" as F
+actor "Patient" as P
+boundary "Frontend" as F
 control "AppointmentBookingController" as C
 control "AppointmentBookingService" as S
-entity "Lịch Hẹn" as A
-entity "Bác Sĩ" as D
-entity "Chuyên Khoa" as SP
-entity "Dịch Vụ" as SV
+entity "Appointment" as A
+entity "Doctor" as D
+entity "Specialty" as SP
+entity "Service" as SV
 
-== Tìm kiếm và chọn bác sĩ ==
+== Search and Select Doctor ==
 
-P -> F: Tìm kiếm chuyên khoa
+P -> F: Search for specialty
 F -> C: GET /appointment-booking/specialties
 C -> C: validateRequest()
 C -> S: getSpecialties()
 S -> SP: findAllSpecialties()
 SP -> SP: prisma.specialty.findMany()
-SP --> S: Trả về danh sách chuyên khoa
-S --> C: Trả về danh sách chuyên khoa
-C --> F: Danh sách chuyên khoa
-F --> P: Hiển thị danh sách chuyên khoa
+SP --> S: specialties\n(all specialty records)
+S --> C: response\n(specialties array with id, name, description)
+C --> F: response\n(specialties list)
+F --> P: Display specialties list
 
-P -> F: Chọn chuyên khoa
+P -> F: Select specialty
 F -> C: GET /appointment-booking/doctors?specialtyId=xxx
 C -> C: validateSpecialtyId(specialtyId)
 C -> S: getDoctorsBySpecialty(specialtyId)
 S -> D: findDoctorsBySpecialty(specialtyId)
 D -> D: prisma.doctor.findMany()
-D --> S: Trả về danh sách bác sĩ
-S --> C: Trả về danh sách bác sĩ
-C --> F: Danh sách bác sĩ
-F --> P: Hiển thị danh sách bác sĩ
+D --> S: doctors\n(doctors matching specialty with work sessions)
+S --> C: response\n(doctors array with specialty info)
+C --> F: response\n(doctors list with rating, experience)
+F --> P: Display doctors list
 
-== Đặt lịch khám ==
+== Book Appointment ==
 
-P -> F: Chọn bác sĩ và ngày
+P -> F: Select doctor and date
 F -> C: GET /appointment-booking/working-days?doctorId=xxx
 C -> C: validateDoctorId(doctorId)
 C -> S: getDoctorWorkingDays(doctorId)
 S -> D: getWorkSessionsByDoctor(doctorId)
 D -> D: prisma.workSession.findMany()
-D --> S: Trả về lịch làm việc
-S --> C: Trả về lịch làm việc
-C --> F: Lịch làm việc
-F --> P: Hiển thị lịch làm việc
+D --> S: workSessions\n(approved and in-progress work sessions)
+S --> C: response\n(working days array for the month)
+C --> F: response\n(available dates list)
+F --> P: Display available working days
 
-P -> F: Chọn dịch vụ và khung giờ
+P -> F: Select service and time slot
 F -> C: GET /appointment-booking/available-slots
 C -> C: validateAvailableSlotsDto(dto)
 C -> S: getAvailableSlots(dto)
 S -> A: calculateAvailableSlots(workSessions, serviceDuration)
 
-note over S: Tính toán slots trống:\n- Duyệt work sessions\n- Tạo slots theo thời lượng\n- Kiểm tra xung đột
+note over S: Calculate available slots:\n- Iterate work sessions\n- Generate time slots\n- Check conflicts
 
 A -> A: generateTimeSlots(workSessions)
 A -> A: filterAvailableSlots(slots, existingAppointments)
-A --> S: Trả về danh sách lịch trống
-S --> C: Trả về danh sách lịch trống
-C --> F: Danh sách lịch trống
-F --> P: Hiển thị khung giờ khả dụng
+A --> S: slots\n(available and booked time slots)
+S --> C: response\n(slots array with startTime, endTime, isAvailable)
+C --> F: response\n(available slots list)
+F --> P: Display available time slots
 
-P -> F: Nhập thông tin và đặt lịch
+P -> F: Submit booking information
 F -> C: POST /appointment-booking/book
 C -> C: validateBookAppointmentDto(dto)
 C -> S: bookAppointment(bookAppointmentDto, user)
@@ -71,18 +71,18 @@ C -> S: bookAppointment(bookAppointmentDto, user)
 S -> A: checkSlotConflict(appointmentData)
 A -> A: prisma.appointment.findFirst()
 
-alt Không có xung đột
+alt No conflict
   S -> A: createAppointment(appointmentData)
   A -> A: prisma.appointment.create()
-  A --> S: Trả về lịch hẹn mới
-  S --> C: Trả về thông tin lịch hẹn
-  C --> F: Thông tin lịch hẹn đã tạo
-  F --> P: Gửi mã lịch hẹn và thông báo thành công
+  A --> S: appointment\n(new appointment with code and details)
+  S --> C: response\n(appointment with booking confirmation)
+  C --> F: response\n(created appointment details)
+  F --> P: Display booking success with code
   
-else Có xung đột
-  S --> C: throw new ConflictException()
-  C --> F: Thông báo lỗi
-  F --> P: Thông báo lịch đã được đặt, chọn khung giờ khác
+else Conflict
+  S --> C: throw ConflictException()
+  C --> F: error\n(time slot not available message)
+  F --> P: Display conflict message
 end
 
 @enduml

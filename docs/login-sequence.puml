@@ -1,9 +1,9 @@
 @startuml Login Sequence Diagram
 !theme plain
-title Tương Tác Đăng Nhập Hệ Thống
+title Login Sequence
 
-actor "Người Dùng" as U
-boundary "Giao Diện" as F
+actor "User" as U
+boundary "Frontend" as F
 control "LoginController" as C
 control "LoginService" as L
 entity "Account" as A
@@ -12,58 +12,57 @@ entity "Doctor" as D
 entity "Receptionist" as R
 entity "Admin" as AD
 
-== Đăng nhập thông thường ==
+== Normal Login ==
 
-U -> F: Nhập thông tin đăng nhập
+U -> F: Enter login credentials
 F -> C: POST /login
+note right: LoginDto
 C -> C: validateLoginDto(loginDto)
 C -> L: login(loginDto)
 L -> L: validateUser(phoneOrEmail, password)
 L -> A: findByPhoneOrEmail(phoneOrEmail)
-A -> A: prisma.account.findFirst()
-A --> L: Trả về account record
+A -> A: prisma.auth.findFirst()
+A --> L: auth\n(account record with hashed password)
 
-L -> L: bcrypt.compare(password, account.password)
-alt Mật khẩu đúng
-  L -> A: getUserById(account.userId)
-  A -> A: prisma.account.findUnique()
-  A --> L: Trả về thông tin user
+L -> L: bcrypt.compare(password, auth.password)
+alt Password correct
+  L -> A: getUserById(auth.id)
+  A -> A: prisma.auth.findUnique()
+  A --> L: user\n(account details with role)
   
   L -> L: createJwtPayload(user)
   L -> L: addRoleSpecificInfo(user)
   
-  alt Role là PATIENT
+  alt Role is PATIENT
     L -> P: getPatientByUserId(user.id)
     P -> P: prisma.patient.findUnique()
-    P --> L: Trả về patient info
+    P --> L: patient\n(patient profile info)
     
-  else Role là DOCTOR
+  else Role is DOCTOR
     L -> D: getDoctorByUserId(user.id)
     D -> D: prisma.doctor.findUnique()
-    D --> L: Trả về doctor info
+    D --> L: doctor\n(doctor profile with specialty)
     
-  else Role là RECEPTIONIST
+  else Role is RECEPTIONIST
     L -> R: getReceptionistByUserId(user.id)
     R -> R: prisma.receptionist.findUnique()
-    R --> L: Trả về receptionist info
+    R --> L: receptionist\n(receptionist profile info)
     
-  else Role là ADMIN
+  else Role is ADMIN
     L -> AD: getAdminByUserId(user.id)
     AD -> AD: prisma.admin.findUnique()
-    AD --> L: Trả về admin info
+    AD --> L: admin\n(admin profile info)
   end
   
   L -> L: jwt.sign(payload, secret, {expiresIn: '15d'})
-  L --> C: Trả về token và user info
-  C --> F: Trả về kết quả đăng nhập
-  F --> U: Hiển thị thông báo thành công và chuyển trang
+  L --> C: response\n(jwt token + user info + role-specific data)
+  C --> F: response\n(login success with access token)
+  F --> U: Display success and redirect
   
-else Mật khẩu sai
-  L --> C: throw new UnauthorizedException()
-  C --> F: Thông báo lỗi
-  F --> U: Hiển thị thông báo lỗi đăng nhập
+else Password incorrect
+  L --> C: throw UnauthorizedException()
+  C --> F: error\n(invalid credentials message)
+  F --> U: Display login error
 end
-
-
 
 @enduml

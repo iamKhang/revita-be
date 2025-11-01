@@ -1,55 +1,56 @@
 @startuml Appointment Booking - Management Sequence Diagram
 !theme plain
-title Tương Tác Đăng Lịch Khám Bệnh - Luồng Bác Sĩ
+title Work Session Management Sequence
 
-actor "Bác Sĩ" as D
-boundary "Giao Diện" as F
+actor "Doctor" as D
+boundary "Frontend" as F
 control "WorkSessionController" as C
 control "WorkSessionService" as S
-entity "Lịch Làm Việc" as WS
-entity "Bác Sĩ" as DOC
-entity "Dịch Vụ" as SV
+entity "WorkSession" as WS
+entity "Doctor" as DOC
+entity "Service" as SV
 
-== Đăng lịch làm việc mới ==
+== Create Work Session ==
 
-D -> F: Đăng lịch làm việc mới
+D -> F: Request to create work session
 F -> C: POST /work-session/create
+note right: CreateWorkSessionDto
 C -> C: validateCreateWorkSessionDto(dto)
 C -> S: createWorkSession(createWorkSessionDto, user)
 S -> WS: validateWorkSessionData(data)
 WS -> WS: checkDuplicateSchedule(data)
 WS -> WS: prisma.workSession.findFirst()
 
-alt Không có trùng lặp
+alt No conflict
   WS -> WS: prisma.workSession.create()
-  WS --> S: Trả về work session mới
-  S --> C: Trả về thông tin lịch làm việc
-  C --> F: Trả về kết quả đăng lịch
-  F --> D: Thông báo đăng lịch thành công
+  WS --> S: workSession\n(id, boothId, doctorId, startTime, endTime, status, services)
+  S --> C: workSessionData\n(id, boothName, doctorInfo, timeRange, status)
+  C --> F: response\n(work session details with confirmation)
+  F --> D: Display success message
   
-else Có trùng lặp
-  WS --> S: throw new ConflictException()
-  S --> C: Trả về lỗi
-  C --> F: Thông báo lỗi
-  F --> D: Thông báo lịch trùng lặp, chỉnh sửa thời gian
+else Conflict detected
+  WS --> S: throw ConflictException()
+  S --> C: error\n(conflict message and details)
+  C --> F: error\n(HTTP error response)
+  F --> D: Display conflict message
 end
 
-== Xem lịch làm việc đã đăng ==
+== Get Doctor Work Sessions ==
 
-D -> F: Xem lịch làm việc đã đăng
+D -> F: Request work sessions
 F -> C: GET /work-session/doctor
 C -> C: validateRequest()
 C -> S: getDoctorWorkSessions(user)
 S -> WS: findByDoctorId(user.id)
 WS -> WS: prisma.workSession.findMany()
-WS --> S: Trả về danh sách lịch làm việc
-S --> C: Trả về danh sách lịch làm việc
-C --> F: Danh sách lịch làm việc
-F --> D: Hiển thị lịch làm việc đã đăng
+WS --> S: workSessions\n(all work session records for doctor)
+S --> C: workSessions\n(formatted list with booth, services info)
+C --> F: workSessions\n(work sessions array)
+F --> D: Display work sessions list
 
-== Cập nhật lịch làm việc ==
+== Update Work Session ==
 
-D -> F: Cập nhật lịch làm việc
+D -> F: Request to update work session
 F -> C: PUT /work-session/update/:id
 C -> C: validateId(id)
 C -> C: validateUpdateWorkSessionDto(dto)
@@ -59,23 +60,23 @@ WS -> WS: prisma.workSession.findUnique()
 WS -> WS: checkHasAppointments(id)
 WS -> WS: prisma.appointment.findFirst()
 
-alt Chưa có bệnh nhân đặt
+alt No appointments
   WS -> WS: prisma.workSession.update()
-  WS --> S: Trả về work session đã cập nhật
-  S --> C: Trả về thông tin lịch làm việc
-  C --> F: Thông tin lịch làm việc đã cập nhật
-  F --> D: Thông báo cập nhật thành công
+  WS --> S: workSession\n(updated work session record)
+  S --> C: workSessionData\n(updated work session details)
+  C --> F: response\n(work session with new time/services)
+  F --> D: Display update success message
   
-else Đã có bệnh nhân đặt
-  WS --> S: throw new BadRequestException()
-  S --> C: Trả về lỗi
-  C --> F: Thông báo lỗi
-  F --> D: Thông báo không thể chỉnh sửa, liên hệ bệnh nhân
+else Has appointments
+  WS --> S: throw BadRequestException()
+  S --> C: error\n(not allowed to modify message)
+  C --> F: error\n(HTTP error response)
+  F --> D: Display cannot modify message
 end
 
-== Hủy lịch làm việc ==
+== Cancel Work Session ==
 
-D -> F: Hủy lịch làm việc
+D -> F: Request to cancel work session
 F -> C: DELETE /work-session/cancel/:id
 C -> C: validateId(id)
 C -> S: cancelWorkSession(id, user)
@@ -84,18 +85,18 @@ WS -> WS: prisma.workSession.findUnique()
 WS -> WS: checkHasAppointments(id)
 WS -> WS: prisma.appointment.findFirst()
 
-alt Chưa có bệnh nhân đặt
+alt No appointments
   WS -> WS: prisma.workSession.update({status: 'cancelled'})
-  WS --> S: Trả về work session đã hủy
-  S --> C: Trả về kết quả hủy lịch
-  C --> F: Kết quả hủy lịch làm việc
-  F --> D: Thông báo hủy lịch thành công
+  WS --> S: workSession\n(cancelled work session record)
+  S --> C: response\n(cancelled work session confirmation)
+  C --> F: response\n(work session marked as cancelled)
+  F --> D: Display cancel success message
   
-else Đã có bệnh nhân đặt
-  WS --> S: throw new BadRequestException()
-  S --> C: Trả về lỗi
-  C --> F: Thông báo lỗi
-  F --> D: Thông báo không thể hủy, liên hệ bệnh nhân trước
+else Has appointments
+  WS --> S: throw BadRequestException()
+  S --> C: error\n(not allowed to cancel message)
+  C --> F: error\n(HTTP error response)
+  F --> D: Display cannot cancel message
 end
 
 @enduml
