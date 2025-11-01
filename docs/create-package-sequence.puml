@@ -1,3 +1,22 @@
+' Toàn cục
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+
+' (Tuỳ chọn) từng loại biểu đồ
+skinparam sequence {
+  FontName "Times New Roman"
+}
+skinparam class {
+  FontName "Times New Roman"
+}
+skinparam activity {
+  FontName "Times New Roman"
+}
+skinparam usecase {
+  FontName "Times New Roman"
+}
+
+
 @startuml createPackageSequence
 
 actor "Quản lý" as Admin
@@ -5,8 +24,11 @@ actor "Quản lý" as Admin
 boundary "Admin UI" as UI
 control "ServiceController" as Controller
 entity "ServiceService" as Service
-entity "PrismaService" as Prisma
-database "PostgreSQL" as DB
+entity "Package" as Package
+entity "PackageItem" as PackageItem
+entity "Service" as ServiceEntity
+entity "Category" as Category
+entity "Specialty" as Specialty
 
 == Tạo gói dịch vụ ==
 
@@ -16,7 +38,7 @@ activate UI
 UI --> Admin: Hiển thị form\nthêm gói dịch vụ
 deactivate UI
 
-Admin -> UI: Điền thông tin cơ bản:\nname, price,\ndescription,\ncategoryId, specialtyId,\nrequiresDoctor, isActive
+Admin -> UI: Điền thông tin cơ bản:\nname, price, description,\ncategoryId, specialtyId,\nrequiresDoctor, isActive
 activate UI
 
 loop Thêm dịch vụ vào gói
@@ -29,7 +51,7 @@ loop Thêm dịch vụ vào gói
     UI -> UI: Thêm vào danh sách items
 end
 
-UI -> UI: Validate form\nname và price bắt buộc
+UI -> UI: validateForm(name, price)
 
 alt Validation thất bại
     UI --> Admin: Hiển thị lỗi\nthiếu thông tin bắt buộc
@@ -37,21 +59,17 @@ alt Validation thất bại
 else Validation thành công
     Admin -> UI: Nhấn Tạo gói dịch vụ
 
-    UI -> Controller: POST /services/management/packages\nCreatePackageDto\nwith items array
+    UI -> Controller: POST /services/management/packages\nname, price, description,\ncategoryId, specialtyId,\nrequiresDoctor, isActive, items
     activate Controller
 
-    Controller -> Service: createPackage(dto)
+    Controller -> Service: createPackage(name, price, description,\ncategoryId, specialtyId, requiresDoctor,\nisActive, items)
     activate Service
 
     alt Có categoryId
-        Service -> Prisma: findUnique category
-        activate Prisma
-        Prisma -> DB: SELECT category\nWHERE id
-        activate DB
-        DB --> Prisma: Category or null
-        deactivate DB
-        Prisma --> Service: Category or null
-        deactivate Prisma
+        Service -> Category: findUnique(categoryId)
+        activate Category
+        Category --> Service: Category hoặc null
+        deactivate Category
 
         alt Category không tồn tại
             Service --> Controller: Error category not found
@@ -64,14 +82,10 @@ else Validation thành công
     end
 
     alt Có specialtyId
-        Service -> Prisma: findUnique specialty
-        activate Prisma
-        Prisma -> DB: SELECT specialty\nWHERE id
-        activate DB
-        DB --> Prisma: Specialty or null
-        deactivate DB
-        Prisma --> Service: Specialty or null
-        deactivate Prisma
+        Service -> Specialty: findUnique(specialtyId)
+        activate Specialty
+        Specialty --> Service: Specialty hoặc null
+        deactivate Specialty
 
         alt Specialty không tồn tại
             Service --> Controller: Error specialty not found
@@ -83,7 +97,7 @@ else Validation thành công
         end
     end
 
-    Service -> Service: Check duplicate\nserviceIds in items
+    Service -> Service: checkDuplicateServiceIds(items)
 
     alt Có serviceId trùng lặp
         Service --> Controller: Error duplicate services
@@ -94,18 +108,12 @@ else Validation thành công
         deactivate Service
     end
 
-    Service -> Prisma: findMany services\nWHERE id IN serviceIds
-    activate Prisma
+    Service -> ServiceEntity: findMany(serviceIds)
+    activate ServiceEntity
+    ServiceEntity --> Service: Services array
+    deactivate ServiceEntity
 
-    Prisma -> DB: SELECT service\nWHERE id IN list
-    activate DB
-    DB --> Prisma: Services found
-    deactivate DB
-
-    Prisma --> Service: Services array
-    deactivate Prisma
-
-    Service -> Service: Validate all serviceIds exist
+    Service -> Service: validateAllServiceIdsExist(services)
 
     alt Có serviceId không tồn tại
         Service --> Controller: Error service not found
@@ -116,36 +124,20 @@ else Validation thành công
         deactivate Service
     end
 
-    Service -> Service: generateUniquePackageCode
+    Service -> Service: generateUniquePackageCode() -> packageCode
 
-    Service -> Prisma: Begin transaction
-    activate Prisma
-
-    Prisma -> DB: BEGIN TRANSACTION
-    activate DB
-    DB --> Prisma: Transaction started
-    deactivate DB
-
-    Prisma -> DB: INSERT INTO package\ncode, name, price,\ndescription, isActive,\nrequiresDoctor,\ncategoryId, specialtyId
-    activate DB
-    DB --> Prisma: Package created
-    deactivate DB
+    Service -> Package: create(packageCode, name, price,\ndescription, isActive, requiresDoctor,\ncategoryId, specialtyId)
+    activate Package
+    Package --> Service: Package created với id
+    deactivate Package
 
     alt Có items
-        Prisma -> DB: INSERT INTO packageItem\nbulk insert\npackageId, serviceId,\nquantity, priceOverride,\nrequired, sortOrder, notes\nfor each item
-        activate DB
+        Service -> PackageItem: createMany(packageId, items)
+        activate PackageItem
 
         alt Insert items thất bại
-            DB --> Prisma: Error constraint violation
-            deactivate DB
-
-            Prisma -> DB: ROLLBACK TRANSACTION
-            activate DB
-            DB --> Prisma: Transaction rolled back
-            deactivate DB
-
-            Prisma --> Service: Error
-            deactivate Prisma
+            PackageItem --> Service: Error constraint violation
+            deactivate PackageItem
 
             Service --> Controller: Error cannot create package
             deactivate Service
@@ -156,61 +148,33 @@ else Validation thành công
             UI --> Admin: Hiển thị lỗi\nkhông thể tạo gói dịch vụ
             deactivate UI
         else Insert items thành công
-            DB --> Prisma: PackageItems created
-            deactivate DB
+            PackageItem --> Service: PackageItems created
+            deactivate PackageItem
 
-            Prisma -> DB: COMMIT TRANSACTION
-            activate DB
-            DB --> Prisma: Transaction committed
-            deactivate DB
-
-            Prisma --> Service: Package created
-            deactivate Prisma
-
-            Service -> Prisma: getPackageManagementById
-            activate Prisma
-
-            Prisma -> DB: SELECT package\nWHERE id\nINCLUDE category, specialty,\nitems with services
-            activate DB
-            DB --> Prisma: Package with relations
-            deactivate DB
-
-            Prisma --> Service: Package details
-            deactivate Prisma
+            Service -> Package: findByIdWithRelations(id)
+            activate Package
+            Package --> Service: Package với category, specialty, items
+            deactivate Package
 
             Service --> Controller: Package created
             deactivate Service
 
-            Controller --> UI: 200 OK\npackage data
+            Controller --> UI: 200 OK package data
             deactivate Controller
 
             UI --> Admin: Hiển thị thông báo\ntạo gói dịch vụ thành công\nvà thông tin gói mới\nvới danh sách dịch vụ
             deactivate UI
         end
     else Không có items
-        Prisma -> DB: COMMIT TRANSACTION
-        activate DB
-        DB --> Prisma: Transaction committed
-        deactivate DB
-
-        Prisma --> Service: Package created
-        deactivate Prisma
-
-        Service -> Prisma: getPackageManagementById
-        activate Prisma
-
-        Prisma -> DB: SELECT package\nWHERE id\nINCLUDE category, specialty
-        activate DB
-        DB --> Prisma: Package with relations
-        deactivate DB
-
-        Prisma --> Service: Package details
-        deactivate Prisma
+        Service -> Package: findByIdWithRelations(id)
+        activate Package
+        Package --> Service: Package với category, specialty
+        deactivate Package
 
         Service --> Controller: Package created
         deactivate Service
 
-        Controller --> UI: 200 OK\npackage data
+        Controller --> UI: 200 OK package data
         deactivate Controller
 
         UI --> Admin: Hiển thị thông báo\ntạo gói dịch vụ thành công\nvà thông tin gói mới
