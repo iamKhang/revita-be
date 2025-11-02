@@ -14,75 +14,45 @@ start
 :Nhấn nút\n"Gọi bệnh nhân tiếp theo";
 
 |Hệ thống|
-:Nhận request\ncallNextPatient(counterId);
+:Nhận yêu cầu gọi bệnh nhân;
 
-:Lấy queue cũ từ Redis\nZREVRANGE;
-
-:Lấy bệnh nhân đang phục vụ\nGET counter:current;
+:Kiểm tra bệnh nhân\nđang phục vụ;
 
 if (Có bệnh nhân\nđang phục vụ?) then (yes)
-  :Xóa bệnh nhân hiện tại\nDEL counter:current;
+  :Đánh dấu bệnh nhân\nđã được phục vụ;
   
-  :Gửi WebSocket:\nPATIENT_SERVED;
-  
-  :Publish Redis Stream:\ntype=PATIENT_SERVED;
+  :Thông báo\nđã phục vụ xong;
 endif
 
-:Lấy danh sách chờ\nZREVRANGE counterQueueZ;
+:Lấy danh sách\nbệnh nhân chờ;
 
-if (Queue rỗng?) then (yes)
-  :Reset sequence nếu cần\nDEL counter:sequence;
-  
+if (Không có bệnh nhân chờ?) then (yes)
   |Nhân viên quầy|
   #pink:Hiển thị:\n"Không có bệnh nhân";
   :Xác nhận;
   stop
 else (no)
   |Hệ thống|
-  :Lấy bệnh nhân\nưu tiên cao nhất\nqueue[0];
+  :Lấy bệnh nhân\nưu tiên cao nhất;
   
-  :Tạo preparingPatient:\n- status = PREPARING\n- isPriority = true\n- preparingAt = now;
+  :Chuyển sang trạng thái\nĐANG CHUẨN BỊ;
   
-  :Xóa khỏi queue\nZREM counterQueueZ;
+  :Thông báo đang chuẩn bị\nphục vụ bệnh nhân;
   
-  :Thêm lại với MAX priority\nZADD MAX_SAFE_INTEGER;
+  :Chuyển sang trạng thái\nĐANG PHỤC VỤ;
   
-  :Gửi WebSocket:\nPATIENT_PREPARING;
+  :Lưu lịch sử\nphục vụ (nếu cần);
   
-  :Publish Redis Stream:\ntype=PATIENT_PREPARING;
+  :Chọn bệnh nhân\nTIẾP THEO;
   
-  :Gọi callNextPatientOptimized:\n- ZPOPMAX (lấy PREPARING)\n- SET counter:current\n- status = SERVING;
+  :Thông báo bệnh nhân tiếp theo;
   
-  :Lấy current đã update\nGET counter:current;
+  :Thông báo thay đổi\nvị trí trong hàng chờ;
   
-  if (Có previous khác current?) then (yes)
-    :Lưu vào history\nLPUSH counter:history;
-  endif
-  
-  :Chuẩn hóa current\nstatus = SERVING;
-  
-  :Cập nhật counter:current\nSET;
-  
-  :Chọn bệnh nhân NEXT\nupdateNextPatientInQueue;
-  
-  :Lấy queue hiện tại\nZREVRANGE;
-  
-  :Tìm bệnh nhân\nưu tiên cao nhất;
-  
-  :Đánh dấu status = NEXT\nZADD;
-  
-  :Publish Redis Stream:\ntype=NEXT_PATIENT_CALLED;
-  
-  :Lấy queue mới\nZREVRANGE;
-  
-  :So sánh oldQueue\nvs newQueue;
-  
-  :Gửi WebSocket:\nqueue_position_changed\n(moved patients);
-  
-  :Tạo response\nmapTicketForFrontend;
+  :Tạo thông tin\nphản hồi;
   
   |Nhân viên quầy|
-  :Nhận thông tin:\n- Bệnh nhân đang phục vụ\n- Bệnh nhân tiếp theo (NEXT)\n- Danh sách chờ;
+  :Nhận thông tin:\n- Bệnh nhân đang phục vụ\n- Bệnh nhân tiếp theo\n- Danh sách chờ;
   
   :Hiển thị trên màn hình\nquầy tiếp nhận;
 endif
