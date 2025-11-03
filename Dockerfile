@@ -1,35 +1,45 @@
+# === 1) Install all deps & generate Prisma Client ===
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-# Install all deps (including dev) to run Prisma CLI
 RUN npm ci
-# Copy Prisma schema and generate client
 COPY prisma ./prisma
-RUN npx prisma generate
+RUN npx prisma generate   # generate client at build-time
 
+# === 2) Build (needs devDependencies: @nestjs/cli, typescript, etc.) ===
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+COPY tsconfig*.json ./
+COPY nest-cli.json ./
+COPY --from=deps /app/node_modules ./node_modules
+COPY src ./src
+COPY prisma ./prisma
+RUN npm run build         # nest build
+
+# === 3) Production deps only (no dev) ===
+FROM node:20-alpine AS prod-deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev     # install production deps
+
+# === 4) Runtime image (no migrate/seed) ===
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install deps (include dev for ts-node + prisma CLI at runtime when needed)
-COPY package*.json ./
-RUN npm ci && npm cache clean --force
-
-# Bring in Prisma generated artifacts
+# Prod node_modules
+COPY --from=prod-deps /app/node_modules ./node_modules
+# Prisma Client artifacts
 COPY --from=deps /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=deps /app/node_modules/@prisma ./node_modules/@prisma
 
-# Copy Prisma schema/migrations for runtime migrations
+# App artifacts
+COPY --from=builder /app/dist ./dist
 COPY prisma ./prisma
-
-# Copy already-built dist from repository (avoids TS compile in container)
-COPY dist ./dist
-
-# Entrypoint script to run migrations/seed if DB empty
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh
+COPY package*.json ./
+COPY tsconfig*.json ./
+COPY nest-cli.json ./
 
 EXPOSE 3000
-ENTRYPOINT ["./docker-entrypoint.sh"]
-
-
+CMD ["node", "dist/src/main.js"]

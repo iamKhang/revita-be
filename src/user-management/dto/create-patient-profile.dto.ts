@@ -5,6 +5,7 @@ import {
   IsDateString,
   IsObject,
   IsUUID,
+  IsBoolean,
 } from 'class-validator';
 
 export class CreatePatientProfileDto {
@@ -47,4 +48,12 @@ export class CreatePatientProfileDto {
   @IsString()
   @IsOptional()
   relationship?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPregnant?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isDisabled?: boolean;
 }

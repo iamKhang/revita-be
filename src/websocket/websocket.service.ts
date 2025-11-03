@@ -11,6 +11,7 @@ export interface WebSocketMessage {
 @Injectable()
 export class WebSocketService {
   private server: Server;
+  private boothServer: Server;
   private counterConnections: Map<string, Set<string>> = new Map(); // counterId -> Set<socketId>
   private socketToCounter: Map<string, string> = new Map(); // socketId -> counterId
   private cashierConnections: Map<string, Set<string>> = new Map(); // cashierId -> Set<socketId>
@@ -20,6 +21,10 @@ export class WebSocketService {
 
   setServer(server: Server) {
     this.server = server;
+  }
+
+  setBoothServer(server: Server) {
+    this.boothServer = server;
   }
 
   /**
@@ -181,6 +186,7 @@ export class WebSocketService {
 
     // Chỉ gửi đến counter tương ứng
     this.server.to(`counter:${counterId}`).emit('new_ticket', message);
+    console.log(`🔔 [WebSocket] Emitted 'new_ticket' to room: counter:${counterId}`);
 
     console.log(`Notified counter ${counterId} about new ticket ${ticket.queueNumber}`);
   }
@@ -200,10 +206,16 @@ export class WebSocketService {
       timestamp: new Date().toISOString(),
     };
 
+    console.log('🔔 [WebSocket] notifyTicketCalled called');
+    console.log('🔔 [WebSocket] Counter ID:', counterId);
+    console.log('🔔 [WebSocket] Ticket:', ticket.queueNumber);
+    console.log('🔔 [WebSocket] Message:', JSON.stringify(message, null, 2));
+
     // Gửi đến tất cả counter
     this.server.emit('ticket_called', message);
+    console.log(`🔔 [WebSocket] Emitted 'ticket_called' to all clients`);
 
-    console.log(`Notified all counters about ticket ${ticket.queueNumber} called at counter ${counterId}`);
+    console.log(`✅ [WebSocket] Notified all counters about ticket ${ticket.queueNumber} called at counter ${counterId}`);
   }
 
   /**
@@ -273,7 +285,13 @@ export class WebSocketService {
    * Gửi thông báo đến counter cụ thể
    */
   async sendToCounter(counterId: string, event: string, data: any) {
+    console.log('🔔 [WebSocket] sendToCounter called');
+    console.log('🔔 [WebSocket] Counter ID:', counterId);
+    console.log('🔔 [WebSocket] Event:', event);
+    console.log('🔔 [WebSocket] Data:', JSON.stringify(data, null, 2));
+    
     this.server.to(`counter:${counterId}`).emit(event, data);
+    console.log(`🔔 [WebSocket] Emitted '${event}' to room: counter:${counterId}`);
   }
 
   /**

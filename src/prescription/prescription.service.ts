@@ -148,6 +148,8 @@ export class PrescriptionService {
             status: s.status || PrescriptionStatus.NOT_STARTED,
             order: s.order ?? index + 1,
             note: s.note ?? null,
+            doctorId: s.doctorId ?? null,
+            technicianId: s.technicianId ?? null,
           })),
         },
         // no medications here; managed by medication-prescription module
@@ -274,6 +276,8 @@ export class PrescriptionService {
               status: (s.status as any) || PrescriptionStatus.NOT_STARTED,
               order: s.order ?? index + 1,
               note: s.note ?? null,
+              doctorId: s.doctorId ?? null,
+              technicianId: s.technicianId ?? null,
             })),
           },
         },

@@ -51,6 +51,9 @@ export class PatientProfileService {
       !dto.patientId, // isIndependent = true if no patientId
     );
 
+    const canManagePriorityFlags =
+      user.role !== Role.PATIENT && user.role !== undefined;
+
     // Create patient profile
     const patientProfile = await this.prisma.patientProfile.create({
       data: {
@@ -65,6 +68,12 @@ export class PatientProfileService {
         emergencyContact: dto.emergencyContact,
         healthInsurance: dto.healthInsurance,
         relationship: dto.relationship,
+        isPregnant: canManagePriorityFlags
+          ? dto.isPregnant ?? false
+          : false,
+        isDisabled: canManagePriorityFlags
+          ? dto.isDisabled ?? false
+          : false,
       },
       include: {
         patient: {
@@ -254,6 +263,9 @@ export class PatientProfileService {
 
     // Staff can update any profile
 
+    const canManagePriorityFlags =
+      user.role !== Role.PATIENT && user.role !== undefined;
+
     const data: Record<string, unknown> = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.phone !== undefined) data.phone = dto.phone;
@@ -267,6 +279,10 @@ export class PatientProfileService {
     if (dto.healthInsurance !== undefined)
       data.healthInsurance = dto.healthInsurance;
     if (dto.relationship !== undefined) data.relationship = dto.relationship;
+    if (canManagePriorityFlags && dto.isPregnant !== undefined)
+      data.isPregnant = dto.isPregnant;
+    if (canManagePriorityFlags && dto.isDisabled !== undefined)
+      data.isDisabled = dto.isDisabled;
 
     const updated = await this.prisma.patientProfile.update({
       where: { id },
@@ -327,6 +343,8 @@ export class PatientProfileService {
         emergencyContact: dto.emergencyContact,
         healthInsurance: dto.healthInsurance,
         relationship: dto.relationship,
+        isPregnant: dto.isPregnant ?? false,
+        isDisabled: dto.isDisabled ?? false,
       },
       include: {
         patient: {

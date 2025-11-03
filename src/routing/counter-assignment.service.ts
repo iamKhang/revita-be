@@ -850,6 +850,9 @@ export class CounterAssignmentService {
 
     // Send WebSocket notification directly
     try {
+      console.log('🔄 [CounterAssignment] About to send PATIENT_PREPARING WebSocket notification');
+      console.log('🔄 [CounterAssignment] Counter ID:', counterId);
+      
       await this.webSocket.sendToCounter(counterId, 'patient_preparing', {
         type: 'PATIENT_PREPARING',
         data: {
@@ -858,9 +861,9 @@ export class CounterAssignmentService {
         },
         timestamp: new Date().toISOString(),
       });
-      console.log('🔄 [WebSocket] Sent PATIENT_PREPARING notification directly');
+      console.log('✅ [CounterAssignment] Sent PATIENT_PREPARING notification successfully');
     } catch (err) {
-      console.warn('[WebSocket] Patient preparing notification failed:', (err as Error).message);
+      console.warn('❌ [CounterAssignment] Patient preparing notification failed:', (err as Error).message);
     }
 
     // Publish preparing event

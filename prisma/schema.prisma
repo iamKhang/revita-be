@@ -131,6 +131,8 @@ model PatientProfile {
   isActive          Boolean     @default(true) @map("is_active")
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
+  isPregnant        Boolean     @default(false) @map("is_pregnant")
+  isDisabled        Boolean     @default(false) @map("is_disabled")
   patient           Patient?    @relation(fields: [patientId], references: [id]) // Quan hệ optional
   appointments      Appointment[]
   medicalRecords    MedicalRecord[]
@@ -251,6 +253,7 @@ model ClinicRoom {
 
   specialty   Specialty   @relation(fields: [specialtyId], references: [id])
   services    ClinicRoomService[]
+  prescriptionServices PrescriptionService[]
 
   @@map("clinic_rooms")
 }
@@ -644,6 +647,16 @@ model PrescriptionService {
   note String?
   startedAt DateTime? @map("started_at")
   completedAt DateTime? @map("completed_at")
+  
+  // Lưu trữ thông tin buồng và phòng thực hiện dịch vụ
+  boothId String? @map("booth_id")
+  booth Booth? @relation(fields: [boothId], references: [id])
+  clinicRoomId String? @map("clinic_room_id")
+  clinicRoom ClinicRoom? @relation(fields: [clinicRoomId], references: [id])
+  
+  // Lưu trữ work session thực hiện dịch vụ
+  workSessionId String? @map("work_session_id")
+  workSession WorkSession? @relation(fields: [workSessionId], references: [id])
 
   @@unique([prescriptionId, serviceId])
   @@map("prescription_services")
@@ -675,6 +688,7 @@ model Booth {
   updatedAt DateTime @updatedAt
   workSessions WorkSession[]
   boothServices BoothService[]
+  prescriptionServices PrescriptionService[]
   @@map("booths")
 }
 
@@ -693,7 +707,7 @@ model WorkSession {
   services WorkSessionService[]
   appointmentServices AppointmentService[]
   appointments Appointment[]
-
+  prescriptionServices PrescriptionService[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
