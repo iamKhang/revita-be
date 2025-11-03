@@ -4,6 +4,7 @@ export interface PendingServiceDto {
 }
 
 export interface PendingServicesResponseDto {
+  prescriptionId: string;
   prescriptionCode: string;
   services: PendingServiceDto[];
   status: 'PENDING';

@@ -1449,69 +1449,72 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
-//   /**
-//    * Lấy độ dài prescription queue
-//    */
-//   async getPrescriptionQueueLength(userId: string, userRole: 'DOCTOR' | 'TECHNICIAN'): Promise<number> {
-//     try {
-//       const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
-//       return await this.redis.zcard(queueKey);
-//     } catch (error) {
-//       console.warn('Error getting prescription queue length:', error);
-//       return 0;
-//     }
-//   }
+  /**
+   * Lấy độ dài prescription queue
+   */
+  async getPrescriptionQueueLength(userId: string, userRole: 'DOCTOR' | 'TECHNICIAN'): Promise<number> {
+    try {
+      const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
+      return await this.redis.zcard(queueKey);
+    } catch (error) {
+      console.warn('Error getting prescription queue length:', error);
+      return 0;
+    }
+  }
 
-//   /**
-//    * Xóa toàn bộ prescription queue cho user
-//    */
-//   async clearPrescriptionQueue(userId: string, userRole: 'DOCTOR' | 'TECHNICIAN'): Promise<void> {
-//     try {
-//       const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
-//       await this.redis.del(queueKey);
-//     } catch (error) {
-//       console.warn('Error clearing prescription queue:', error);
-//     }
-//   /**
-//    * Thêm entry vào Redis Stream
-//    */
-//   async xadd(streamKey: string, id: string, ...fields: string[]): Promise<string> {
-//     const result = await this.redis.xadd(streamKey, id, ...fields);
-//     return result || '';
-//   }
+  /**
+   * Xóa toàn bộ prescription queue cho user
+   */
+  async clearPrescriptionQueue(userId: string, userRole: 'DOCTOR' | 'TECHNICIAN'): Promise<void> {
+    try {
+      const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
+      await this.redis.del(queueKey);
+    } catch (error) {
+      console.warn('Error clearing prescription queue:', error);
+    }
+  }
+  /**
+   * Thêm entry vào Redis Stream
+   */
+  async xadd(streamKey: string, id: string, ...fields: string[]): Promise<string> {
+    const result = await this.redis.xadd(streamKey, id, ...fields);
+    return result || '';
+  }
 
-//   /**
-//    * Lấy entries từ Redis Stream
-//    */
-//   async xrange(streamKey: string, start: string, end: string): Promise<Array<[string, Array<[string, string]>]>> {
-//     const result = await this.redis.xrange(streamKey, start, end);
-//     return result.map(([id, fields]) => [id, Array.from(fields).map(([key, value]) => [key, value])]);
-//   }
+  /**
+   * Lấy entries từ Redis Stream
+   */
+  async xrange(streamKey: string, start: string, end: string): Promise<Array<[string, Array<[string, string]>]>> {
+    const result: any = await this.redis.xrange(streamKey, start, end);
+    const typed: Array<[string, [string, string][]]> = result as Array<[string, [string, string][]]>;
+    return typed.map(([id, fields]) => [id, fields]);
+  }
 
-//   /**
-//    * Lấy entries từ Redis Stream (reverse)
-//    */
-//   async xrevrange(streamKey: string, end: string, start: string, count?: number): Promise<Array<[string, Array<[string, string]>]>> {
-//     let result;
-//     if (count) {
-//       result = await this.redis.xrevrange(streamKey, end, start, 'COUNT', count);
-//     } else {
-//       result = await this.redis.xrevrange(streamKey, end, start);
-//     }
-//     return result.map(([id, fields]) => [id, Array.from(fields).map(([key, value]) => [key, value])]);
-//   }
+  /**
+   * Lấy entries từ Redis Stream (reverse)
+   */
+  async xrevrange(streamKey: string, end: string, start: string, count?: number): Promise<Array<[string, Array<[string, string]>]>> {
+    let result: any;
+    if (count) {
+      result = await this.redis.xrevrange(streamKey, end, start, 'COUNT', count);
+    } else {
+      result = await this.redis.xrevrange(streamKey, end, start);
+    }
+    const typed: Array<[string, [string, string][]]> = result as Array<[string, [string, string][]]>;
+    return typed.map(([id, fields]) => [id, fields]);
+  }
 
-//   /**
-//    * Lấy length của Redis Stream
-//    */
-//   async xlen(streamKey: string): Promise<number> {
-//     return await this.redis.xlen(streamKey);
-//   }
+  /**
+   * Lấy length của Redis Stream
+   */
+  async xlen(streamKey: string): Promise<number> {
+    return await this.redis.xlen(streamKey);
+  }
 
-//   /**
-//    * Xóa entries từ Redis Stream
-//    */
-//   async xdel(streamKey: string, ...ids: string[]): Promise<number> {
-//     return await this.redis.xdel(streamKey, ...ids);
-//   }
+  /**
+   * Xóa entries từ Redis Stream
+   */
+  async xdel(streamKey: string, ...ids: string[]): Promise<number> {
+    return await this.redis.xdel(streamKey, ...ids);
+  }
 }

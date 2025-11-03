@@ -1246,7 +1246,7 @@ export class PrescriptionService {
   /**
    * Chuyển các PrescriptionService từ PENDING sang WAITING và thêm vào queue
    */
-  async startServices(dto: StartServicesDto, user: JwtUserPayload): Promise<StartServicesResponseDto> {
+  async startServices(dto: StartServicesDto, user?: JwtUserPayload): Promise<StartServicesResponseDto> {
     const startedServices: any[] = [];
     const failedServices: any[] = [];
     const startedAt = new Date();
@@ -1299,7 +1299,7 @@ export class PrescriptionService {
   private async startSingleService(
     prescriptionId: string,
     serviceId: string,
-    user: JwtUserPayload,
+    user: JwtUserPayload | undefined,
     startedAt: Date
   ): Promise<{ success: boolean; reason?: string }> {
     try {
@@ -1329,14 +1329,14 @@ export class PrescriptionService {
       }
 
       // Kiểm tra quyền truy cập
-      if (user.role === 'DOCTOR' && prescriptionService.prescription.doctorId !== user.doctor?.id) {
+      if (user?.role === 'DOCTOR' && prescriptionService.prescription.doctorId !== user.doctor?.id) {
         return {
           success: false,
           reason: 'You can only start services in prescriptions you created',
         };
       }
 
-      if (user.role === 'TECHNICIAN' && prescriptionService.technicianId !== user.technician?.id) {
+      if (user?.role === 'TECHNICIAN' && prescriptionService.technicianId !== user.technician?.id) {
         return {
           success: false,
           reason: 'You can only start services assigned to you',
@@ -1415,6 +1415,7 @@ export class PrescriptionService {
 
       if (prescription.services.length === 0) {
         return {
+          prescriptionId: prescription.id,
           prescriptionCode,
           services: [],
           status: 'PENDING',
@@ -1431,6 +1432,7 @@ export class PrescriptionService {
       }));
 
       return {
+        prescriptionId: prescription.id,
         prescriptionCode,
         services,
         status: 'PENDING',

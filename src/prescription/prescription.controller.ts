@@ -11,6 +11,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { Roles } from 'src/rbac/roles.decorator';
+import { Public } from 'src/rbac/public.decorator';
 import { Role } from 'src/rbac/roles.enum';
 import { JwtAuthGuard } from 'src/login/jwt-auth.guard';
 import { RolesGuard } from 'src/rbac/roles.guard';
@@ -94,7 +95,7 @@ export class PrescriptionController {
 
   // Chuyển các PrescriptionService từ PENDING sang WAITING và thêm vào queue
   @Post('start-services')
-  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  @Public()
   async startServices(
     @Body() dto: StartServicesDto,
     @Request() req: { user: JwtUserPayload },
@@ -104,6 +105,7 @@ export class PrescriptionController {
 
   // Lấy các dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên (không cần quyền)
   @Get('pending-services/:prescriptionCode')
+  @Public()
   async getPendingServices(
     @Param('prescriptionCode') prescriptionCode: string,
   ): Promise<PendingServicesResponseDto> {
