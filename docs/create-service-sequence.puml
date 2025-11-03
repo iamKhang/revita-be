@@ -5,8 +5,9 @@ actor "Quản lý" as Admin
 boundary "Admin UI" as UI
 control "ServiceController" as Controller
 entity "ServiceService" as Service
-entity "PrismaService" as Prisma
-database "PostgreSQL" as DB
+entity "Service" as ServiceEntity
+entity "Category" as Category
+entity "Specialty" as Specialty
 
 
 Admin -> UI: Chọn Thêm dịch vụ
@@ -15,10 +16,10 @@ activate UI
 UI --> Admin: Hiển thị form\nthêm dịch vụ
 deactivate UI
 
-Admin -> UI: Điền thông tin:\nname, price,\ndescription, durationMinutes,\nunit, currency,\ncategoryId, specialtyId,\nrequiresDoctor, isActive
+Admin -> UI: Điền thông tin:\nname, price, description,\ndurationMinutes, unit, currency,\ncategoryId, specialtyId,\nrequiresDoctor, isActive
 activate UI
 
-UI -> UI: Validate form\nname và price bắt buộc
+UI -> UI: validateForm(name, price)
 
 alt Validation thất bại
     UI --> Admin: Hiển thị lỗi\nthiếu thông tin bắt buộc
@@ -26,21 +27,17 @@ alt Validation thất bại
 else Validation thành công
     Admin -> UI: Nhấn Tạo dịch vụ
 
-    UI -> Controller: POST /services/management/services\nCreateServiceDto
+    UI -> Controller: POST /services/management/services\nname, price, description,\ndurationMinutes, unit, currency,\ncategoryId, specialtyId,\nrequiresDoctor, isActive
     activate Controller
 
-    Controller -> Service: createService(dto)
+    Controller -> Service: createService(name, price, description,\ndurationMinutes, unit, currency,\ncategoryId, specialtyId,\nrequiresDoctor, isActive)
     activate Service
 
     alt Có categoryId
-        Service -> Prisma: findUnique category
-        activate Prisma
-        Prisma -> DB: SELECT category\nWHERE id
-        activate DB
-        DB --> Prisma: Category or null
-        deactivate DB
-        Prisma --> Service: Category or null
-        deactivate Prisma
+        Service -> Category: findUnique(categoryId)
+        activate Category
+        Category --> Service: Category hoặc null
+        deactivate Category
 
         alt Category không tồn tại
             Service --> Controller: Error category not found
@@ -53,14 +50,10 @@ else Validation thành công
     end
 
     alt Có specialtyId
-        Service -> Prisma: findUnique specialty
-        activate Prisma
-        Prisma -> DB: SELECT specialty\nWHERE id
-        activate DB
-        DB --> Prisma: Specialty or null
-        deactivate DB
-        Prisma --> Service: Specialty or null
-        deactivate Prisma
+        Service -> Specialty: findUnique(specialtyId)
+        activate Specialty
+        Specialty --> Service: Specialty hoặc null
+        deactivate Specialty
 
         alt Specialty không tồn tại
             Service --> Controller: Error specialty not found
@@ -72,19 +65,14 @@ else Validation thành công
         end
     end
 
-    Service -> Service: generateUniqueServiceCode
+    Service -> Service: generateUniqueServiceCode() -> serviceCode
 
-    Service -> Prisma: create service
-    activate Prisma
-
-    Prisma -> DB: INSERT INTO service\nserviceCode, name, price,\ndescription, durationMinutes,\nunit, currency, isActive,\ncategoryId, specialtyId,\nrequiresDoctor
-    activate DB
+    Service -> ServiceEntity: create(serviceCode, name, price,\ndescription, durationMinutes, unit,\ncurrency, isActive, categoryId,\nspecialtyId, requiresDoctor)
+    activate ServiceEntity
 
     alt Database error
-        DB --> Prisma: Error duplicate code\nor constraint violation
-        deactivate DB
-        Prisma --> Service: Error
-        deactivate Prisma
+        ServiceEntity --> Service: Error duplicate code\nhoặc constraint violation
+        deactivate ServiceEntity
 
         Service --> Controller: Error cannot create service
         deactivate Service
@@ -95,26 +83,18 @@ else Validation thành công
         UI --> Admin: Hiển thị lỗi\nkhông thể tạo dịch vụ
         deactivate UI
     else Success
-        DB --> Prisma: Service created
-        deactivate DB
-        Prisma --> Service: Created service
-        deactivate Prisma
+        ServiceEntity --> Service: Service created với id
+        deactivate ServiceEntity
 
-        Service -> Prisma: getServiceManagementById
-        activate Prisma
-
-        Prisma -> DB: SELECT service\nWHERE id\nINCLUDE category, specialty
-        activate DB
-        DB --> Prisma: Service with relations
-        deactivate DB
-
-        Prisma --> Service: Service details
-        deactivate Prisma
+        Service -> ServiceEntity: findByIdWithRelations(id)
+        activate ServiceEntity
+        ServiceEntity --> Service: Service với category, specialty
+        deactivate ServiceEntity
 
         Service --> Controller: Service created
         deactivate Service
 
-        Controller --> UI: 200 OK\nservice data
+        Controller --> UI: 200 OK service data
         deactivate Controller
 
         UI --> Admin: Hiển thị thông báo\ntạo dịch vụ thành công\nvà thông tin dịch vụ mới
