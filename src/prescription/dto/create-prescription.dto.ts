@@ -30,6 +30,14 @@ export class CreatePrescriptionServiceItemDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @IsString()
+  doctorId?: string;
+
+  @IsOptional()
+  @IsString()
+  technicianId?: string;
 }
 
 export class CreatePrescriptionDto {

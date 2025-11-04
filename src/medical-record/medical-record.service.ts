@@ -246,12 +246,12 @@ export class MedicalRecordService {
         throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
       }
     }
-    if (user.role === Role.DOCTOR) {
-      if (!user.doctor?.id) throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
-      if (record.doctorId !== user.doctor.id) {
-        throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
-      }
-    }
+    // if (user.role === Role.DOCTOR) {
+    //   if (!user.doctor?.id) throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+    //   if (record.doctorId !== user.doctor.id) {
+    //     throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
+    //   }
+    // }
 
     // Tính tuổi
     const dob = record.patientProfile.dateOfBirth as unknown as Date;

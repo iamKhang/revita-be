@@ -1308,4 +1308,47 @@ export class RedisService implements OnModuleDestroy {
       cleanedDuplicates,
     };
   }
+
+  /**
+   * Thêm entry vào Redis Stream
+   */
+  async xadd(streamKey: string, id: string, ...fields: string[]): Promise<string> {
+    const result = await this.redis.xadd(streamKey, id, ...fields);
+    return result || '';
+  }
+
+  /**
+   * Lấy entries từ Redis Stream
+   */
+  async xrange(streamKey: string, start: string, end: string): Promise<Array<[string, Array<[string, string]>]>> {
+    const result = await this.redis.xrange(streamKey, start, end);
+    return result.map(([id, fields]) => [id, Array.from(fields).map(([key, value]) => [key, value])]);
+  }
+
+  /**
+   * Lấy entries từ Redis Stream (reverse)
+   */
+  async xrevrange(streamKey: string, end: string, start: string, count?: number): Promise<Array<[string, Array<[string, string]>]>> {
+    let result;
+    if (count) {
+      result = await this.redis.xrevrange(streamKey, end, start, 'COUNT', count);
+    } else {
+      result = await this.redis.xrevrange(streamKey, end, start);
+    }
+    return result.map(([id, fields]) => [id, Array.from(fields).map(([key, value]) => [key, value])]);
+  }
+
+  /**
+   * Lấy length của Redis Stream
+   */
+  async xlen(streamKey: string): Promise<number> {
+    return await this.redis.xlen(streamKey);
+  }
+
+  /**
+   * Xóa entries từ Redis Stream
+   */
+  async xdel(streamKey: string, ...ids: string[]): Promise<number> {
+    return await this.redis.xdel(streamKey, ...ids);
+  }
 }

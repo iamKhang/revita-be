@@ -4,24 +4,35 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Patch,
   Delete,
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { PrescriptionService } from './prescription.service';
-import { CreatePrescriptionDto } from './dto/create-prescription.dto';
-import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
 import { Roles } from 'src/rbac/roles.decorator';
 import { Role } from 'src/rbac/roles.enum';
 import { JwtAuthGuard } from 'src/login/jwt-auth.guard';
 import { RolesGuard } from 'src/rbac/roles.guard';
 import { JwtUserPayload } from 'src/medical-record/dto/jwt-user-payload.dto';
+import { PrescriptionService } from './prescription.service';
+import { CreatePrescriptionDto } from './dto/create-prescription.dto';
+import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
+import { PrescriptionServiceManagementService } from '../service/prescription-service-management.service';
+import {
+  UpdateServiceStatusDto,
+  UpdateServiceResultsDto,
+  UpdateServiceStatusResponseDto,
+  UpdateResultsResponseDto,
+} from '../service/dto';
 
 @Controller('prescriptions')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PrescriptionController {
-  constructor(private readonly prescriptionService: PrescriptionService) {}
+  constructor(
+    private readonly prescriptionService: PrescriptionService,
+    private readonly prescriptionServiceManagement: PrescriptionServiceManagementService,
+  ) {}
 
   @Post()
   @Roles(Role.DOCTOR)
@@ -99,52 +110,39 @@ export class PrescriptionController {
     return this.prescriptionService.cancel(id, req.user);
   }
 
-  // Service status transitions by code + serviceId
-  @Post(':code/services/:serviceId/serving')
-  @Roles(Role.DOCTOR)
-  async markServiceServing(
-    @Param('code') code: string,
-    @Param('serviceId') serviceId: string,
+  @Put('prescription-service/status')
+  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  async updateServiceStatus(
+    @Body() updateDto: UpdateServiceStatusDto,
     @Request() req: { user: JwtUserPayload },
-  ) {
-    const prescription = await this.prescriptionService.findByCode(code);
-    await this.prescriptionService.markServiceServing(
-      prescription.id,
-      serviceId,
-      req.user,
+  ): Promise<UpdateServiceStatusResponseDto> {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    return this.prescriptionServiceManagement.updateServiceStatus(
+      updateDto.prescriptionId,
+      updateDto.serviceId,
+      updateDto.status,
+      userId,
+      userRole,
+      updateDto.note,
     );
-    return { ok: true };
   }
 
-  @Post(':code/services/:serviceId/waiting-result')
-  @Roles(Role.DOCTOR)
-  async markServiceWaitingResult(
-    @Param('code') code: string,
-    @Param('serviceId') serviceId: string,
+  @Put('prescription-service/results')
+  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  async updateServiceResults(
+    @Body() updateDto: UpdateServiceResultsDto,
     @Request() req: { user: JwtUserPayload },
-  ) {
-    const prescription = await this.prescriptionService.findByCode(code);
-    await this.prescriptionService.markServiceWaitingResult(
-      prescription.id,
-      serviceId,
-      req.user,
+  ): Promise<UpdateResultsResponseDto> {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    return this.prescriptionServiceManagement.updateServiceResults(
+      updateDto.prescriptionId,
+      updateDto.serviceId,
+      updateDto.results,
+      userId,
+      userRole,
+      updateDto.note,
     );
-    return { ok: true };
-  }
-
-  @Post(':code/services/:serviceId/completed')
-  @Roles(Role.DOCTOR)
-  async markServiceCompleted(
-    @Param('code') code: string,
-    @Param('serviceId') serviceId: string,
-    @Request() req: { user: JwtUserPayload },
-  ) {
-    const prescription = await this.prescriptionService.findByCode(code);
-    await this.prescriptionService.markServiceCompleted(
-      prescription.id,
-      serviceId,
-      req.user,
-    );
-    return { ok: true };
   }
 }
