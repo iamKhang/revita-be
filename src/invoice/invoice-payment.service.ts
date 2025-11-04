@@ -265,21 +265,7 @@ export class InvoicePaymentService {
     const prescription = preview.prescriptionDetails;
     const selectedServiceIds = preview.selectedServices.map((s) => s.serviceId);
 
-    // Check if there are available work sessions for the requested services
-    const currentTime = new Date();
-    const availableAssignments = await this.routingService.assignPatientToRooms(
-      {
-        patientProfileId: prescription.patientProfile.id,
-        serviceIds: selectedServiceIds,
-        requestedTime: currentTime,
-      },
-    );
-
-    if (availableAssignments.length === 0) {
-      throw new BadRequestException(
-        'Hiện tại chưa có nhân sự để phục vụ cho các dịch vụ đã chọn. Vui lòng thử lại sau hoặc liên hệ quầy tiếp tân để được hỗ trợ.',
-      );
-    }
+    // Auto routing removed: skip checking available work sessions
 
     // Generate invoice code
     const invoiceCode = `INV-${Date.now()}-${Math.random()
@@ -519,67 +505,10 @@ export class InvoicePaymentService {
       );
     }
 
-    let routingAssignments: any[] = [];
-    try {
-      const routingResult = await this.routingService.assignPatientToRooms({
-        patientProfileId: updatedInvoice.patientProfileId,
-        serviceIds: selectedServiceIds,
-        requestedTime: new Date(),
-      });
-      routingAssignments = routingResult || [];
-    } catch (error) {
-      console.warn('Routing failed:', error);
-    }
+    // Auto routing removed: no routing assignments
+    const detailedRoutingAssignments: any[] = [];
 
-    const detailedRoutingAssignments = routingAssignments.map((assignment) => ({
-      roomId: assignment.roomId,
-      roomCode: assignment.roomCode,
-      roomName: assignment.roomName,
-      specialtyName: assignment.specialtyName,
-      boothId: assignment.boothId,
-      boothCode: assignment.boothCode,
-      boothName: assignment.boothName,
-      doctorId: assignment.doctorId,
-      doctorCode: assignment.doctorCode,
-      doctorName: assignment.doctorName,
-      technicianId: assignment.technicianId,
-      technicianCode: assignment.technicianCode,
-      technicianName: assignment.technicianName,
-      nextAvailableAt: assignment.nextAvailableAt,
-    }));
-
-    const streamKey = process.env.REDIS_STREAM_ASSIGNMENTS || 'clinic:assignments';
-    try {
-      for (const assignment of detailedRoutingAssignments) {
-        await this.redisStream.publishEvent(streamKey, {
-          type: 'PATIENT_ASSIGNED',
-          patientProfileId: updatedInvoice.patientProfileId,
-          patientName: updatedInvoice.patientProfile.name,
-          status: 'WAITING',
-          roomId: assignment.roomId,
-          roomCode: assignment.roomCode,
-          roomName: assignment.roomName,
-          boothId: assignment.boothId || '',
-          boothCode: assignment.boothCode || '',
-          boothName: assignment.boothName || '',
-          doctorId: assignment.doctorId || '',
-          doctorCode: assignment.doctorCode || '',
-          doctorName: assignment.doctorName || '',
-          technicianId: assignment.technicianId || '',
-          technicianCode: assignment.technicianCode || '',
-          technicianName: assignment.technicianName || '',
-          serviceIds: selectedServiceIds.join(','),
-          prescriptionId: prescription.id,
-          prescriptionCode: prescription.prescriptionCode,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    } catch (err) {
-      console.warn(
-        '[Redis Stream] Patient assignment publish failed:',
-        (err as Error).message,
-      );
-    }
+    // Auto routing removed: skip publishing routing events
 
     const result = {
       invoiceCode: updatedInvoice.invoiceCode,

@@ -365,7 +365,7 @@ export class PrescriptionService {
     serviceId: string,
   ) {
     // Called after payment success for a given service
-    // Mark the paid service as PENDING, then check if we should start the first available service
+    // Mark the paid service as PENDING only (no auto-start)
     const psList = await this.prisma.prescriptionService.findMany({
       where: { prescriptionId },
       orderBy: { order: 'asc' },
@@ -375,13 +375,17 @@ export class PrescriptionService {
     const current = psList.find((s) => s.serviceId === serviceId);
     if (!current) throw new NotFoundException('Service not in prescription');
 
-    // Mark this particular service as PENDING (paid but not yet started)
+    // Nếu đã có bác sĩ/kỹ thuật viên được gán sẵn → chuyển WAITING, ngược lại → PENDING
+    const nextStatus = current.doctorId || current.technicianId
+      ? PrescriptionStatus.WAITING
+      : PrescriptionStatus.PENDING;
+
     await this.prisma.prescriptionService.update({
       where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-      data: { status: PrescriptionStatus.PENDING },
+      data: { status: nextStatus },
     });
 
-    await this._startFirstPendingServiceIfNoActive(prescriptionId);
+    // Auto-start disabled: do not move any service to WAITING here
 
     // Ensure prescription is at least PENDING
     await this.prisma.prescription.update({
@@ -647,83 +651,7 @@ export class PrescriptionService {
         .sort((a, b) => a.order - b.order)[0];
 
       if (firstPendingService) {
-        // Try to assign the service to a technician/doctor based on routing
-        let assignedDoctorId: string | null = null;
-        let assignedTechnicianId: string | null = null;
-
-        try {
-          // Get the service details to find which room it should go to
-          const service = await this.prisma.service.findUnique({
-            where: { id: firstPendingService.serviceId },
-            include: {
-              clinicRoomServices: {
-                include: {
-                  clinicRoom: {
-                    include: {
-                      booth: {
-                        include: {
-                          workSessions: {
-                            where: {
-                              startTime: { lte: new Date() },
-                              endTime: { gte: new Date() },
-                            },
-                            include: {
-                              doctor: true,
-                              technician: true,
-                            },
-                            orderBy: { startTime: 'desc' },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          });
-
-          if (service && service.clinicRoomServices.length > 0) {
-            // Find the first available booth with active work session
-            for (const crs of service.clinicRoomServices) {
-              for (const booth of crs.clinicRoom.booth) {
-                if (booth.workSessions.length > 0) {
-                  const workSession = booth.workSessions[0];
-                  assignedDoctorId = workSession.doctorId;
-                  assignedTechnicianId = workSession.technicianId;
-                  break;
-                }
-              }
-              if (assignedDoctorId || assignedTechnicianId) break;
-            }
-
-            // If no active work session, try to find any work session for fallback
-            if (!assignedDoctorId && !assignedTechnicianId) {
-              for (const crs of service.clinicRoomServices) {
-                for (const booth of crs.clinicRoom.booth) {
-                  const anyWorkSession =
-                    await this.prisma.workSession.findFirst({
-                      where: { boothId: booth.id },
-                      include: {
-                        doctor: true,
-                        technician: true,
-                      },
-                      orderBy: { startTime: 'desc' },
-                    });
-
-                  if (anyWorkSession) {
-                    assignedDoctorId = anyWorkSession.doctorId;
-                    assignedTechnicianId = anyWorkSession.technicianId;
-                    break;
-                  }
-                }
-                if (assignedDoctorId || assignedTechnicianId) break;
-              }
-            }
-          }
-        } catch (error) {
-          console.warn('Failed to assign service to technician/doctor:', error);
-        }
-
+        // Auto routing removed: only move the first PENDING service to WAITING without assignment
         await this.prisma.prescriptionService.update({
           where: {
             prescriptionId_serviceId: {
@@ -733,8 +661,8 @@ export class PrescriptionService {
           },
           data: {
             status: PrescriptionStatus.WAITING,
-            doctorId: assignedDoctorId,
-            technicianId: assignedTechnicianId,
+            doctorId: null,
+            technicianId: null,
           },
         });
       }
@@ -743,6 +671,136 @@ export class PrescriptionService {
 
   private async unlockNextPendingService(prescriptionId: string) {
     await this._startFirstPendingServiceIfNoActive(prescriptionId);
+  }
+
+  /**
+   * Assign the next pending service (lowest order) to an in-progress work session that can handle
+   * the most pending services of this prescription, then break ties by least current workload.
+   */
+  async assignNextPendingService(prescriptionCode: string) {
+    const now = new Date();
+    const prescription = await this.prisma.prescription.findFirst({
+      where: { prescriptionCode },
+      include: {
+        services: {
+          include: { service: true },
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found');
+    }
+
+    const pendingServices = prescription.services.filter((s) => s.status === PrescriptionStatus.PENDING);
+    if (pendingServices.length === 0) {
+      throw new BadRequestException('No pending services to assign');
+    }
+
+    const target = pendingServices[0];
+
+    // Fetch IN_PROGRESS work sessions active now, with declared services
+    const sessions = await this.prisma.workSession.findMany({
+      where: {
+        status: 'IN_PROGRESS' as any,
+        startTime: { lte: now },
+        endTime: { gte: now },
+        services: {
+          some: {},
+        },
+      },
+      include: {
+        services: true,
+      },
+    });
+
+    if (sessions.length === 0) {
+      throw new BadRequestException('No active work sessions');
+    }
+
+    const pendingServiceIds = new Set(pendingServices.map((ps) => ps.serviceId));
+    const serviceIdToDuration = new Map(prescription.services.map((ps) => [ps.serviceId, ps.service?.durationMinutes ?? 15] as const));
+
+    type ScoredSession = {
+      session: any;
+      canDoCount: number;
+      timeLeftMin: number;
+      currentWorkloadMin: number;
+      canDoServiceIds: string[];
+    };
+
+    const scored: ScoredSession[] = [];
+    for (const session of sessions) {
+      const timeLeftMin = Math.max(0, Math.ceil((session.endTime.getTime() - now.getTime()) / 60000));
+      const sessionServiceIds = new Set(session.services.map((ws: any) => ws.serviceId));
+      // Candidate pending in this prescription that this session can do
+      const canDo = pendingServices.filter((ps) => sessionServiceIds.has(ps.serviceId));
+      if (canDo.length === 0) continue;
+
+      // Filter sessions that at least can finish the first pending service
+      const targetDuration = serviceIdToDuration.get(target.serviceId) ?? 15;
+      if (timeLeftMin < targetDuration) continue;
+
+      // Compute current workload in this session by summing durations of services started in this session window
+      const startedHere = await this.prisma.prescriptionService.findMany({
+        where: {
+          workSessionId: session.id,
+          startedAt: { gte: session.startTime, lte: session.endTime },
+        },
+        include: { service: true },
+      });
+      const currentWorkloadMin = startedHere.reduce((sum, x) => sum + (x.service?.durationMinutes ?? 15), 0);
+
+      scored.push({
+        session,
+        canDoCount: canDo.length,
+        timeLeftMin,
+        currentWorkloadMin,
+        canDoServiceIds: canDo.map((x) => x.serviceId),
+      });
+    }
+
+    if (scored.length === 0) {
+      throw new BadRequestException('No suitable work session found');
+    }
+
+    // Rank: most pending services it can do, then least workload, then most time left
+    scored.sort((a, b) => {
+      if (b.canDoCount !== a.canDoCount) return b.canDoCount - a.canDoCount;
+      if (a.currentWorkloadMin !== b.currentWorkloadMin) return a.currentWorkloadMin - b.currentWorkloadMin;
+      return b.timeLeftMin - a.timeLeftMin;
+    });
+
+    const chosen = scored[0].session;
+
+    const updated = await this.prisma.prescriptionService.update({
+      where: { prescriptionId_serviceId: { prescriptionId: prescription.id, serviceId: target.serviceId } },
+      data: {
+        status: PrescriptionStatus.WAITING,
+        doctorId: chosen.doctorId ?? null,
+        technicianId: chosen.technicianId ?? null,
+        workSessionId: chosen.id,
+      },
+      include: { service: true },
+    });
+
+    return {
+      assignedService: {
+        prescriptionId: updated.prescriptionId,
+        serviceId: updated.serviceId,
+        status: updated.status,
+        doctorId: updated.doctorId,
+        technicianId: updated.technicianId,
+        workSessionId: updated.workSessionId,
+      },
+      chosenSession: {
+        id: chosen.id,
+        doctorId: chosen.doctorId,
+        technicianId: chosen.technicianId,
+        startTime: chosen.startTime,
+        endTime: chosen.endTime,
+      },
+    };
   }
 
   /**

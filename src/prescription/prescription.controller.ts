@@ -114,6 +114,14 @@ export class PrescriptionController {
     );
   }
 
+  @Post('assign-next-service')
+  @Public()
+  async assignNextService(
+    @Body() body: { prescriptionCode: string },
+  ) {
+    return this.prescriptionService.assignNextPendingService(body.prescriptionCode);
+  }
+
   // // OpenFDA proxy endpoints for drug lookup
   // @Get('drugs/search/:query')
   // @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST)
