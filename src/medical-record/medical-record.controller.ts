@@ -185,15 +185,23 @@ export class MedicalRecordController {
   }
 
   @Get()
+  @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST, Role.PATIENT)
   async findAll(
     @Request() req: { user: JwtUserPayload },
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
+    @Query('patientProfileName') patientProfileName?: string,
   ) {
-    return await this.medicalRecordService.findAll(req.user, page, limit);
+    return await this.medicalRecordService.findAll(
+      req.user,
+      page,
+      limit,
+      patientProfileName,
+    );
   }
 
   @Get('patient-profile/:patientProfileId')
+  @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST, Role.PATIENT)
   async findByPatientProfile(
     @Param('patientProfileId') patientProfileId: string,
     @Request() req: { user: JwtUserPayload },
@@ -209,6 +217,7 @@ export class MedicalRecordController {
   }
 
   @Get('patient-profile/:patientProfileId/summary')
+  @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST, Role.PATIENT)
   @ApiOperation({
     summary: 'Lấy tóm tắt toàn bộ thông tin y tế của bệnh nhân',
     description:
@@ -268,6 +277,7 @@ export class MedicalRecordController {
   }
 
   @Get(':id')
+  @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST, Role.PATIENT)
   async findOne(
     @Param('id') id: string,
     @Request() req: { user: JwtUserPayload },
@@ -275,9 +285,23 @@ export class MedicalRecordController {
     return await this.medicalRecordService.findOne(id, req.user);
   }
 
+  @Get('code/:code')
+  @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST, Role.PATIENT)
+  @ApiOperation({ summary: 'Tìm hồ sơ bệnh án theo mã (medicalRecordCode)' })
+  @ApiResponse({ status: 200, description: 'Thông tin hồ sơ bệnh án theo mã' })
+  async findByCode(
+    @Param('code') code: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return await this.medicalRecordService.findByCode(code, req.user);
+  }
+
   @Get(':id/predict')
   @ApiOperation({ summary: 'Dự đoán bệnh từ hồ sơ bệnh án theo id' })
-  @ApiResponse({ status: 200, description: 'Danh sách dự đoán đã dịch sang tiếng Việt' })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách dự đoán đã dịch sang tiếng Việt',
+  })
   async predictByMedicalRecordId(
     @Param('id') id: string,
     @Request() req: { user: JwtUserPayload },

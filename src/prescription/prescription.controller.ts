@@ -35,7 +35,7 @@ export class PrescriptionController {
   ) {}
 
   @Post()
-  @Roles(Role.DOCTOR)
+  @Roles(Role.DOCTOR, Role.RECEPTIONIST)
   async create(
     @Body() dto: CreatePrescriptionDto,
     @Request() req: { user: JwtUserPayload },
@@ -92,7 +92,7 @@ export class PrescriptionController {
   // }
 
   @Patch(':id')
-  @Roles(Role.DOCTOR)
+  @Roles(Role.DOCTOR, Role.RECEPTIONIST)
   async update(
     @Param('id') id: string,
     @Body() dto: UpdatePrescriptionDto,
@@ -102,7 +102,7 @@ export class PrescriptionController {
   }
 
   @Delete(':id')
-  @Roles(Role.DOCTOR)
+  @Roles(Role.DOCTOR, Role.RECEPTIONIST)
   async cancel(
     @Param('id') id: string,
     @Request() req: { user: JwtUserPayload },
