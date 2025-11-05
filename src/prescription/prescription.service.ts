@@ -784,6 +784,21 @@ export class PrescriptionService {
       include: { service: true },
     });
 
+    // Xây dựng preview queue cho user (doctor/technician) được gán
+    let queuePreview: QueueResponseDto | null = null as any;
+    try {
+      const role = chosen.doctorId ? 'DOCTOR' : (chosen.technicianId ? 'TECHNICIAN' : null);
+      const userId = chosen.doctorId ?? chosen.technicianId ?? null;
+      if (role && userId) {
+        queuePreview = await this.buildQueueFromDatabase({
+          id: userId,
+          role: role,
+          doctor: role === 'DOCTOR' ? { id: userId } : undefined,
+          technician: role === 'TECHNICIAN' ? { id: userId } : undefined,
+        } as any);
+      }
+    } catch {}
+
     return {
       assignedService: {
         prescriptionId: updated.prescriptionId,
@@ -800,6 +815,7 @@ export class PrescriptionService {
         startTime: chosen.startTime,
         endTime: chosen.endTime,
       },
+      queuePreview,
     };
   }
 
