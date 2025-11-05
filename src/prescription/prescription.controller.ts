@@ -9,6 +9,7 @@ import {
   Delete,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import { Roles } from 'src/rbac/roles.decorator';
 import { Role } from 'src/rbac/roles.enum';
@@ -44,13 +45,42 @@ export class PrescriptionController {
     return this.prescriptionService.create(dto, user);
   }
 
-  @Get(':code')
-  @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST, Role.CASHIER)
-  async findByCode(
-    @Param('code') code: string,
+  @Get()
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async findAll(
     @Request() req: { user: JwtUserPayload },
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
   ) {
-    return this.prescriptionService.findByCodeForUser(code, req.user);
+    return this.prescriptionService.findAll(req.user, page, limit);
+  }
+
+  @Get('services')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async getAllServices(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string,
+    @Query('isActive') isActive?: string,
+  ) {
+    const isActiveFilter =
+      isActive !== undefined ? isActive === 'true' : undefined;
+    return this.prescriptionService.getAllServices(
+      page,
+      limit,
+      search,
+      isActiveFilter,
+    );
+  }
+
+  @Get('doctors/by-service')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR, Role.ADMIN)
+  async getDoctorsByService(
+    @Request() req: { user: JwtUserPayload },
+    @Query('serviceId') serviceId?: string,
+    @Query('serviceCode') serviceCode?: string,
+  ) {
+    return this.prescriptionService.getDoctorsByService(serviceId, serviceCode);
   }
 
   @Get('medical-record/:medicalRecordId')
@@ -63,6 +93,15 @@ export class PrescriptionController {
       medicalRecordId,
       req.user,
     );
+  }
+
+  @Get(':code')
+  @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST, Role.CASHIER)
+  async findByCode(
+    @Param('code') code: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return this.prescriptionService.findByCodeForUser(code, req.user);
   }
 
   // Patients can query their own prescriptions by patient profile

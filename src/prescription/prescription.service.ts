@@ -7,6 +7,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto';
@@ -37,7 +38,9 @@ export class PrescriptionService {
       doctorId = user.doctor.id;
     }
 
-    if (!doctorId) {
+    // For RECEPTIONIST, doctorId is optional
+    // For DOCTOR, doctorId is required (either from JWT token or DTO)
+    if (user.role !== 'RECEPTIONIST' && !doctorId) {
       throw new BadRequestException(
         'Doctor ID is required (either from JWT token or DTO)',
       );
@@ -56,34 +59,41 @@ export class PrescriptionService {
       throw new NotFoundException('Patient profile not found');
     }
 
-    // Validate doctorId exists (always validate since we set it from token or DTO)
-    const doctor = await this.prisma.doctor.findUnique({
-      where: { id: doctorId },
-      select: { id: true },
-    });
-    if (!doctor) {
-      throw new NotFoundException('Doctor not found');
+    // Validate doctorId exists if provided
+    if (doctorId) {
+      const doctor = await this.prisma.doctor.findUnique({
+        where: { id: doctorId },
+        select: { id: true },
+      });
+      if (!doctor) {
+        throw new NotFoundException('Doctor not found');
+      }
     }
 
     // Accept serviceId or serviceCode; resolve to IDs
+    // Validate each service has at least one identifier
+    for (let i = 0; i < services.length; i++) {
+      const service = services[i];
+      if (!service.serviceId && !service.serviceCode) {
+        throw new BadRequestException(
+          `Service at index ${i} must include serviceId or serviceCode`,
+        );
+      }
+    }
+
     const requestedById = (services as any[])
       .filter((s: any) => !!s.serviceId)
       .map((s: any) => s.serviceId);
     const requestedByCode = (services as any[])
       .filter((s: any) => !!s.serviceCode)
       .map((s: any) => s.serviceCode);
-    if (requestedById.length + requestedByCode.length !== services.length) {
-      throw new BadRequestException(
-        'Each service must include serviceId or serviceCode',
-      );
-    }
     const servicesById = await this.prisma.service.findMany({
       where: { id: { in: requestedById } },
-      select: { id: true },
+      select: { id: true, requiresDoctor: true },
     });
     const servicesByCode = await this.prisma.service.findMany({
       where: { serviceCode: { in: requestedByCode } },
-      select: { id: true, serviceCode: true },
+      select: { id: true, serviceCode: true, requiresDoctor: true },
     });
     const idSet = new Set(servicesById.map((s) => s.id));
     const codeToId = new Map(
@@ -98,6 +108,25 @@ export class PrescriptionService {
       if (missingCodes.length)
         parts.push(`serviceCode(s): ${missingCodes.join(', ')}`);
       throw new BadRequestException(`Invalid ${parts.join(' and ')}`);
+    }
+
+    // Check requiresDoctor for RECEPTIONIST
+    if (user.role === 'RECEPTIONIST') {
+      const allServices = [
+        ...servicesById,
+        ...servicesByCode.map((s) => ({
+          id: s.id,
+          requiresDoctor: s.requiresDoctor,
+        })),
+      ];
+      const servicesRequiringDoctor = allServices.filter(
+        (s) => s.requiresDoctor === true,
+      );
+      if (servicesRequiringDoctor.length > 0) {
+        throw new BadRequestException(
+          `Receptionist cannot assign services that require doctor: ${servicesRequiringDoctor.map((s) => s.id).join(', ')}`,
+        );
+      }
     }
 
     // Optional: validate medicalRecord belongs to same patientProfile
@@ -130,7 +159,8 @@ export class PrescriptionService {
       });
 
       finalPrescriptionCode = this.codeGenerator.generatePrescriptionCode(
-        doctor?.auth?.name || 'Unknown',
+        doctor?.auth?.name ||
+          (user.role === 'RECEPTIONIST' ? 'Receptionist' : 'Unknown'),
         patientProfile?.name || 'Unknown',
       );
     }
@@ -647,5 +677,358 @@ export class PrescriptionService {
 
   private async unlockNextPendingService(prescriptionId: string) {
     await this._startFirstPendingServiceIfNoActive(prescriptionId);
+  }
+
+  /**
+   * Lấy danh sách doctors đang có work session với service cụ thể
+   * @param serviceId - ID của service
+   * @param serviceCode - Code của service (alternative to serviceId)
+   * @returns Danh sách doctors với work session đang active
+   */
+  async getDoctorsByService(
+    serviceId?: string,
+    serviceCode?: string,
+  ): Promise<
+    Array<{
+      doctorId: string;
+      doctorCode: string;
+      doctorName: string;
+      boothId: string | null;
+      boothCode: string | null;
+      boothName: string | null;
+      clinicRoomId: string | null;
+      clinicRoomCode: string | null;
+      clinicRoomName: string | null;
+      workSessionId: string | null;
+      workSessionStartTime: Date | null;
+      workSessionEndTime: Date | null;
+    }>
+  > {
+    if (!serviceId && !serviceCode) {
+      throw new BadRequestException(
+        'Either serviceId or serviceCode is required',
+      );
+    }
+
+    // Find service
+    const service = serviceId
+      ? await this.prisma.service.findUnique({
+          where: { id: serviceId },
+          select: { id: true, serviceCode: true },
+        })
+      : await this.prisma.service.findUnique({
+          where: { serviceCode: serviceCode! },
+          select: { id: true, serviceCode: true },
+        });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    const currentTime = new Date();
+
+    // Approach 1: Find through WorkSessionService (work sessions that have this service)
+    const workSessionServices = await this.prisma.workSessionService.findMany({
+      where: { serviceId: service.id },
+      include: {
+        workSession: {
+          include: {
+            doctor: {
+              include: {
+                auth: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+            booth: {
+              include: {
+                room: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const doctorMap = new Map<
+      string,
+      {
+        doctorId: string;
+        doctorCode: string;
+        doctorName: string;
+        boothId: string | null;
+        boothCode: string | null;
+        boothName: string | null;
+        clinicRoomId: string | null;
+        clinicRoomCode: string | null;
+        clinicRoomName: string | null;
+        workSessionId: string | null;
+        workSessionStartTime: Date | null;
+        workSessionEndTime: Date | null;
+      }
+    >();
+
+    // Collect from work session services (filter active sessions)
+    for (const wss of workSessionServices) {
+      const workSession = wss.workSession;
+      if (
+        workSession &&
+        workSession.doctorId &&
+        workSession.doctor &&
+        workSession.startTime <= currentTime &&
+        workSession.endTime >= currentTime &&
+        (workSession.status === 'APPROVED' ||
+          workSession.status === 'IN_PROGRESS')
+      ) {
+        const doctorId = workSession.doctorId;
+        if (!doctorMap.has(doctorId)) {
+          const booth = workSession.booth;
+          doctorMap.set(doctorId, {
+            doctorId: doctorId,
+            doctorCode: workSession.doctor.doctorCode,
+            doctorName: workSession.doctor.auth.name,
+            boothId: booth?.id || null,
+            boothCode: booth?.boothCode || null,
+            boothName: booth?.name || null,
+            clinicRoomId: booth?.room?.id || null,
+            clinicRoomCode: booth?.room?.roomCode || null,
+            clinicRoomName: booth?.room?.roomName || null,
+            workSessionId: workSession.id,
+            workSessionStartTime: workSession.startTime,
+            workSessionEndTime: workSession.endTime,
+          });
+        }
+      }
+    }
+
+    // Approach 2: Fallback - Find through ClinicRoomService (if no results from approach 1)
+    if (doctorMap.size === 0) {
+      const clinicRoomServices = await this.prisma.clinicRoomService.findMany({
+        where: { serviceId: service.id },
+        include: {
+          clinicRoom: {
+            include: {
+              booth: {
+                where: { isActive: true },
+                include: {
+                  workSessions: {
+                    where: {
+                      doctorId: { not: null },
+                      startTime: { lte: currentTime },
+                      endTime: { gte: currentTime },
+                      status: {
+                        in: ['APPROVED', 'IN_PROGRESS'],
+                      },
+                    },
+                    include: {
+                      doctor: {
+                        include: {
+                          auth: {
+                            select: {
+                              name: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                    orderBy: { startTime: 'asc' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      for (const crs of clinicRoomServices) {
+        for (const booth of crs.clinicRoom.booth) {
+          for (const workSession of booth.workSessions) {
+            if (workSession.doctorId && workSession.doctor) {
+              const doctorId = workSession.doctorId;
+              if (!doctorMap.has(doctorId)) {
+                doctorMap.set(doctorId, {
+                  doctorId: doctorId,
+                  doctorCode: workSession.doctor.doctorCode,
+                  doctorName: workSession.doctor.auth.name,
+                  boothId: booth.id,
+                  boothCode: booth.boothCode,
+                  boothName: booth.name,
+                  clinicRoomId: crs.clinicRoomId,
+                  clinicRoomCode: crs.clinicRoom.roomCode,
+                  clinicRoomName: crs.clinicRoom.roomName,
+                  workSessionId: workSession.id,
+                  workSessionStartTime: workSession.startTime,
+                  workSessionEndTime: workSession.endTime,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+    return Array.from(doctorMap.values());
+  }
+
+  /**
+   * Lấy danh sách tất cả dịch vụ với phân trang
+   * @param page - Số trang (bắt đầu từ 1)
+   * @param limit - Số lượng items mỗi trang
+   * @param search - Từ khóa tìm kiếm (tùy chọn)
+   * @param isActive - Lọc theo trạng thái active (tùy chọn)
+   * @returns Danh sách dịch vụ với thông tin phân trang
+   */
+  async getAllServices(
+    page: string = '1',
+    limit: string = '10',
+    search?: string,
+    isActive?: boolean,
+  ) {
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build where condition
+    const where: any = {};
+
+    if (isActive !== undefined) {
+      where.isActive = isActive;
+    }
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { serviceCode: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.service.count({ where }),
+      this.prisma.service.findMany({
+        where,
+        select: {
+          id: true,
+          serviceCode: true,
+          name: true,
+          price: true,
+          description: true,
+          durationMinutes: true,
+          isActive: true,
+          requiresDoctor: true,
+          unit: true,
+          currency: true,
+          category: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+            },
+          },
+          specialty: {
+            select: {
+              id: true,
+              specialtyCode: true,
+              name: true,
+            },
+          },
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: [{ name: 'asc' }, { serviceCode: 'asc' }],
+        skip,
+        take: limitNum,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    };
+  }
+
+  /**
+   * Lấy danh sách tất cả phiếu chỉ định theo người tạo
+   * - DOCTOR: chỉ lấy phiếu chỉ định do bác sĩ đó tạo
+   * - RECEPTIONIST: lấy tất cả phiếu chỉ định
+   * @param user - Thông tin user từ JWT token
+   * @param page - Số trang (bắt đầu từ 1)
+   * @param limit - Số lượng items mỗi trang
+   * @returns Danh sách phiếu chỉ định với thông tin phân trang
+   */
+  async findAll(
+    user: JwtUserPayload,
+    page: string = '1',
+    limit: string = '10',
+  ) {
+    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
+    const limitNum = Math.min(
+      Math.max(parseInt(limit || '10', 10) || 10, 1),
+      100,
+    );
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build where condition based on user role
+    const where: any = {};
+
+    if (user.role === 'DOCTOR') {
+      if (!user.doctor?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      }
+      // Doctor chỉ lấy prescriptions do mình tạo
+      where.doctorId = user.doctor.id;
+    }
+    // RECEPTIONIST và ADMIN có thể xem tất cả
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.prescription.count({ where }),
+      this.prisma.prescription.findMany({
+        where,
+        include: {
+          services: {
+            include: { service: true },
+            orderBy: { order: 'asc' as const },
+          },
+          medicalRecord: true,
+          patientProfile: true,
+          doctor: {
+            include: {
+              auth: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                  avatar: true,
+                  gender: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { id: 'desc' },
+        skip,
+        take: limitNum,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    };
   }
 }
