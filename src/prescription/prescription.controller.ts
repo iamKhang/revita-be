@@ -184,4 +184,25 @@ export class PrescriptionController {
       updateDto.note,
     );
   }
+
+  // ======= Appointment-based endpoints =======
+  @Get('appointment/:appointmentCode')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async getAppointmentByCode(
+    @Param('appointmentCode') appointmentCode: string,
+  ) {
+    return this.prescriptionService.getAppointmentByCode(appointmentCode);
+  }
+
+  @Post('appointment/:appointmentCode/create-prescription')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async createPrescriptionFromAppointment(
+    @Param('appointmentCode') appointmentCode: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return this.prescriptionService.createPrescriptionFromAppointment(
+      appointmentCode,
+      req.user,
+    );
+  }
 }

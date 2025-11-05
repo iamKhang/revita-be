@@ -214,6 +214,80 @@ export class PrescriptionService {
     return prescription;
   }
 
+  // ======= Appointment integration =======
+  async getAppointmentByCode(appointmentCode: string) {
+    const appt = await this.prisma.appointment.findFirst({
+      where: { appointmentCode },
+      include: {
+        patientProfile: true,
+        specialty: true,
+        doctor: { include: { auth: true } },
+        service: true,
+        workSession: true,
+        appointmentServices: {
+          include: { service: true },
+        },
+      },
+    });
+    if (!appt) {
+      throw new NotFoundException('Appointment not found');
+    }
+    return appt;
+  }
+
+  async createPrescriptionFromAppointment(
+    appointmentCode: string,
+    user: JwtUserPayload,
+  ) {
+    const appt = await this.prisma.appointment.findFirst({
+      where: { appointmentCode },
+      include: {
+        patientProfile: true,
+        doctor: { include: { auth: true } },
+        appointmentServices: true,
+      },
+    });
+    if (!appt) throw new NotFoundException('Appointment not found');
+    if (!appt.patientProfile) throw new NotFoundException('Patient profile not found');
+
+    const doctorId = appt.doctorId ?? user.doctor?.id ?? null;
+    const servicesToCreate = (appt.appointmentServices || []).map((as, idx) => ({
+      serviceId: as.serviceId,
+      status: PrescriptionStatus.NOT_STARTED,
+      order: idx + 1,
+      note: null,
+      doctorId: doctorId,
+      technicianId: null,
+    }));
+    if (servicesToCreate.length === 0) {
+      throw new BadRequestException('Appointment has no services');
+    }
+
+    const doctorName = appt.doctor?.auth?.name || (user.role === 'RECEPTIONIST' ? 'Receptionist' : 'Unknown');
+    const code = this.codeGenerator.generatePrescriptionCode(
+      doctorName,
+      appt.patientProfile.name,
+    );
+
+    const prescription = await this.prisma.prescription.create({
+      data: {
+        prescriptionCode: code,
+        patientProfileId: appt.patientProfileId,
+        doctorId: doctorId,
+        note: null,
+        medicalRecordId: null,
+        services: { create: servicesToCreate },
+      },
+      include: {
+        services: { include: { service: true }, orderBy: { order: 'asc' } },
+        patientProfile: true,
+        doctor: true,
+      },
+    });
+
+    return prescription;
+  }
+
   async findByCodeForUser(code: string, user: JwtUserPayload) {
     const prescription = await this.findByCode(code);
     // Patients can only access their own profile's prescriptions
