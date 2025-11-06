@@ -9,6 +9,7 @@ import {
   Delete,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import { Roles } from 'src/rbac/roles.decorator';
 import { Public } from 'src/rbac/public.decorator';
@@ -42,7 +43,7 @@ export class PrescriptionController {
   ) {}
 
   @Post()
-  @Roles(Role.DOCTOR)
+  @Roles(Role.DOCTOR, Role.RECEPTIONIST)
   async create(
     @Body() dto: CreatePrescriptionDto,
     @Request() req: { user: JwtUserPayload },
@@ -59,13 +60,42 @@ export class PrescriptionController {
     return this.prescriptionService.getQueueForUser(req.user);
   }
 
-  @Get(':code')
-  @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST, Role.CASHIER)
-  async findByCode(
-    @Param('code') code: string,
+  @Get()
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async findAll(
     @Request() req: { user: JwtUserPayload },
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
   ) {
-    return this.prescriptionService.findByCodeForUser(code, req.user);
+    return this.prescriptionService.findAll(req.user, page, limit);
+  }
+
+  @Get('services')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async getAllServices(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string,
+    @Query('isActive') isActive?: string,
+  ) {
+    const isActiveFilter =
+      isActive !== undefined ? isActive === 'true' : undefined;
+    return this.prescriptionService.getAllServices(
+      page,
+      limit,
+      search,
+      isActiveFilter,
+    );
+  }
+
+  @Get('doctors/by-service')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR, Role.ADMIN)
+  async getDoctorsByService(
+    @Request() req: { user: JwtUserPayload },
+    @Query('serviceId') serviceId?: string,
+    @Query('serviceCode') serviceCode?: string,
+  ) {
+    return this.prescriptionService.getDoctorsByService(serviceId, serviceCode);
   }
 
   @Get('medical-record/:medicalRecordId')
@@ -78,6 +108,15 @@ export class PrescriptionController {
       medicalRecordId,
       req.user,
     );
+  }
+
+  @Get(':code')
+  @Roles(Role.DOCTOR, Role.PATIENT, Role.RECEPTIONIST, Role.CASHIER)
+  async findByCode(
+    @Param('code') code: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return this.prescriptionService.findByCodeForUser(code, req.user);
   }
 
   // Patients can query their own prescriptions by patient profile
@@ -136,7 +175,7 @@ export class PrescriptionController {
   // }
 
   @Patch(':id')
-  @Roles(Role.DOCTOR)
+  @Roles(Role.DOCTOR, Role.RECEPTIONIST)
   async update(
     @Param('id') id: string,
     @Body() dto: UpdatePrescriptionDto,
@@ -146,7 +185,7 @@ export class PrescriptionController {
   }
 
   @Delete(':id')
-  @Roles(Role.DOCTOR)
+  @Roles(Role.DOCTOR, Role.RECEPTIONIST)
   async cancel(
     @Param('id') id: string,
     @Request() req: { user: JwtUserPayload },
@@ -252,5 +291,25 @@ export class PrescriptionController {
           queueOrder: p.queueOrder,
         })),
     };
+  }
+  // ======= Appointment-based endpoints =======
+  @Get('appointment/:appointmentCode')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async getAppointmentByCode(
+    @Param('appointmentCode') appointmentCode: string,
+  ) {
+    return this.prescriptionService.getAppointmentByCode(appointmentCode);
+  }
+
+  @Post('appointment/:appointmentCode/create-prescription')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async createPrescriptionFromAppointment(
+    @Param('appointmentCode') appointmentCode: string,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return this.prescriptionService.createPrescriptionFromAppointment(
+      appointmentCode,
+      req.user,
+    );
   }
 }

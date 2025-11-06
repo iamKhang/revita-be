@@ -305,7 +305,12 @@ export class MedicalRecordService {
       patient_info: { age, gender, notes },
     };
   }
-  async findAll(user: JwtUserPayload, page: string = '1', limit: string = '10') {
+  async findAll(
+    user: JwtUserPayload,
+    page: string = '1',
+    limit: string = '10',
+    patientProfileName?: string,
+  ) {
     const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
     const limitNum = Math.min(
       Math.max(parseInt(limit || '10', 10) || 10, 1),
@@ -348,10 +353,16 @@ export class MedicalRecordService {
       });
       
       const patientProfileIds = patientProfiles.map(profile => profile.id);
+      const patientWhere: any = {
+        patientProfileId: { in: patientProfileIds },
+        ...(patientProfileName
+          ? { patientProfile: { name: { contains: patientProfileName, mode: 'insensitive' } } }
+          : {}),
+      };
       const [total, data] = await this.prisma.$transaction([
-        this.prisma.medicalRecord.count({ where: { patientProfileId: { in: patientProfileIds } } }),
+        this.prisma.medicalRecord.count({ where: patientWhere }),
         this.prisma.medicalRecord.findMany({
-          where: { patientProfileId: { in: patientProfileIds } },
+          where: patientWhere,
           include,
           orderBy: { createdAt: 'desc' },
           skip,
@@ -365,10 +376,16 @@ export class MedicalRecordService {
       if (!user.doctor?.id) {
         throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
       }
+      const doctorWhere: any = {
+        doctorId: user.doctor.id,
+        ...(patientProfileName
+          ? { patientProfile: { name: { contains: patientProfileName, mode: 'insensitive' } } }
+          : {}),
+      };
       const [total, data] = await this.prisma.$transaction([
-        this.prisma.medicalRecord.count({ where: { doctorId: user.doctor.id } }),
+        this.prisma.medicalRecord.count({ where: doctorWhere }),
         this.prisma.medicalRecord.findMany({
-          where: { doctorId: user.doctor.id },
+          where: doctorWhere,
           include,
           orderBy: { createdAt: 'desc' },
           skip,
@@ -379,9 +396,15 @@ export class MedicalRecordService {
     }
 
     // Cho admin - có thể xem tất cả
+    const adminWhere: any = {
+      ...(patientProfileName
+        ? { patientProfile: { name: { contains: patientProfileName, mode: 'insensitive' } } }
+        : {}),
+    };
     const [total, data] = await this.prisma.$transaction([
-      this.prisma.medicalRecord.count(),
+      this.prisma.medicalRecord.count({ where: adminWhere }),
       this.prisma.medicalRecord.findMany({
+        where: adminWhere,
         include,
         orderBy: { createdAt: 'desc' },
         skip,
@@ -531,6 +554,67 @@ export class MedicalRecordService {
         throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
       }
       
+      if (record.doctorId !== user.doctor.id) {
+        throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
+      }
+    }
+
+    return record;
+  }
+
+
+  async findByCode(code: string, user: JwtUserPayload) {
+    const record = await this.prisma.medicalRecord.findFirst({
+      where: { medicalRecordCode: code },
+      include: {
+        histories: {
+          select: {
+            changedBy: true,
+            changedAt: true,
+          },
+        },
+        patientProfile: true,
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                avatar: true,
+                gender: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!record) {
+      throw new NotFoundException('Không tìm thấy hồ sơ');
+    }
+
+    if (user.role === Role.PATIENT) {
+      if (!user.patient?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bệnh nhân');
+      }
+
+      const patientProfile = await this.prisma.patientProfile.findUnique({
+        where: { id: record.patientProfileId },
+        select: { patientId: true },
+      });
+
+      if (!patientProfile || patientProfile.patientId !== user.patient.id) {
+        throw new ForbiddenException('Bạn không có quyền xem hồ sơ này');
+      }
+    }
+
+    if (user.role === Role.DOCTOR) {
+      if (!user.doctor?.id) {
+        throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
+      }
+
       if (record.doctorId !== user.doctor.id) {
         throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
       }

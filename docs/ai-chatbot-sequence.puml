@@ -1,50 +1,52 @@
 @startuml AI Chatbot Sequence Diagram
 !theme plain
-title Sơ đồ Sequence - Trò chuyện với AI Chatbot
+title AI Chatbot Sequence
 
-actor "Nguoi Dung" as U
-participant "Giao Dien" as UI
-participant "AiChatbotController" as C
-participant "AiChatbotService" as ACS
-participant "DatabaseQueryService" as DQS
-participant "Gemini AI" as GAI
-participant "PrismaService" as PS
+actor "User" as U
+boundary "Frontend" as F
+control "AiChatbotController" as C
+control "AiChatbotService" as ACS
+control "DatabaseQueryService" as DQS
+entity "Gemini AI" as GAI
+entity "PrismaService" as PS
 
-== Trò chuyện với AI Chatbot ==
+== Chat with AI Chatbot ==
 
-U -> UI: Gửi câu hỏi
-UI -> C: POST /ai-chatbot/chat
+U -> F: Send message
+F -> C: POST /ai-chatbot/chat
+note right: ChatRequestDto
 C -> C: JwtAuthGuard.validateToken()
 C -> C: validateChatRequest(chatRequest)
 C -> ACS: generateResponse(chatRequest)
 
 ACS -> DQS: processDatabaseQuery(message)
 DQS -> DQS: isDatabaseRelatedQuestion(message)
-alt Câu hỏi liên quan dữ liệu hệ thống
+alt Database related question
     DQS -> GAI: generatePrismaQuery(question)
     GAI -> GAI: gemini.generateContent()
-    GAI --> DQS: Trả về query string
+    GAI --> DQS: queryString\n(Prisma query in string format)
     DQS -> DQS: validateQueryFormat(queryString)
     DQS -> DQS: sanitizeQueryForPatient(queryString)
     DQS -> PS: executePrismaQuery(queryString)
     PS -> PS: prisma.$queryRaw()
-    PS --> DQS: Kết quả query
+    PS --> DQS: queryResults\n(data from database query)
     DQS -> GAI: generateExplanation(question, data)
     GAI -> GAI: gemini.generateContent()
-    GAI --> DQS: Giải thích bằng tiếng Việt
-    DQS --> ACS: Trả về dữ liệu hệ thống
-else Câu hỏi y tế thông thường
-    DQS --> ACS: success: false
+    GAI --> DQS: explanation\n(natural language explanation in Vietnamese)
+    DQS --> ACS: response\n(explained data with context)
+else Normal medical question
+    DQS --> ACS: isDatabaseQuery\n(flag set to false)
     ACS -> GAI: buildMedicalAssistantPrompt(message)
     GAI -> GAI: gemini.generateContent()
-    GAI --> ACS: Trả về câu trả lời
+    GAI --> ACS: aiResponse\n(medical advice in Vietnamese)
     ACS -> ACS: containsMedicalAdvice(text)
+    ACS --> ACS: response\n(general medical response with disclaimer)
 end
 
 ACS -> ACS: generateConversationId()
 ACS -> ACS: getMedicalDisclaimer()
-ACS --> C: Trả về ChatResponseDto
-C --> UI: Trả về phản hồi AI
-UI --> U: Hiển thị câu trả lời
+ACS --> C: response\n(chat response with conversationId, disclaimer, content)
+C --> F: response\n(complete AI response)
+F --> U: Display AI response
 
 @enduml

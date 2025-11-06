@@ -1,75 +1,77 @@
 @startuml Patient Profile Sequence Diagram
 !theme plain
-title Tương Tác Tạo và Xem Hồ Sơ Bệnh Nhân - Luồng Bác Sĩ và Bệnh Nhân
+title Patient Profile Sequence
 
-actor "Bác Sĩ" as D
-actor "Bệnh Nhân" as P
-boundary "Giao Diện" as F
+actor "Doctor" as D
+actor "Patient" as P
+boundary "Frontend" as F
 control "PatientProfileController" as C
 control "PatientProfileService" as PS
 entity "PatientProfile" as PP
 entity "Patient" as PAT
 
-== Bác sĩ tạo hồ sơ bệnh nhân độc lập ==
+== Doctor Creates Independent Profile ==
 
-D -> F: Tạo hồ sơ bệnh nhân mới
+D -> F: Create new patient profile
 F -> C: POST /patient-profile/create-independent
+note right: CreateIndependentPatientProfileDto
 C -> C: validateCreateIndependentPatientProfileDto(dto)
 C -> PS: createIndependent(createIndependentPatientProfileDto, user)
 PS -> PS: checkStaffPermission(user)
 
-alt Có quyền tạo
+alt Has permission
   PS -> PP: createIndependentProfile(profileData)
   PP -> PP: prisma.patientProfile.create()
-  PP --> PS: Trả về hồ sơ mới
-  PS --> C: Trả về hồ sơ đã tạo
-  C --> F: Trả về kết quả tạo hồ sơ
-  F --> D: Hiển thị thông báo tạo thành công
+  PP --> PS: patientProfile\n(new patient profile with generated code)
+  PS --> C: response\n(created patient profile details)
+  C --> F: response\n(patient profile data)
+  F --> D: Display success message
   
-else Không có quyền
-  PS --> C: throw new ForbiddenException()
-  C --> F: Thông báo lỗi
-  F --> D: Hiển thị thông báo không có quyền
+else No permission
+  PS --> C: throw ForbiddenException()
+  C --> F: error\n(insufficient permissions message)
+  F --> D: Display permission error
 end
 
-== Bệnh nhân tạo hồ sơ cho chính mình ==
+== Patient Creates Own Profile ==
 
-P -> F: Tạo hồ sơ bệnh nhân
+P -> F: Create patient profile
 F -> C: POST /patient-profile/create
+note right: CreatePatientProfileDto
 C -> C: validateCreatePatientProfileDto(dto)
 C -> PS: create(createPatientProfileDto, user)
 PS -> PAT: validatePatientExists(user.id)
 PAT -> PAT: prisma.patient.findUnique()
-PAT --> PS: Xác nhận bệnh nhân hợp lệ
+PAT --> PS: patient\n(patient account info)
 
 PS -> PS: checkSelfCreationPermission(user, patientId)
 
-alt Có quyền tạo
+alt Has permission
   PS -> PP: createPatientProfile(profileData)
   PP -> PP: prisma.patientProfile.create()
-  PP --> PS: Trả về hồ sơ mới
-  PS --> C: Trả về hồ sơ đã tạo
-  C --> F: Trả về kết quả tạo hồ sơ
-  F --> P: Hiển thị thông báo tạo thành công
+  PP --> PS: patientProfile\n(new patient profile linked to patient)
+  PS --> C: response\n(created patient profile with relationships)
+  C --> F: response\n(patient profile data)
+  F --> P: Display success message
   
-else Không có quyền
-  PS --> C: throw new ForbiddenException()
-  C --> F: Thông báo lỗi
-  F --> P: Hiển thị thông báo không có quyền
+else No permission
+  PS --> C: throw ForbiddenException()
+  C --> F: error\n(permission denied message)
+  F --> P: Display permission error
 end
 
-== Xem hồ sơ bệnh nhân ==
+== View Patient Profiles ==
 
-D -> F: Xem danh sách hồ sơ
+D -> F: View profiles list
 F -> C: GET /patient-profile
 C -> C: validateRequest()
 C -> PS: findAll(user)
 PS -> PS: checkViewPermission(user)
 PS -> PP: findByPermission(user)
 PP -> PP: prisma.patientProfile.findMany()
-PP --> PS: Trả về danh sách hồ sơ
-PS --> C: Trả về danh sách hồ sơ
-C --> F: Trả về kết quả
-F --> D: Hiển thị danh sách hồ sơ
+PP --> PS: patientProfiles\n(accessible patient profiles)
+PS --> C: response\n(patient profiles list with patient info)
+C --> F: response\n(patient profiles array)
+F --> D: Display profiles list
 
 @enduml

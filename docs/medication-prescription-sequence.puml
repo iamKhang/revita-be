@@ -1,9 +1,9 @@
 @startuml Medication Prescription Sequence Diagram
 !theme plain
-title Tương Tác Tạo Đơn Thuốc - Luồng Bác Sĩ
+title Medication Prescription Sequence
 
-actor "Bác Sĩ" as D
-boundary "Giao Diện" as F
+actor "Doctor" as D
+boundary "Frontend" as F
 control "MedicationPrescriptionController" as C
 control "MedicationPrescriptionService" as M
 control "DrugCatalogService" as DC
@@ -12,51 +12,52 @@ entity "PatientProfile" as PP
 entity "MedicalRecord" as MR
 entity "Drug" as DR
 
-== Bác sĩ tạo đơn thuốc ==
+== Doctor Creates Prescription ==
 
-D -> F: Chọn bệnh nhân và tạo đơn thuốc
+D -> F: Select patient and create prescription
 F -> C: POST /medication-prescription/create
+note right: CreateMedicationPrescriptionDto
 C -> C: validateCreateMedicationPrescriptionDto(dto)
 C -> M: create(createMedicationPrescriptionDto)
 M -> M: validateItemsNotEmpty(items)
 
-alt Items hợp lệ
+alt Items valid
   M -> M: generatePrescriptionCode()
   M -> MP: createPrescription(prescriptionData)
   MP -> MP: prisma.medicationPrescription.create()
-  MP --> M: Đơn thuốc đã tạo
+  MP --> M: prescription\n(new prescription with status DRAFT)
   
   M -> MP: createPrescriptionItems(prescriptionId, items)
   MP -> MP: prisma.medicationPrescriptionItem.createMany()
-  MP --> M: Items đã lưu
-  MP --> M: Trả về đơn thuốc hoàn chỉnh
+  MP --> M: items\n(prescription items with dosage info)
+  MP --> M: fullPrescription\n(complete prescription with all items)
   
-  M --> C: Trả về đơn thuốc đã tạo
-  C --> F: Trả về kết quả tạo đơn thuốc
-  F --> D: Hiển thị thông báo tạo thành công
+  M --> C: response\n(prescription with items and patient info)
+  C --> F: response\n(created prescription data)
+  F --> D: Display success message
   
-else Items rỗng
-  M --> C: throw new BadRequestException()
-  C --> F: Thông báo lỗi
-  F --> D: Hiển thị thông báo lỗi
+else Items empty
+  M --> C: throw BadRequestException()
+  C --> F: error\n(no items provided message)
+  F --> D: Display error message
 end
 
-== Tìm kiếm thuốc để thêm vào đơn ==
+== Search Drugs to Add ==
 
-D -> F: Tìm kiếm thuốc trong catalog
+D -> F: Search drugs in catalog
 F -> C: GET /medication-prescription/search-drugs?q=xxx
 C -> C: validateSearchQuery(query)
 C -> DC: searchDrugs(query, limit, skip)
 DC -> DR: searchDrugsByOpenFDA(query, limit, skip)
 DR -> DR: mongodb.collection.find()
-DR --> DC: Trả về kết quả tìm kiếm
+DR --> DC: drugs\n(drugs matching search query from catalog)
 DC -> DC: formatDrugSearchResults(results)
-DC --> C: Trả về danh sách thuốc
-C --> F: Trả về kết quả tìm kiếm
-F --> D: Hiển thị danh sách thuốc để chọn
+DC --> C: response\n(drugs array with name, NDC, strength, dosage)
+C --> F: response\n(search results with drug details)
+F --> D: Display drugs list for selection
 
-D -> F: Chọn thuốc từ danh sách
+D -> F: Select drug from list
 F -> F: addDrugToItemsList(drug)
-F --> D: Hiển thị danh sách thuốc đã chọn
+F --> D: Display selected drugs list
 
 @enduml

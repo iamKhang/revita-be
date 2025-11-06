@@ -1,9 +1,9 @@
 @startuml Register Sequence Diagram
 !theme plain
-title Tương Tác Đăng Ký Tài Khoản
+title Registration Sequence
 
-actor "Người Dùng" as U
-boundary "Giao Diện" as F
+actor "User" as U
+boundary "Frontend" as F
 control "RegisterController" as C
 control "RegisterService" as R
 entity "Account" as A
@@ -12,129 +12,131 @@ entity "Redis" as RED
 entity "EmailService" as E
 entity "SmsService" as S
 
-== Bước 1: Đăng ký với số điện thoại/email ==
+== Step 1: Register with Phone/Email ==
 
-U -> F: Nhập số điện thoại hoặc email
+U -> F: Enter phone or email
 F -> C: POST /register/step1
+note right: RegisterDto
 C -> C: validateRegisterDto(dto)
 C -> R: registerStep1(registerDto)
 R -> A: checkPhoneOrEmailExists(phoneOrEmail)
-A -> A: prisma.account.findFirst()
-A --> R: Trả về kết quả
+A -> A: prisma.auth.findFirst()
+A --> R: existingAuth\n(account if exists, null otherwise)
 
-alt Phone/email chưa tồn tại
+alt Phone/email not exists
   R -> R: generateOTP()
   R -> R: generateSessionId()
   R -> RED: saveSessionData(sessionId, sessionData)
   RED -> RED: redis.setex()
-  RED --> R: Xác nhận lưu session
+  RED --> R: success\n(session saved with 15min expiry)
   
   R -> RED: saveOTP(phoneOrEmail, otp, 300)
   RED -> RED: redis.setex()
-  RED --> R: Xác nhận lưu OTP
+  RED --> R: success\n(OTP saved with 5min expiry)
   
-  alt Có số điện thoại
+  alt Has phone
     R -> S: sendSMS(phone, otp)
     S -> S: smsProvider.send()
-    S --> R: Kết quả gửi SMS
+    S --> R: result\n(SMS sent confirmation)
     
-  else Có email
+  else Has email
     R -> E: sendEmail(email, otp)
     E -> E: emailProvider.send()
-    E --> R: Kết quả gửi email
+    E --> R: result\n(email sent confirmation)
   end
   
-  R --> C: Trả về sessionId và message
-  C --> F: Trả về kết quả
-  F --> U: Hiển thị thông báo OTP đã gửi
+  R --> C: response\n(sessionId and OTP sent message)
+  C --> F: response\n(session data)
+  F --> U: Display OTP sent message
   
-else Phone/email đã tồn tại
-  R --> C: throw new ConflictException()
-  C --> F: Thông báo lỗi
-  F --> U: Hiển thị thông báo đã được đăng ký
+else Phone/email exists
+  R --> C: throw ConflictException()
+  C --> F: error\n(already registered message)
+  F --> U: Display already registered message
 end
 
-== Bước 2: Xác thực OTP ==
+== Step 2: Verify OTP ==
 
-U -> F: Nhập mã OTP
+U -> F: Enter OTP code
 F -> C: POST /register/verify-otp
+note right: VerifyOtpDto
 C -> C: validateVerifyDto(dto)
 C -> R: verifyOtp(verifyDto)
 R -> RED: getSessionData(sessionId)
 RED -> RED: redis.get()
-RED --> R: Session data
+RED --> R: sessionData\n(session info if valid, null if expired)
 R -> RED: getOTP(phoneOrEmail)
 RED -> RED: redis.get()
-RED --> R: OTP đã lưu
+RED --> R: savedOtp\n(OTP code if valid, null if expired)
 
-alt OTP hợp lệ
+alt OTP valid
   R -> RED: updateSessionVerified(sessionId)
   RED -> RED: redis.setex()
-  RED --> R: Xác nhận cập nhật
+  RED --> R: success\n(session marked as verified)
   R -> RED: deleteOTP(phoneOrEmail)
   RED -> RED: redis.del()
-  RED --> R: Xác nhận xóa OTP
-  R --> C: Trả về kết quả xác thực thành công
-  C --> F: Trả về kết quả
-  F --> U: Hiển thị thông báo xác thực thành công, chuyển sang bước 3
+  RED --> R: success\n(OTP deleted after use)
+  R --> C: response\n(verification success confirmation)
+  C --> F: response\n(verified session data)
+  F --> U: Display verification success, proceed to step 3
   
-else OTP không hợp lệ
-  R --> C: throw new BadRequestException()
-  C --> F: Thông báo lỗi
-  F --> U: Hiển thị thông báo OTP không chính xác
+else OTP invalid
+  R --> C: throw BadRequestException()
+  C --> F: error\n(OTP incorrect or expired message)
+  F --> U: Display OTP incorrect message
 end
 
-== Bước 3: Hoàn tất đăng ký ==
+== Step 3: Complete Registration ==
 
-U -> F: Nhập thông tin cá nhân và mật khẩu
+U -> F: Enter personal info and password
 F -> C: POST /register/complete
+note right: CompleteRegistrationDto
 C -> C: validateCompleteDto(dto)
 C -> R: completeRegistration(completeDto)
 R -> RED: getSessionData(sessionId)
 RED -> RED: redis.get()
-RED --> R: Session data
+RED --> R: sessionData\n(verified session data)
 
-alt Session hợp lệ và đã xác thực
+alt Session valid and verified
   R -> A: checkCitizenIdExists(citizenId)
-  A -> A: prisma.account.findFirst()
-  A --> R: Trả về kết quả
+  A -> A: prisma.auth.findFirst()
+  A --> R: existingAuth\n(account with citizenId if exists)
   
-  alt CitizenId chưa tồn tại
+  alt CitizenId not exists
     R -> R: hashPassword(password)
     R -> R: beginTransaction()
     
     R -> A: createAccountRecord(accountData)
-    A -> A: prisma.account.create()
-    A --> R: Trả về account
+    A -> A: prisma.auth.create()
+    A --> R: auth\n(new account with encrypted password)
     
     R -> P: createPatientRecord(patientData)
     P -> P: prisma.patient.create()
-    P --> R: Trả về patient
+    P --> R: patient\n(new patient linked to account)
     
     R -> RED: deleteSession(sessionId)
     RED -> RED: redis.del()
-    RED --> R: Xác nhận xóa session
+    RED --> R: success\n(session cleaned up)
     
     R -> E: sendWelcomeNotification(email)
     E -> E: emailProvider.send()
-    E --> R: Kết quả gửi thông báo
+    E --> R: result\n(welcome email sent)
     
     R -> R: commitTransaction()
-    R --> C: Trả về kết quả đăng ký thành công
-    C --> F: Trả về kết quả
-    F --> U: Hiển thị thông báo đăng ký thành công
+    R --> C: response\n(registration complete with account info)
+    C --> F: response\n(success message)
+    F --> U: Display registration success
     
-  else CitizenId đã tồn tại
-    R --> C: throw new ConflictException()
-    C --> F: Thông báo lỗi
-    F --> U: Hiển thị thông báo số CMND/CCCD đã được đăng ký
+  else CitizenId exists
+    R --> C: throw ConflictException()
+    C --> F: error\n(citizen ID already registered message)
+    F --> U: Display ID already registered message
   end
   
-else Session không hợp lệ
-  R --> C: throw new BadRequestException()
-  C --> F: Thông báo lỗi
-  F --> U: Hiển thị thông báo session không hợp lệ
+else Session invalid
+  R --> C: throw BadRequestException()
+  C --> F: error\n(session expired or invalid message)
+  F --> U: Display session invalid message
 end
-
 
 @enduml

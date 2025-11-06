@@ -18,8 +18,9 @@ export class CreateMedicalRecordDto {
   templateId: string;
 
   @ApiPropertyOptional({
-    description: 'ID của bác sĩ hoặc authId của bác sĩ (tùy chọn cho admin, bắt buộc nếu admin muốn chỉ định bác sĩ cụ thể)',
-    example: 'doctor-uuid-1 hoặc auth-uuid-1'
+    description:
+      'ID của bác sĩ hoặc authId của bác sĩ (tùy chọn cho admin, bắt buộc nếu admin muốn chỉ định bác sĩ cụ thể)',
+    example: 'doctor-uuid-1 hoặc auth-uuid-1',
   })
   @IsOptional()
   doctorId?: string;

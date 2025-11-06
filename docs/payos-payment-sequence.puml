@@ -9,7 +9,6 @@ entity "InvoicePaymentService" as Service
 entity "PayOsService" as PayOS
 entity "RoutingService" as Routing
 entity "WebSocketService" as WS
-database "PostgreSQL" as DB
 
 Cashier -> Patient: Yêu cầu phiếu chỉ định
 activate Patient
@@ -25,10 +24,7 @@ activate Controller
 Controller -> Service: scanPrescription(dto)
 activate Service
 
-Service -> DB: SELECT prescription\nWHERE prescriptionCode\nINCLUDE patientProfile, doctor, services
-activate DB
-DB --> Service: Prescription data
-deactivate DB
+Service -> Service: prisma.prescription.findFirst
 
 Service -> Service: Validate status not CANCELLED
 
@@ -52,7 +48,7 @@ loop Chọn dịch vụ và xem tổng tiền
     activate Service
     
     Service -> Service: Lọc selectedServices
-    Service -> Service: Calculate totalAmount
+    Service -> Service: Tính totalAmount
     
     Service --> Controller: PaymentPreview\nselectedServices, totalAmount
     deactivate Service
@@ -77,16 +73,7 @@ activate Service
 
 Service -> Service: Tạo preview để validate
 
-Service -> Routing: assignPatientToRooms\nvalidate có nhân sự
-activate Routing
-
-Routing -> DB: SELECT work sessions\nfor services
-activate DB
-DB --> Routing: Work sessions
-deactivate DB
-
-Routing --> Service: availableAssignments
-deactivate Routing
+Service -> Routing: assignPatientToRooms
 
 alt Không có nhân sú
     Service --> Controller: Error không có nhân sự
@@ -98,16 +85,8 @@ alt Không có nhân sú
 else Có nhân sự
     Service -> Service: Generate invoiceCode
 
-    Service -> DB: BEGIN TRANSACTION
-    activate DB
-
-    Service -> DB: INSERT INTO invoice\ninvoiceCode, patientProfileId,\ncashierId, totalAmount,\npaymentMethod TRANSFER,\nisPaid false,\npaymentStatus PENDING
-
-    DB --> Service: Invoice created
-
-    Service -> DB: INSERT INTO invoiceDetail\ncho từng selectedService
-
-    DB --> Service: InvoiceDetails created
+    Service -> Service: prisma.$transaction
+    Service -> Service: prisma.invoice.create
 
     Service -> Service: Generate numeric orderCode
 
@@ -121,12 +100,7 @@ else Có nhân sự
 
     Service -> Service: Map PayOS status
 
-    Service -> DB: INSERT INTO paymentTransaction\ninvoiceId, amount, currency VND,\nstatus PENDING,\nproviderTransactionId,\norderCode, paymentUrl,\nqrCode, expiredAt,\nisVerified false
-
-    DB --> Service: Transaction created
-
-    Service -> DB: COMMIT TRANSACTION
-    deactivate DB
+    Service -> Service: prisma.paymentTransaction.create
 
     Service --> Controller: PaymentResult\ninvoiceCode, totalAmount,\npaymentStatus PENDING,\ntransaction with paymentUrl and qrCode
     deactivate Service
@@ -159,7 +133,7 @@ else Có nhân sự
     PayOS -> Controller: POST /invoice-payments/payos/webhook\nwith signature and payload
     activate Controller
 
-    Controller -> Service: handlePayOsWebhook\nsignature, payload
+    Controller -> Service: handlePayOsWebhook
     activate Service
 
     Service -> Service: Parse payload JSON
@@ -188,16 +162,10 @@ else Có nhân sự
         else Signature hợp lệ
             Service -> Service: Extract transactionId\nand orderCode from payload
 
-            Service -> DB: SELECT paymentTransaction\nWHERE providerTransactionId\nOR orderCode\nINCLUDE invoice, invoiceDetails,\npatientProfile
-            activate DB
-            DB --> Service: Transaction with invoice
-            deactivate DB
+            Service -> Service: prisma.paymentTransaction.findFirst
 
             alt Transaction không tìm thấy
-                Service -> DB: Fallback lookup\nby amount and time window
-                activate DB
-                DB --> Service: Candidates
-                deactivate DB
+                Service -> Service: prisma.paymentTransaction.findMany
 
                 alt Tìm thấy 1 candidate
                     Service -> Service: Use fallback transaction
@@ -213,19 +181,13 @@ else Có nhân sự
 
             Service -> Service: Map status\nfrom payload
 
-            Service -> DB: BEGIN TRANSACTION
-            activate DB
-
-            Service -> DB: UPDATE paymentTransaction\nstatus, paidAt,\nproviderTransactionId,\norderCode, isVerified true,\nlastWebhookPayload,\nlastWebhookStatus,\nlastWebhookAt
-
-            DB --> Service: Transaction updated
+            Service -> Service: prisma.paymentTransaction.update
 
             alt Status is SUCCEEDED
                 Service -> Service: Check if invoice\nalready isPaid
 
                 alt Invoice đã isPaid
-                    Service -> DB: COMMIT TRANSACTION
-                    deactivate DB
+                    Service -> Service: // done
 
                     Service ->> WS: notifyInvoicePaymentSuccess
                     activate WS
@@ -245,27 +207,10 @@ else Có nhân sự
                     UI --> Cashier: Hiển thị notification\nthanh toán thành công
                     deactivate UI
                 else Invoice chưa isPaid
-                    Service -> DB: UPDATE invoice\nset isPaid true,\npaymentStatus PAID,\namountPaid, changeAmount 0,\npaidAt now
+                    Service -> Service: prisma.invoice.update
+                    Service -> Service: prisma.prescription.update
 
-                    DB --> Service: Invoice updated
-
-                    Service -> DB: UPDATE prescription\nstatus PAID
-
-                    DB --> Service: Prescription updated
-
-                    Service -> DB: COMMIT TRANSACTION
-                    deactivate DB
-
-                    Service -> Routing: assignPatientToRooms\ntạo routing assignments
-                    activate Routing
-
-                    Routing -> DB: INSERT routing assignments\nfor each service
-                    activate DB
-                    DB --> Routing: Assignments created
-                    deactivate DB
-
-                    Routing --> Service: routingAssignments
-                    deactivate Routing
+                    Service -> Routing: assignPatientToRooms
 
                     Service ->> WS: notifyInvoicePaymentSuccess\nand routing created
                     activate WS
@@ -298,8 +243,7 @@ else Có nhân sự
                     deactivate Patient
                 end
             else Status is CANCELLED or FAILED
-                Service -> DB: COMMIT TRANSACTION
-                deactivate DB
+                Service -> Service: // done
 
                 Service --> Controller: Return success\nwith status
                 deactivate Service
@@ -318,8 +262,7 @@ else Có nhân sự
                 UI --> Cashier: Hiển thị thanh toán\nthất bại hoặc hủy
                 deactivate UI
             else Status khác (PENDING/PROCESSING)
-                Service -> DB: COMMIT TRANSACTION
-                deactivate DB
+                Service -> Service: // done
 
                 Service --> Controller: Return success
                 deactivate Service
