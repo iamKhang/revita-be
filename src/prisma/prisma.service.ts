@@ -2,8 +2,6 @@ import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/commo
 import { ModuleRef } from '@nestjs/core';
 import { PrismaClient } from '@prisma/client';
 import { PrescriptionStatus } from '@prisma/client';
-import { WebSocketService } from '../websocket/websocket.service';
-import { PrescriptionService as DomainPrescriptionService } from '../prescription/prescription.service';
 
 @Injectable()
 export class PrismaService
@@ -45,7 +43,7 @@ export class PrismaService
 
             try {
               // Lấy bản ghi sau update
-              const updated = await this.prescriptionService.findUnique({
+              const updated = await (this as any).prescriptionService.findUnique({
                 where: where?.prescriptionId_serviceId ?? where,
                 include: {
                   prescription: {
@@ -57,7 +55,7 @@ export class PrismaService
 
               if (updated) {
                 // Cập nhật queue cho doctor / technician nếu có
-                const domainSvc = this.moduleRef.get(DomainPrescriptionService, { strict: false });
+                const domainSvc = this.moduleRef.get<any>('PrescriptionService' as any, { strict: false });
                 if (updated.doctorId) {
                   await domainSvc.updateQueueInRedis(updated.doctorId, 'DOCTOR');
                 }
@@ -66,7 +64,7 @@ export class PrismaService
                 }
 
                 // Phát sự kiện websocket đến các bên liên quan
-                const ws = this.moduleRef.get(WebSocketService, { strict: false });
+                const ws = this.moduleRef.get<any>('WebSocketService' as any, { strict: false });
                 const payload = {
                   patientProfileId: updated.prescription.patientProfileId,
                   patientName: updated.prescription.patientProfile.name,
@@ -98,14 +96,14 @@ export class PrismaService
 
             try {
               // Tìm các bản ghi bị ảnh hưởng để cập nhật queue và phát sự kiện
-              const affected = await this.prescriptionService.findMany({
+              const affected = await (this as any).prescriptionService.findMany({
                 where,
                 include: {
                   prescription: { include: { patientProfile: true } },
                 },
               });
-              const domainSvc = this.moduleRef.get(DomainPrescriptionService, { strict: false });
-              const ws = this.moduleRef.get(WebSocketService, { strict: false });
+              const domainSvc = this.moduleRef.get<any>('PrescriptionService' as any, { strict: false });
+              const ws = this.moduleRef.get<any>('WebSocketService' as any, { strict: false });
 
               for (const rec of affected) {
                 if (rec.doctorId) {
