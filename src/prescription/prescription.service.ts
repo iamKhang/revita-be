@@ -174,8 +174,7 @@ export class PrescriptionService {
       });
 
       finalPrescriptionCode = this.codeGenerator.generatePrescriptionCode(
-        doctor?.auth?.name ||
-          (user.role === 'RECEPTIONIST' ? 'Receptionist' : 'Unknown'),
+        doctor?.auth?.name || (user.role === 'RECEPTIONIST' ? 'Receptionist' : 'Unknown'),
         patientProfile?.name || 'Unknown',
       );
     }
