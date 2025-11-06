@@ -47,7 +47,8 @@ export class PrescriptionService {
       doctorId = user.doctor.id;
     }
 
-    if (!doctorId) {
+    // For RECEPTIONIST, doctorId is optional; for DOCTOR, doctorId is required (from token or DTO)
+    if (user.role !== 'RECEPTIONIST' && !doctorId) {
       throw new BadRequestException(
         'Doctor ID is required (either from JWT token or DTO)',
       );
@@ -66,34 +67,41 @@ export class PrescriptionService {
       throw new NotFoundException('Patient profile not found');
     }
 
-    // Validate doctorId exists (always validate since we set it from token or DTO)
-    const doctor = await this.prisma.doctor.findUnique({
-      where: { id: doctorId },
-      select: { id: true },
-    });
-    if (!doctor) {
-      throw new NotFoundException('Doctor not found');
+    // Validate doctorId exists if provided
+    if (doctorId) {
+      const doctor = await this.prisma.doctor.findUnique({
+        where: { id: doctorId },
+        select: { id: true },
+      });
+      if (!doctor) {
+        throw new NotFoundException('Doctor not found');
+      }
     }
 
     // Accept serviceId or serviceCode; resolve to IDs
+    // Validate each service provides at least one identifier (allow both)
+    for (let i = 0; i < (services as any[]).length; i++) {
+      const s = (services as any[])[i];
+      if (!s.serviceId && !s.serviceCode) {
+        throw new BadRequestException(
+          'Each service must include serviceId or serviceCode',
+        );
+      }
+    }
+
     const requestedById = (services as any[])
       .filter((s: any) => !!s.serviceId)
       .map((s: any) => s.serviceId);
     const requestedByCode = (services as any[])
       .filter((s: any) => !!s.serviceCode)
       .map((s: any) => s.serviceCode);
-    if (requestedById.length + requestedByCode.length !== services.length) {
-      throw new BadRequestException(
-        'Each service must include serviceId or serviceCode',
-      );
-    }
     const servicesById = await this.prisma.service.findMany({
       where: { id: { in: requestedById } },
-      select: { id: true },
+      select: { id: true, requiresDoctor: true },
     });
     const servicesByCode = await this.prisma.service.findMany({
       where: { serviceCode: { in: requestedByCode } },
-      select: { id: true, serviceCode: true },
+      select: { id: true, serviceCode: true, requiresDoctor: true },
     });
     const idSet = new Set(servicesById.map((s) => s.id));
     const codeToId = new Map(
@@ -108,6 +116,20 @@ export class PrescriptionService {
       if (missingCodes.length)
         parts.push(`serviceCode(s): ${missingCodes.join(', ')}`);
       throw new BadRequestException(`Invalid ${parts.join(' and ')}`);
+    }
+
+    // Receptionist cannot assign services that require a doctor
+    if (user.role === 'RECEPTIONIST') {
+      const allResolved = [
+        ...servicesById,
+        ...servicesByCode.map((s) => ({ id: s.id, requiresDoctor: s.requiresDoctor })),
+      ];
+      const requiresDoctorIds = allResolved.filter((s) => s.requiresDoctor === true).map((s) => s.id);
+      if (requiresDoctorIds.length > 0) {
+        throw new BadRequestException(
+          `Receptionist cannot assign services that require doctor: ${requiresDoctorIds.join(', ')}`,
+        );
+      }
     }
 
     // Optional: validate medicalRecord belongs to same patientProfile
@@ -140,7 +162,7 @@ export class PrescriptionService {
       });
 
       finalPrescriptionCode = this.codeGenerator.generatePrescriptionCode(
-        doctor?.auth?.name || 'Unknown',
+        doctor?.auth?.name || (user.role === 'RECEPTIONIST' ? 'Receptionist' : 'Unknown'),
         patientProfile?.name || 'Unknown',
       );
     }
