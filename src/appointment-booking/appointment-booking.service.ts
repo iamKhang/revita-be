@@ -1233,6 +1233,7 @@ export class AppointmentBookingService {
             },
           },
         },
+        patientProfile: true,
       },
       orderBy: {
         date: 'desc', // Sắp xếp theo ngày giảm dần (mới nhất trước)
@@ -1266,6 +1267,7 @@ export class AppointmentBookingService {
         return {
           appointmentId: apt.id,
           appointmentCode: apt.appointmentCode,
+          patientProfileCode: apt.patientProfile.profileCode,
           doctorId: apt.doctorId,
           doctorName: apt.doctor.auth.name,
           specialtyId: apt.specialtyId,
@@ -1375,6 +1377,7 @@ export class AppointmentBookingService {
         return {
           appointmentId: apt.id,
           appointmentCode: apt.appointmentCode,
+          patientProfileCode: apt.patientProfile.profileCode,
           doctorId: apt.doctorId,
           doctorName: doctor.auth.name,
           specialtyId: apt.specialtyId,
@@ -1479,6 +1482,7 @@ export class AppointmentBookingService {
     return {
       appointmentId: appointment.id,
       appointmentCode: appointment.appointmentCode,
+      patientProfileCode: appointment.patientProfile.profileCode,
       doctorId: appointment.doctorId,
       doctorName: appointment.doctor.auth.name,
       specialtyId: appointment.specialtyId,
