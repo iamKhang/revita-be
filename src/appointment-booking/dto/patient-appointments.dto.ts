@@ -9,6 +9,7 @@ export class PatientAppointmentServiceDto {
 export class PatientAppointmentDto {
   appointmentId: string;
   appointmentCode: string;
+  patientProfileCode: string;
   doctorId: string;
   doctorName: string;
   specialtyId: string;
