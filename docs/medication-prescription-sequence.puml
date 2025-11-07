@@ -1,6 +1,5 @@
 @startuml Medication Prescription Sequence Diagram
 !theme plain
-title Medication Prescription Sequence
 
 actor "Doctor" as D
 boundary "Frontend" as F
@@ -11,8 +10,6 @@ entity "MedicationPrescription" as MP
 entity "PatientProfile" as PP
 entity "MedicalRecord" as MR
 entity "Drug" as DR
-
-== Doctor Creates Prescription ==
 
 D -> F: Select patient and create prescription
 F -> C: POST /medication-prescription/create
@@ -41,8 +38,6 @@ else Items empty
   C --> F: error\n(no items provided message)
   F --> D: Display error message
 end
-
-== Search Drugs to Add ==
 
 D -> F: Search drugs in catalog
 F -> C: GET /medication-prescription/search-drugs?q=xxx

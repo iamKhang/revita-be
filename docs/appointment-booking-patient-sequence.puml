@@ -1,6 +1,5 @@
 @startuml Appointment Booking - Patient Sequence Diagram
 !theme plain
-title Patient Appointment Booking Sequence
 
 actor "Patient" as P
 boundary "Frontend" as F
@@ -11,7 +10,6 @@ entity "Doctor" as D
 entity "Specialty" as SP
 entity "Service" as SV
 
-== Search and Select Doctor ==
 
 P -> F: Search for specialty
 F -> C: GET /appointment-booking/specialties
@@ -34,8 +32,6 @@ D --> S: doctors\n(doctors matching specialty with work sessions)
 S --> C: response\n(doctors array with specialty info)
 C --> F: response\n(doctors list with rating, experience)
 F --> P: Display doctors list
-
-== Book Appointment ==
 
 P -> F: Select doctor and date
 F -> C: GET /appointment-booking/working-days?doctorId=xxx

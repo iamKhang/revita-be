@@ -7,7 +7,12 @@ control "AdminController" as Controller
 entity "CodeGeneratorService" as CodeGen
 entity "bcrypt" as Bcrypt
 entity "EmailService" as Email
-database "PostgreSQL" as DB
+entity "Auth" as Auth
+entity "Doctor" as Doctor
+entity "Patient" as Patient
+entity "Receptionist" as Receptionist
+entity "Cashier" as Cashier
+entity "Admin" as AdminModel
 
 Admin -> UI: Nhập thông tin user mới\n- name, dateOfBirth, gender\n- address, citizenId\n- email, phone, password\n- role, specialtyId, etc
 activate UI
@@ -20,20 +25,20 @@ activate Controller
 Controller -> Controller: Validate required fields\nname, dateOfBirth, gender,\naddress, password, role
 
 alt Thiếu trường bắt buộc
-    Controller --> UI: 400 Missing required fields
+    Controller --> UI: 400 BadRequestException\nMissing required fields
     deactivate Controller
     UI --> Admin: Hiển thị lỗi
     deactivate UI
 else Đầy đủ trường bắt buộc
 
 alt Có citizenId
-    Controller -> DB: SELECT FROM auth\nWHERE citizenId = value
-    activate DB
-    DB --> Controller: Record hoặc null
-    deactivate DB
+    Controller -> Auth: findUnique({ where: { citizenId } })
+    activate Auth
+    Auth --> Controller: Auth | null
+    deactivate Auth
     
     alt CitizenId đã tồn tại
-        Controller --> UI: 400 CitizenId already exists
+        Controller --> UI: 400 BadRequestException\nCitizenId already exists
         deactivate Controller
         UI --> Admin: Hiển thị lỗi trùng citizenId
         deactivate UI
@@ -41,13 +46,13 @@ alt Có citizenId
 end
 
 alt Có email
-    Controller -> DB: SELECT FROM auth\nWHERE email = value
-    activate DB
-    DB --> Controller: Record hoặc null
-    deactivate DB
+    Controller -> Auth: findUnique({ where: { email } })
+    activate Auth
+    Auth --> Controller: Auth | null
+    deactivate Auth
     
     alt Email đã tồn tại
-        Controller --> UI: 400 Email already exists
+        Controller --> UI: 400 BadRequestException\nEmail already exists
         deactivate Controller
         UI --> Admin: Hiển thị lỗi trùng email
         deactivate UI
@@ -55,13 +60,13 @@ alt Có email
 end
 
 alt Có phone
-    Controller -> DB: SELECT FROM auth\nWHERE phone = value
-    activate DB
-    DB --> Controller: Record hoặc null
-    deactivate DB
+    Controller -> Auth: findUnique({ where: { phone } })
+    activate Auth
+    Auth --> Controller: Auth | null
+    deactivate Auth
     
     alt Phone đã tồn tại
-        Controller --> UI: 400 Phone already exists
+        Controller --> UI: 400 BadRequestException\nPhone already exists
         deactivate Controller
         UI --> Admin: Hiển thị lỗi trùng phone
         deactivate UI
@@ -70,107 +75,91 @@ end
 
 Controller -> Bcrypt: hash(password, 10)
 activate Bcrypt
-Bcrypt -> Bcrypt: Generate salt\nHash password
-Bcrypt --> Controller: hashedPassword
+Bcrypt --> Controller: hashedPassword: string
 deactivate Bcrypt
 
-Controller -> DB: INSERT INTO auth VALUES\n(name, dateOfBirth, gender,\naddress, citizenId, avatar,\nrole, email, phone,\nhashedPassword)
-activate DB
-DB -> DB: Execute INSERT
-DB --> Controller: Auth record\n(id, name, role, email, phone, ...)
-deactivate DB
+Controller -> Auth: create({ data: {...} })
+activate Auth
+Auth --> Controller: Auth
+deactivate Auth
 
 alt role = DOCTOR
     alt Thiếu specialtyId
-        Controller --> UI: 400 Missing specialtyId for DOCTOR
+        Controller --> UI: 400 BadRequestException\nMissing specialtyId for DOCTOR
         deactivate Controller
         UI --> Admin: Hiển thị lỗi thiếu specialtyId
         deactivate UI
     else Có specialtyId
         Controller -> CodeGen: generateDoctorCode(name)
         activate CodeGen
-        CodeGen -> CodeGen: Tạo mã doctor\nformat: DOC-XXXXXX
-        CodeGen --> Controller: doctorCode
+        CodeGen --> Controller: doctorCode: string
         deactivate CodeGen
         
-        Controller -> DB: INSERT INTO doctor VALUES\n(doctorCode, authId,\nyearsExperience, rating = 0,\nworkHistory, description,\nspecialtyId)
-        activate DB
-        DB -> DB: Execute INSERT
-        DB --> Controller: Doctor record
-        deactivate DB
+        Controller -> Doctor: create({ data: {...} })
+        activate Doctor
+        Doctor --> Controller: Doctor
+        deactivate Doctor
     end
     
 else role = PATIENT
-    Controller -> CodeGen: generatePatientCode\n(name, dateOfBirth, gender)
+    Controller -> CodeGen: generatePatientCode(name, dateOfBirth, gender)
     activate CodeGen
-    CodeGen -> CodeGen: Tạo mã patient\nformat: PAT-XXXXXX
-    CodeGen --> Controller: patientCode
+    CodeGen --> Controller: patientCode: string
     deactivate CodeGen
     
-    Controller -> DB: INSERT INTO patient VALUES\n(patientCode, authId,\nloyaltyPoints)
-    activate DB
-    DB -> DB: Execute INSERT
-    DB --> Controller: Patient record
-    deactivate DB
+    Controller -> Patient: create({ data: {...} })
+    activate Patient
+    Patient --> Controller: Patient
+    deactivate Patient
     
 else role = RECEPTIONIST
     Controller -> CodeGen: generateReceptionistCode(name)
     activate CodeGen
-    CodeGen -> CodeGen: Tạo mã receptionist\nformat: REC-XXXXXX
-    CodeGen --> Controller: receptionistCode
+    CodeGen --> Controller: receptionistCode: string
     deactivate CodeGen
     
-    Controller -> DB: INSERT INTO receptionist VALUES\n(receptionistCode, authId)
-    activate DB
-    DB -> DB: Execute INSERT
-    DB --> Controller: Receptionist record
-    deactivate DB
+    Controller -> Receptionist: create({ data: {...} })
+    activate Receptionist
+    Receptionist --> Controller: Receptionist
+    deactivate Receptionist
     
 else role = CASHIER
     Controller -> CodeGen: generateCashierCode(name)
     activate CodeGen
-    CodeGen -> CodeGen: Tạo mã cashier\nformat: CAS-XXXXXX
-    CodeGen --> Controller: cashierCode
+    CodeGen --> Controller: cashierCode: string
     deactivate CodeGen
     
-    Controller -> DB: INSERT INTO cashier VALUES\n(cashierCode, authId)
-    activate DB
-    DB -> DB: Execute INSERT
-    DB --> Controller: Cashier record
-    deactivate DB
+    Controller -> Cashier: create({ data: {...} })
+    activate Cashier
+    Cashier --> Controller: Cashier
+    deactivate Cashier
     
 else role = ADMIN
     Controller -> CodeGen: generateAdminCode(name)
     activate CodeGen
-    CodeGen -> CodeGen: Tạo mã admin\nformat: ADM-XXXXXX
-    CodeGen --> Controller: adminCode
+    CodeGen --> Controller: adminCode: string
     deactivate CodeGen
     
-    Controller -> DB: INSERT INTO admin VALUES\n(adminCode, authId)
-    activate DB
-    DB -> DB: Execute INSERT
-    DB --> Controller: Admin record
-    deactivate DB
+    Controller -> AdminModel: create({ data: {...} })
+    activate AdminModel
+    AdminModel --> Controller: Admin
+    deactivate AdminModel
     
 else Invalid role
-    Controller --> UI: 400 Invalid role
+    Controller --> UI: 400 BadRequestException\nInvalid role
     deactivate Controller
     UI --> Admin: Hiển thị lỗi role không hợp lệ
     deactivate UI
 end
 
 alt Có email
-    Controller -> Email: sendAccountCredentials\n(email, name, username,\npassword, role)
+    Controller -> Email: sendAccountCredentials({ email, name, username, password, role })
     activate Email
-    Email -> Email: Tạo email template\nvới thông tin đăng nhập
-    Email -> Email: Gửi email qua SMTP
-    Email --> Controller: Email sent successfully
+    Email --> Controller: boolean
     deactivate Email
 end
 
-Controller -> Controller: Tạo response object\n(auth, roleRecord)
-
-Controller --> UI: 200 OK\n(auth record + role record)
+Controller --> UI: 200 OK\n{ auth: Auth, roleRecord: Doctor | Patient | Receptionist | Cashier | Admin }
 deactivate Controller
 
 UI --> Admin: Hiển thị thông báo\nUser created successfully\n- ID: xxx\n- Name: xxx\n- Role: xxx\n- Code: xxx

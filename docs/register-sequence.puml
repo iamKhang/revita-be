@@ -1,18 +1,15 @@
 @startuml Register Sequence Diagram
 !theme plain
-title Registration Sequence
 
 actor "User" as U
 boundary "Frontend" as F
 control "RegisterController" as C
 control "RegisterService" as R
+entity "EmailService" as E
+entity "SmsService" as S
 entity "Account" as A
 entity "Patient" as P
 entity "Redis" as RED
-entity "EmailService" as E
-entity "SmsService" as S
-
-== Step 1: Register with Phone/Email ==
 
 U -> F: Enter phone or email
 F -> C: POST /register/step1
@@ -55,8 +52,6 @@ else Phone/email exists
   F --> U: Display already registered message
 end
 
-== Step 2: Verify OTP ==
-
 U -> F: Enter OTP code
 F -> C: POST /register/verify-otp
 note right: VerifyOtpDto
@@ -85,8 +80,6 @@ else OTP invalid
   C --> F: error\n(OTP incorrect or expired message)
   F --> U: Display OTP incorrect message
 end
-
-== Step 3: Complete Registration ==
 
 U -> F: Enter personal info and password
 F -> C: POST /register/complete
