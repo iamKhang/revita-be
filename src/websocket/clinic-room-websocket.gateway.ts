@@ -25,7 +25,7 @@ export class ClinicRoomWebSocketGateway implements OnGatewayConnection, OnGatewa
   constructor(private readonly webSocketService: WebSocketService) {}
 
   afterInit(server: Server) {
-    this.webSocketService.setServer(server);
+    this.webSocketService.setServer(server, '/clinic-rooms');
     console.log('Clinic Room WebSocket Gateway initialized');
   }
 

@@ -23,7 +23,7 @@ export class CounterWebSocketGateway implements OnGatewayConnection, OnGatewayDi
   constructor(private readonly webSocketService: WebSocketService) {}
 
   afterInit(server: Server) {
-    this.webSocketService.setServer(server);
+    this.webSocketService.setServer(server, '/counters');
     console.log('WebSocket Gateway initialized');
   }
 

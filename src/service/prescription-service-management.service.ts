@@ -39,8 +39,11 @@ export class PrescriptionServiceManagementService {
   private readonly logger = new Logger(
     PrescriptionServiceManagementService.name,
   );
+  private prescriptionService?: any; // Được set từ PrescriptionModule
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
 
   async scanPrescription(
     prescriptionCode: string,
@@ -239,37 +242,14 @@ export class PrescriptionServiceManagementService {
         `${userRole} ${userId} updating service ${prescriptionId}-${serviceId} to ${status}`,
       );
 
-      // Resolve auth ID to doctor/technician ID
-      let resolvedUserId: string | null = null;
-      if (userRole === 'DOCTOR') {
-        const doctor = await this.prisma.doctor.findFirst({
-          where: { authId: userId },
-        });
-        resolvedUserId = doctor?.id || null;
-      } else if (userRole === 'TECHNICIAN') {
-        const technician = await this.prisma.technician.findFirst({
-          where: { authId: userId },
-        });
-        resolvedUserId = technician?.id || null;
-      }
-
-      if (!resolvedUserId) {
-        throw new NotFoundException('Không tìm thấy thông tin user');
-      }
-
-      // Tìm prescription service
+      // Tìm prescription service (không kiểm tra quyền, ai cũng có thể update)
       const prescriptionService =
-        await this.prisma.prescriptionService.findFirst({
+        await this.prisma.prescriptionService.findUnique({
           where: {
-            prescriptionId,
-            serviceId,
-            OR: [
-              { doctorId: userRole === 'DOCTOR' ? resolvedUserId : undefined },
-              {
-                technicianId:
-                  userRole === 'TECHNICIAN' ? resolvedUserId : undefined,
-              },
-            ].filter(Boolean),
+            prescriptionId_serviceId: {
+              prescriptionId,
+              serviceId,
+            },
           },
           include: {
             service: true,
@@ -277,9 +257,7 @@ export class PrescriptionServiceManagementService {
         });
 
       if (!prescriptionService) {
-        throw new NotFoundException(
-          'Không tìm thấy service hoặc bạn không có quyền cập nhật',
-        );
+        throw new NotFoundException('Không tìm thấy service');
       }
 
       // Cập nhật status
@@ -295,13 +273,46 @@ export class PrescriptionServiceManagementService {
       const updatedService = await this.prisma.prescriptionService.update({
         where: {
           prescriptionId_serviceId: {
-            prescriptionId: prescriptionService.prescriptionId,
-            serviceId: prescriptionService.serviceId,
+            prescriptionId,
+            serviceId,
           },
         },
         data: updateData,
         include: { service: true },
       });
+
+      // Cập nhật queue trong Redis
+      if (this.prescriptionService) {
+        try {
+          const prescriptionData = await this.prisma.prescription.findUnique({
+            where: { id: prescriptionId },
+            select: { doctorId: true },
+          });
+
+          // technicianId nằm trong PrescriptionService, không phải Prescription
+          const prescriptionServiceData = await this.prisma.prescriptionService.findUnique({
+            where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+            select: { technicianId: true },
+          });
+
+          if (prescriptionData?.doctorId) {
+            await this.prescriptionService.updateQueueInRedis(
+              prescriptionData.doctorId,
+              'DOCTOR',
+            );
+          }
+          if (prescriptionServiceData?.technicianId) {
+            await this.prescriptionService.updateQueueInRedis(
+              prescriptionServiceData.technicianId,
+              'TECHNICIAN',
+            );
+          }
+        } catch (redisError) {
+          this.logger.warn(
+            `Failed to update Redis queue: ${(redisError as Error).message}`,
+          );
+        }
+      }
 
       return {
         service: updatedService,
@@ -326,45 +337,20 @@ export class PrescriptionServiceManagementService {
         `${userRole} ${userId} updating results for service ${prescriptionId}-${serviceId}`,
       );
 
-      // Resolve auth ID to doctor/technician ID
-      let resolvedUserId: string | null = null;
-      if (userRole === 'DOCTOR') {
-        const doctor = await this.prisma.doctor.findFirst({
-          where: { authId: userId },
-        });
-        resolvedUserId = doctor?.id || null;
-      } else if (userRole === 'TECHNICIAN') {
-        const technician = await this.prisma.technician.findFirst({
-          where: { authId: userId },
-        });
-        resolvedUserId = technician?.id || null;
-      }
-
-      if (!resolvedUserId) {
-        throw new NotFoundException('Không tìm thấy thông tin user');
-      }
-
-      // Tìm prescription service
+      // Tìm prescription service (không kiểm tra quyền, ai cũng có thể update)
       const prescriptionService =
-        await this.prisma.prescriptionService.findFirst({
+        await this.prisma.prescriptionService.findUnique({
           where: {
-            prescriptionId,
-            serviceId,
-            OR: [
-              { doctorId: userRole === 'DOCTOR' ? resolvedUserId : undefined },
-              {
-                technicianId:
-                  userRole === 'TECHNICIAN' ? resolvedUserId : undefined,
-              },
-            ].filter(Boolean),
+            prescriptionId_serviceId: {
+              prescriptionId,
+              serviceId,
+            },
           },
           include: { service: true },
         });
 
       if (!prescriptionService) {
-        throw new NotFoundException(
-          'Không tìm thấy service hoặc bạn không có quyền cập nhật',
-        );
+        throw new NotFoundException('Không tìm thấy service');
       }
 
       // Kiểm tra trạng thái hiện tại
@@ -378,8 +364,8 @@ export class PrescriptionServiceManagementService {
       const updatedService = await this.prisma.prescriptionService.update({
         where: {
           prescriptionId_serviceId: {
-            prescriptionId: prescriptionService.prescriptionId,
-            serviceId: prescriptionService.serviceId,
+            prescriptionId,
+            serviceId,
           },
         },
         data: {
@@ -390,6 +376,39 @@ export class PrescriptionServiceManagementService {
         },
         include: { service: true },
       });
+
+      // Cập nhật queue trong Redis
+      if (this.prescriptionService) {
+        try {
+          const prescriptionData = await this.prisma.prescription.findUnique({
+            where: { id: prescriptionId },
+            select: { doctorId: true },
+          });
+
+          // technicianId nằm trong PrescriptionService, không phải Prescription
+          const prescriptionServiceData = await this.prisma.prescriptionService.findUnique({
+            where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+            select: { technicianId: true },
+          });
+
+          if (prescriptionData?.doctorId) {
+            await this.prescriptionService.updateQueueInRedis(
+              prescriptionData.doctorId,
+              'DOCTOR',
+            );
+          }
+          if (prescriptionServiceData?.technicianId) {
+            await this.prescriptionService.updateQueueInRedis(
+              prescriptionServiceData.technicianId,
+              'TECHNICIAN',
+            );
+          }
+        } catch (redisError) {
+          this.logger.warn(
+            `Failed to update Redis queue: ${(redisError as Error).message}`,
+          );
+        }
+      }
 
       this.logger.log(
         `Service ${prescriptionService.serviceId} completed with results`,
