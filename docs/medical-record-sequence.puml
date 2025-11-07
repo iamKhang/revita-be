@@ -1,7 +1,5 @@
 @startuml Medical Record Sequence Diagram
 !theme plain
-title Medical Record Sequence
-
 actor "Doctor" as D
 boundary "Frontend" as F
 control "MedicalRecordController" as C
@@ -11,7 +9,6 @@ entity "PatientProfile" as PP
 entity "Template" as T
 entity "MedicalRecordHistory" as MRH
 
-== Create Medical Record ==
 
 D -> F: Select patient
 F -> C: GET /medical-record/templates
@@ -56,7 +53,6 @@ else No permission
   F --> D: Display permission error
 end
 
-== View and Manage Records ==
 
 D -> F: View medical records
 F -> C: GET /medical-record?page=1&limit=10

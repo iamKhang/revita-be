@@ -30,8 +30,6 @@ entity "Service" as ServiceEntity
 entity "Category" as Category
 entity "Specialty" as Specialty
 
-== Tạo gói dịch vụ ==
-
 Admin -> UI: Chọn Thêm gói dịch vụ
 activate UI
 

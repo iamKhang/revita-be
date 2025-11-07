@@ -1,6 +1,5 @@
 @startuml Login Sequence Diagram
 !theme plain
-title Login Sequence
 
 actor "User" as U
 boundary "Frontend" as F
@@ -11,8 +10,6 @@ entity "Patient" as P
 entity "Doctor" as D
 entity "Receptionist" as R
 entity "Admin" as AD
-
-== Normal Login ==
 
 U -> F: Enter login credentials
 F -> C: POST /login
