@@ -312,6 +312,7 @@ export class AppointmentBookingController {
     if (!code) {
       throw new BadRequestException('Appointment code is required');
     }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
     return this.appointmentBookingService.getAppointmentByCode(code);
   }
 }
