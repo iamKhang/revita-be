@@ -16,7 +16,7 @@ import { AppointmentBookingService } from './appointment-booking.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Public } from '../rbac/public.decorator';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
-import { BookAppointmentDto } from './dto';
+import { BookAppointmentDto, PatientAppointmentDto } from './dto';
 
 @Controller('appointment-booking')
 export class AppointmentBookingController {
@@ -298,5 +298,21 @@ export class AppointmentBookingController {
 
       bookerId,
     );
+  }
+
+  /**
+   * Lấy appointment theo mã code
+   * GET /appointment-booking/appointments/code/:code
+   */
+  @Get('appointments/code/:code')
+  @Public() // Cho phép truy cập công khai để tra cứu appointment
+  async getAppointmentByCode(
+    @Param('code') code: string,
+  ): Promise<PatientAppointmentDto> {
+    if (!code) {
+      throw new BadRequestException('Appointment code is required');
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return this.appointmentBookingService.getAppointmentByCode(code);
   }
 }
