@@ -1,6 +1,5 @@
 @startuml Appointment Booking - Management Sequence Diagram
 !theme plain
-title Work Session Management Sequence
 
 actor "Doctor" as D
 boundary "Frontend" as F
@@ -9,8 +8,6 @@ control "WorkSessionService" as S
 entity "WorkSession" as WS
 entity "Doctor" as DOC
 entity "Service" as SV
-
-== Create Work Session ==
 
 D -> F: Request to create work session
 F -> C: POST /work-session/create
@@ -35,8 +32,6 @@ else Conflict detected
   F --> D: Display conflict message
 end
 
-== Get Doctor Work Sessions ==
-
 D -> F: Request work sessions
 F -> C: GET /work-session/doctor
 C -> C: validateRequest()
@@ -47,8 +42,6 @@ WS --> S: workSessions\n(all work session records for doctor)
 S --> C: workSessions\n(formatted list with booth, services info)
 C --> F: workSessions\n(work sessions array)
 F --> D: Display work sessions list
-
-== Update Work Session ==
 
 D -> F: Request to update work session
 F -> C: PUT /work-session/update/:id
@@ -73,8 +66,6 @@ else Has appointments
   C --> F: error\n(HTTP error response)
   F --> D: Display cannot modify message
 end
-
-== Cancel Work Session ==
 
 D -> F: Request to cancel work session
 F -> C: DELETE /work-session/cancel/:id

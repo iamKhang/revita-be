@@ -1309,6 +1309,170 @@ export class RedisService implements OnModuleDestroy {
     };
   }
 
+  // ==================== PRESCRIPTION QUEUE METHODS ====================
+
+  /**
+   * Lấy prescription queue cho user cụ thể
+   */
+  async getPrescriptionQueue(userId: string, userRole: 'DOCTOR' | 'TECHNICIAN'): Promise<any[]> {
+    try {
+      const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
+      const members = await this.redis.zrevrange(queueKey, 0, -1);
+      
+      return members.map(member => {
+        try {
+          return JSON.parse(member);
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+    } catch (error) {
+      console.warn('Error getting prescription queue:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Cập nhật toàn bộ prescription queue cho user
+   */
+  async updatePrescriptionQueue(
+    userId: string, 
+    userRole: 'DOCTOR' | 'TECHNICIAN', 
+    queueData: any[]
+  ): Promise<void> {
+    try {
+      const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
+      
+      // Xóa queue cũ
+      await this.redis.del(queueKey);
+      
+      if (queueData.length === 0) return;
+
+      // Thêm queue mới với priority score
+      const pipeline = this.redis.pipeline();
+      
+      queueData.forEach((item, index) => {
+        const priorityScore = item.priorityScore || (1000000 - index);
+        pipeline.zadd(queueKey, priorityScore, JSON.stringify(item));
+      });
+      
+      await pipeline.exec();
+    } catch (error) {
+      console.warn('Error updating prescription queue:', error);
+    }
+  }
+
+  /**
+   * Thêm bệnh nhân vào prescription queue
+   */
+  async addToPrescriptionQueue(
+    userId: string,
+    userRole: 'DOCTOR' | 'TECHNICIAN',
+    patientData: any
+  ): Promise<void> {
+    try {
+      const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
+      const priorityScore = patientData.priorityScore || 1000000;
+      
+      await this.redis.zadd(queueKey, priorityScore, JSON.stringify(patientData));
+    } catch (error) {
+      console.warn('Error adding to prescription queue:', error);
+    }
+  }
+
+  /**
+   * Xóa bệnh nhân khỏi prescription queue
+   */
+  async removeFromPrescriptionQueue(
+    userId: string,
+    userRole: 'DOCTOR' | 'TECHNICIAN',
+    patientProfileId: string
+  ): Promise<void> {
+    try {
+      const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
+      
+      // Lấy tất cả members để tìm patient cần xóa
+      const members = await this.redis.zrevrange(queueKey, 0, -1);
+      
+      for (const member of members) {
+        try {
+          const data = JSON.parse(member);
+          if (data.patientProfileId === patientProfileId) {
+            await this.redis.zrem(queueKey, member);
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+    } catch (error) {
+      console.warn('Error removing from prescription queue:', error);
+    }
+  }
+
+  /**
+   * Cập nhật trạng thái bệnh nhân trong prescription queue
+   */
+  async updatePrescriptionQueueStatus(
+    userId: string,
+    userRole: 'DOCTOR' | 'TECHNICIAN',
+    patientProfileId: string,
+    newStatus: string
+  ): Promise<void> {
+    try {
+      const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
+      
+      // Lấy tất cả members để tìm patient cần cập nhật
+      const members = await this.redis.zrevrange(queueKey, 0, -1);
+      
+      for (const member of members) {
+        try {
+          const data = JSON.parse(member);
+          if (data.patientProfileId === patientProfileId) {
+            // Xóa member cũ
+            await this.redis.zrem(queueKey, member);
+            
+            // Thêm member mới với trạng thái đã cập nhật
+            data.overallStatus = newStatus;
+            data.updatedAt = new Date().toISOString();
+            
+            const priorityScore = data.priorityScore || 1000000;
+            await this.redis.zadd(queueKey, priorityScore, JSON.stringify(data));
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+    } catch (error) {
+      console.warn('Error updating prescription queue status:', error);
+    }
+  }
+
+  /**
+   * Lấy độ dài prescription queue
+   */
+  async getPrescriptionQueueLength(userId: string, userRole: 'DOCTOR' | 'TECHNICIAN'): Promise<number> {
+    try {
+      const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
+      return await this.redis.zcard(queueKey);
+    } catch (error) {
+      console.warn('Error getting prescription queue length:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Xóa toàn bộ prescription queue cho user
+   */
+  async clearPrescriptionQueue(userId: string, userRole: 'DOCTOR' | 'TECHNICIAN'): Promise<void> {
+    try {
+      const queueKey = `prescriptionQueue:${userRole.toLowerCase()}:${userId}`;
+      await this.redis.del(queueKey);
+    } catch (error) {
+      console.warn('Error clearing prescription queue:', error);
+    }
+  }
   /**
    * Thêm entry vào Redis Stream
    */
@@ -1321,21 +1485,23 @@ export class RedisService implements OnModuleDestroy {
    * Lấy entries từ Redis Stream
    */
   async xrange(streamKey: string, start: string, end: string): Promise<Array<[string, Array<[string, string]>]>> {
-    const result = await this.redis.xrange(streamKey, start, end);
-    return result.map(([id, fields]) => [id, Array.from(fields).map(([key, value]) => [key, value])]);
+    const result: any = await this.redis.xrange(streamKey, start, end);
+    const typed: Array<[string, [string, string][]]> = result as Array<[string, [string, string][]]>;
+    return typed.map(([id, fields]) => [id, fields]);
   }
 
   /**
    * Lấy entries từ Redis Stream (reverse)
    */
   async xrevrange(streamKey: string, end: string, start: string, count?: number): Promise<Array<[string, Array<[string, string]>]>> {
-    let result;
+    let result: any;
     if (count) {
       result = await this.redis.xrevrange(streamKey, end, start, 'COUNT', count);
     } else {
       result = await this.redis.xrevrange(streamKey, end, start);
     }
-    return result.map(([id, fields]) => [id, Array.from(fields).map(([key, value]) => [key, value])]);
+    const typed: Array<[string, [string, string][]]> = result as Array<[string, [string, string][]]>;
+    return typed.map(([id, fields]) => [id, fields]);
   }
 
   /**

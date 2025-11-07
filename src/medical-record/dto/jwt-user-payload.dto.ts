@@ -16,6 +16,15 @@ export interface JwtUserPayload {
   };
   admin?: {
     id: string;
+    adminCode: string;
+  };
+  technician?: {
+    id: string;
+    technicianCode: string;
+  };
+  cashier?: {
+    id: string;
+    cashierCode: string;
   };
 
   // Thêm các trường khác nếu cần

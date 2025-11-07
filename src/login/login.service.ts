@@ -362,8 +362,8 @@ export class LoginService {
       throw new UnauthorizedException('Invalid token');
     }
 
-    // Best-effort: clear stored provider tokens so mobile/web sessions relying on them are invalidated
-    await this.prisma.auth.update({
+    // Best-effort: clear stored provider tokens. Use updateMany to avoid throwing if user is missing
+    await this.prisma.auth.updateMany({
       where: { id: sub },
       data: {
         accessToken: null,

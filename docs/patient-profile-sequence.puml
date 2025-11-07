@@ -1,6 +1,5 @@
 @startuml Patient Profile Sequence Diagram
 !theme plain
-title Patient Profile Sequence
 
 actor "Doctor" as D
 actor "Patient" as P
@@ -9,8 +8,6 @@ control "PatientProfileController" as C
 control "PatientProfileService" as PS
 entity "PatientProfile" as PP
 entity "Patient" as PAT
-
-== Doctor Creates Independent Profile ==
 
 D -> F: Create new patient profile
 F -> C: POST /patient-profile/create-independent
@@ -32,8 +29,6 @@ else No permission
   C --> F: error\n(insufficient permissions message)
   F --> D: Display permission error
 end
-
-== Patient Creates Own Profile ==
 
 P -> F: Create patient profile
 F -> C: POST /patient-profile/create
@@ -59,8 +54,6 @@ else No permission
   C --> F: error\n(permission denied message)
   F --> P: Display permission error
 end
-
-== View Patient Profiles ==
 
 D -> F: View profiles list
 F -> C: GET /patient-profile

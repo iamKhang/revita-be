@@ -397,6 +397,7 @@ model Appointment {
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
   service     Service? @relation(fields: [serviceId], references: [id])
   appointmentServices AppointmentService[]
+  prescriptionServices PrescriptionService[]
   medicalRecords MedicalRecord[]
 
   @@map("appointments")
@@ -644,6 +645,10 @@ model PrescriptionService {
   status PrescriptionStatus @default(NOT_STARTED)
   results String[] @map("results")
   order Int @default(1)
+  callCount Int @default(0)
+  skipCount Int @default(0)
+  appointmentId String?
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
   note String?
   startedAt DateTime? @map("started_at")
   completedAt DateTime? @map("completed_at")
@@ -658,6 +663,7 @@ model PrescriptionService {
   workSessionId String? @map("work_session_id")
   workSession WorkSession? @relation(fields: [workSessionId], references: [id])
 
+
   @@unique([prescriptionId, serviceId])
   @@map("prescription_services")
 }
@@ -669,6 +675,7 @@ enum PrescriptionStatus {
   PREPARING
   SERVING
   WAITING_RESULT
+  RETURNING
   COMPLETED
   DELAYED
   CANCELLED

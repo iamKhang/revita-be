@@ -3,7 +3,7 @@ import { Server, Socket } from 'socket.io';
 import { QueueTicket } from '../cache/redis-stream.service';
 
 export interface WebSocketMessage {
-  type: 'NEW_TICKET' | 'TICKET_CALLED' | 'TICKET_COMPLETED' | 'COUNTER_STATUS' | 'NEXT_PATIENT_CALLED' | 'PATIENT_SKIPPED_AND_NEXT_CALLED' | 'PATIENT_PREPARING' | 'PATIENT_SERVED' | 'INVOICE_PAYMENT_SUCCESS';
+  type: 'NEW_TICKET' | 'TICKET_CALLED' | 'TICKET_COMPLETED' | 'COUNTER_STATUS' | 'NEXT_PATIENT_CALLED' | 'PATIENT_SKIPPED_AND_NEXT_CALLED' | 'PATIENT_PREPARING' | 'PATIENT_SERVED' | 'INVOICE_PAYMENT_SUCCESS' | 'NEW_PRESCRIPTION_PATIENT' | 'PATIENT_CALLED' | 'PATIENT_SKIPPED' | 'PATIENT_STATUS_CHANGED';
   data: any;
   timestamp: string;
 }
@@ -560,5 +560,210 @@ export class WebSocketService {
     } catch (error) {
       console.error('Error sending invoice payment success notification to cashier:', error);
     }
+  }
+
+  // ==================== PRESCRIPTION SYSTEM EVENTS ====================
+
+  /**
+   * Thông báo bệnh nhân mới đến với prescription
+   */
+  async notifyNewPrescriptionPatient(patientData: {
+    patientProfileId: string;
+    patientName: string;
+    prescriptionCode: string;
+    services: any[];
+    doctorId?: string;
+    technicianId?: string;
+    serviceIds: string[];
+    clinicRoomIds: string[];
+    boothIds: string[];
+  }): Promise<void> {
+    try {
+      const message: WebSocketMessage = {
+        type: 'NEW_PRESCRIPTION_PATIENT',
+        data: {
+          patientProfileId: patientData.patientProfileId,
+          patientName: patientData.patientName,
+          prescriptionCode: patientData.prescriptionCode,
+          services: patientData.services,
+          doctorId: patientData.doctorId,
+          technicianId: patientData.technicianId,
+          serviceIds: patientData.serviceIds,
+          clinicRoomIds: patientData.clinicRoomIds,
+          boothIds: patientData.boothIds,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      // Gửi đến các bác sĩ/kỹ thuật viên thực hiện dịch vụ
+      if (patientData.doctorId) {
+        await this.sendToDoctor(patientData.doctorId, 'new_prescription_patient', message);
+      }
+      if (patientData.technicianId) {
+        await this.sendToTechnician(patientData.technicianId, 'new_prescription_patient', message);
+      }
+
+      // Gửi đến các buồng thực hiện dịch vụ
+      for (const boothId of patientData.boothIds) {
+        await this.sendToBooth(boothId, 'new_prescription_patient', message);
+      }
+
+      // Gửi đến các phòng thực hiện dịch vụ
+      for (const clinicRoomId of patientData.clinicRoomIds) {
+        await this.sendToClinicRoom(clinicRoomId, 'new_prescription_patient', message);
+      }
+
+      console.log(`[WebSocket] Sent new prescription patient notification: ${patientData.patientName} (${patientData.prescriptionCode})`);
+    } catch (error) {
+      console.error('Error sending new prescription patient notification:', error);
+    }
+  }
+
+  /**
+   * Thông báo bệnh nhân được gọi
+   */
+  async notifyPatientCalled(actionData: {
+    patientProfileId: string;
+    patientName: string;
+    prescriptionCode: string;
+    doctorId?: string;
+    technicianId?: string;
+    serviceIds: string[];
+    clinicRoomIds: string[];
+    boothIds: string[];
+    action: 'CALLED' | 'SKIPPED';
+    currentPatient?: any;
+    nextPatient?: any;
+    preparingPatient?: any;
+  }): Promise<void> {
+    try {
+      const message: WebSocketMessage = {
+        type: actionData.action === 'CALLED' ? 'PATIENT_CALLED' : 'PATIENT_SKIPPED',
+        data: {
+          patientProfileId: actionData.patientProfileId,
+          patientName: actionData.patientName,
+          prescriptionCode: actionData.prescriptionCode,
+          doctorId: actionData.doctorId,
+          technicianId: actionData.technicianId,
+          serviceIds: actionData.serviceIds,
+          clinicRoomIds: actionData.clinicRoomIds,
+          boothIds: actionData.boothIds,
+          action: actionData.action,
+          currentPatient: actionData.currentPatient,
+          nextPatient: actionData.nextPatient,
+          preparingPatient: actionData.preparingPatient,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      // Gửi đến các bác sĩ/kỹ thuật viên thực hiện dịch vụ
+      if (actionData.doctorId) {
+        await this.sendToDoctor(actionData.doctorId, 'patient_action', message);
+      }
+      if (actionData.technicianId) {
+        await this.sendToTechnician(actionData.technicianId, 'patient_action', message);
+      }
+
+      // Gửi đến các buồng thực hiện dịch vụ
+      for (const boothId of actionData.boothIds) {
+        await this.sendToBooth(boothId, 'patient_action', message);
+      }
+
+      // Gửi đến các phòng thực hiện dịch vụ
+      for (const clinicRoomId of actionData.clinicRoomIds) {
+        await this.sendToClinicRoom(clinicRoomId, 'patient_action', message);
+      }
+
+      console.log(`[WebSocket] Sent patient ${actionData.action.toLowerCase()} notification: ${actionData.patientName} (${actionData.prescriptionCode})`);
+    } catch (error) {
+      console.error(`Error sending patient ${actionData.action.toLowerCase()} notification:`, error);
+    }
+  }
+
+  /**
+   * Thông báo thay đổi trạng thái bệnh nhân
+   */
+  async notifyPatientStatusChanged(statusData: {
+    patientProfileId: string;
+    patientName: string;
+    prescriptionCode: string;
+    oldStatus: string;
+    newStatus: string;
+    doctorId?: string;
+    technicianId?: string;
+    serviceIds: string[];
+    clinicRoomIds: string[];
+    boothIds: string[];
+  }): Promise<void> {
+    try {
+      const message: WebSocketMessage = {
+        type: 'PATIENT_STATUS_CHANGED',
+        data: {
+          patientProfileId: statusData.patientProfileId,
+          patientName: statusData.patientName,
+          prescriptionCode: statusData.prescriptionCode,
+          oldStatus: statusData.oldStatus,
+          newStatus: statusData.newStatus,
+          doctorId: statusData.doctorId,
+          technicianId: statusData.technicianId,
+          serviceIds: statusData.serviceIds,
+          clinicRoomIds: statusData.clinicRoomIds,
+          boothIds: statusData.boothIds,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      // Gửi đến các bác sĩ/kỹ thuật viên thực hiện dịch vụ
+      if (statusData.doctorId) {
+        await this.sendToDoctor(statusData.doctorId, 'patient_status_changed', message);
+      }
+      if (statusData.technicianId) {
+        await this.sendToTechnician(statusData.technicianId, 'patient_status_changed', message);
+      }
+
+      // Gửi đến các buồng thực hiện dịch vụ
+      for (const boothId of statusData.boothIds) {
+        await this.sendToBooth(boothId, 'patient_status_changed', message);
+      }
+
+      // Gửi đến các phòng thực hiện dịch vụ
+      for (const clinicRoomId of statusData.clinicRoomIds) {
+        await this.sendToClinicRoom(clinicRoomId, 'patient_status_changed', message);
+      }
+
+      console.log(`[WebSocket] Sent patient status changed notification: ${statusData.patientName} ${statusData.oldStatus} -> ${statusData.newStatus}`);
+    } catch (error) {
+      console.error('Error sending patient status changed notification:', error);
+    }
+  }
+
+  // ==================== HELPER METHODS FOR PRESCRIPTION SYSTEM ====================
+
+  /**
+   * Gửi thông báo đến bác sĩ cụ thể
+   */
+  async sendToDoctor(doctorId: string, event: string, data: any) {
+    this.server.to(`doctor:${doctorId}`).emit(event, data);
+  }
+
+  /**
+   * Gửi thông báo đến kỹ thuật viên cụ thể
+   */
+  async sendToTechnician(technicianId: string, event: string, data: any) {
+    this.server.to(`technician:${technicianId}`).emit(event, data);
+  }
+
+  /**
+   * Gửi thông báo đến buồng cụ thể
+   */
+  async sendToBooth(boothId: string, event: string, data: any) {
+    this.server.to(`booth:${boothId}`).emit(event, data);
+  }
+
+  /**
+   * Gửi thông báo đến phòng cụ thể
+   */
+  async sendToClinicRoom(clinicRoomId: string, event: string, data: any) {
+    this.server.to(`clinic_room:${clinicRoomId}`).emit(event, data);
   }
 }
