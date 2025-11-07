@@ -1398,6 +1398,101 @@ export class AppointmentBookingService {
   }
 
   /**
+   * Lấy appointment theo mã code
+   */
+  async getAppointmentByCode(
+    appointmentCode: string,
+  ): Promise<PatientAppointmentDto> {
+    const appointment = await this.prisma.appointment.findFirst({
+      where: {
+        appointmentCode: appointmentCode,
+      },
+      include: {
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            serviceCode: true,
+            price: true,
+            durationMinutes: true,
+          },
+        },
+        appointmentServices: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                name: true,
+                serviceCode: true,
+                price: true,
+                durationMinutes: true,
+              },
+            },
+          },
+        },
+        patientProfile: true,
+      },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException(
+        `Appointment with code ${appointmentCode} not found`,
+      );
+    }
+
+    // Lấy danh sách services từ appointmentServices
+    const services: PatientAppointmentServiceDto[] =
+      appointment.appointmentServices.map((as) => ({
+        serviceId: as.service.id,
+        serviceName: as.service.name,
+        serviceCode: as.service.serviceCode,
+        price: as.service.price,
+        timePerPatient: as.service.durationMinutes ?? 15,
+      }));
+
+    // Nếu không có appointmentServices nhưng có service chính, thêm vào
+    if (services.length === 0 && appointment.service) {
+      services.push({
+        serviceId: appointment.service.id,
+        serviceName: appointment.service.name,
+        serviceCode: appointment.service.serviceCode,
+        price: appointment.service.price,
+        timePerPatient: appointment.service.durationMinutes ?? 15,
+      });
+    }
+
+    return {
+      appointmentId: appointment.id,
+      appointmentCode: appointment.appointmentCode,
+      doctorId: appointment.doctorId,
+      doctorName: appointment.doctor.auth.name,
+      specialtyId: appointment.specialtyId,
+      specialtyName: appointment.specialty.name,
+      date: appointment.date.toISOString().split('T')[0],
+      startTime: appointment.startTime,
+      endTime: appointment.endTime,
+      status: appointment.status,
+      services: services,
+      createdAt: appointment.date.toISOString(), // Sử dụng date làm createdAt nếu không có field createdAt
+    };
+  }
+
+  /**
    * Parse appointment time từ date và time string
    */
   private parseAppointmentTime(dateStr: string, timeStr: string): Date {
