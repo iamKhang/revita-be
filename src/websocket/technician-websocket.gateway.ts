@@ -25,7 +25,7 @@ export class TechnicianWebSocketGateway implements OnGatewayConnection, OnGatewa
   constructor(private readonly webSocketService: WebSocketService) {}
 
   afterInit(server: Server) {
-    this.webSocketService.setServer(server);
+    this.webSocketService.setServer(server, '/technicians');
     console.log('Technician WebSocket Gateway initialized');
   }
 

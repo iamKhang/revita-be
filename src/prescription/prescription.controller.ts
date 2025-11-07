@@ -194,7 +194,7 @@ export class PrescriptionController {
   }
 
   @Put('prescription-service/status')
-  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  @Roles(Role.DOCTOR, Role.TECHNICIAN, Role.RECEPTIONIST)
   async updateServiceStatus(
     @Body() updateDto: UpdateServiceStatusDto,
     @Request() req: { user: JwtUserPayload },
@@ -212,7 +212,7 @@ export class PrescriptionController {
   }
 
   @Put('prescription-service/results')
-  @Roles(Role.DOCTOR, Role.TECHNICIAN)
+  @Roles(Role.DOCTOR, Role.TECHNICIAN, Role.RECEPTIONIST)
   async updateServiceResults(
     @Body() updateDto: UpdateServiceResultsDto,
     @Request() req: { user: JwtUserPayload },
@@ -247,6 +247,7 @@ export class PrescriptionController {
   async callNextPatient(@Request() req: { user: JwtUserPayload }) {
     return this.prescriptionService.callNextPatient(req.user);
   }
+
 
   @Get('queue/status')
   @Roles(Role.DOCTOR, Role.TECHNICIAN)

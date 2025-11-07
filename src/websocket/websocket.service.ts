@@ -10,8 +10,10 @@ export interface WebSocketMessage {
 
 @Injectable()
 export class WebSocketService {
-  private server: Server;
+  private server: Server; // Default server (for backward compatibility)
   private boothServer: Server;
+  // Store servers by namespace
+  private namespaceServers: Map<string, Server> = new Map();
   private counterConnections: Map<string, Set<string>> = new Map(); // counterId -> Set<socketId>
   private socketToCounter: Map<string, string> = new Map(); // socketId -> counterId
   private cashierConnections: Map<string, Set<string>> = new Map(); // cashierId -> Set<socketId>
@@ -19,12 +21,31 @@ export class WebSocketService {
   private postConnections: Map<string, Set<string>> = new Map(); // postId -> Set<socketId>
   private socketToPosts: Map<string, Set<string>> = new Map(); // socketId -> Set<postId>
 
-  setServer(server: Server) {
-    this.server = server;
+  setServer(server: Server, namespace?: string) {
+    this.server = server; // Keep for backward compatibility
+    if (namespace) {
+      this.namespaceServers.set(namespace, server);
+      console.log(`[WebSocketService] Registered server for namespace: ${namespace}`);
+    }
   }
 
   setBoothServer(server: Server) {
     this.boothServer = server;
+    this.namespaceServers.set('/booths', server);
+    console.log(`[WebSocketService] Registered server for namespace: /booths`);
+  }
+
+  /**
+   * Get server for specific namespace
+   */
+  private getServerForNamespace(namespace: string): Server | null {
+    const server = this.namespaceServers.get(namespace);
+    if (server) {
+      return server;
+    }
+    // Fallback to default server if namespace not found
+    console.warn(`[WebSocketService] ⚠️ No server found for namespace ${namespace}, using default server`);
+    return this.server;
   }
 
   /**
@@ -743,27 +764,65 @@ export class WebSocketService {
    * Gửi thông báo đến bác sĩ cụ thể
    */
   async sendToDoctor(doctorId: string, event: string, data: any) {
-    this.server.to(`doctor:${doctorId}`).emit(event, data);
+    const room = `doctor:${doctorId}`;
+    const namespace = '/doctors';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[DOCTOR SOCKET] ❌ Cannot emit '${event}': No server found for namespace ${namespace}`);
+      return;
+    }
+    
+    console.log(`[DOCTOR SOCKET] 📤 Broadcasting '${event}' to room '${room}' on namespace '${namespace}'`);
+    console.log(`[DOCTOR SOCKET] Event data:`, JSON.stringify(data, null, 2));
+    server.to(room).emit(event, data);
   }
 
   /**
    * Gửi thông báo đến kỹ thuật viên cụ thể
    */
   async sendToTechnician(technicianId: string, event: string, data: any) {
-    this.server.to(`technician:${technicianId}`).emit(event, data);
+    const namespace = '/technicians';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[TECHNICIAN SOCKET] ❌ Cannot emit '${event}': No server found for namespace ${namespace}`);
+      return;
+    }
+    
+    console.log(`[TECHNICIAN SOCKET] 📤 Broadcasting '${event}' to room 'technician:${technicianId}' on namespace '${namespace}'`);
+    server.to(`technician:${technicianId}`).emit(event, data);
   }
 
   /**
    * Gửi thông báo đến buồng cụ thể
    */
   async sendToBooth(boothId: string, event: string, data: any) {
-    this.server.to(`booth:${boothId}`).emit(event, data);
+    const namespace = '/booths';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[BOOTH SOCKET] ❌ Cannot emit '${event}': No server found for namespace ${namespace}`);
+      return;
+    }
+    
+    console.log(`[BOOTH SOCKET] 📤 Broadcasting '${event}' to room 'booth:${boothId}' on namespace '${namespace}'`);
+    server.to(`booth:${boothId}`).emit(event, data);
   }
 
   /**
    * Gửi thông báo đến phòng cụ thể
    */
   async sendToClinicRoom(clinicRoomId: string, event: string, data: any) {
-    this.server.to(`clinic_room:${clinicRoomId}`).emit(event, data);
+    const namespace = '/clinic-rooms';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[CLINIC ROOM SOCKET] ❌ Cannot emit '${event}': No server found for namespace ${namespace}`);
+      return;
+    }
+    
+    console.log(`[CLINIC ROOM SOCKET] 📤 Broadcasting '${event}' to room 'clinic_room:${clinicRoomId}' on namespace '${namespace}'`);
+    server.to(`clinic_room:${clinicRoomId}`).emit(event, data);
   }
 }

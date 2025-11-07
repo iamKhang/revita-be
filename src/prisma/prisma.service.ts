@@ -42,9 +42,29 @@ export class PrismaService
             );
 
             try {
+              // Xây dựng where clause đúng format cho compound unique key
+              let whereClause: any;
+              if (where?.prescriptionId_serviceId) {
+                // Đã có compound key trong where object
+                whereClause = {
+                  prescriptionId_serviceId: where.prescriptionId_serviceId,
+                };
+              } else if (where?.prescriptionId && where?.serviceId) {
+                // Có prescriptionId và serviceId riêng lẻ, cần xây dựng compound key
+                whereClause = {
+                  prescriptionId_serviceId: {
+                    prescriptionId: where.prescriptionId,
+                    serviceId: where.serviceId,
+                  },
+                };
+              } else {
+                // Fallback: dùng where trực tiếp (có thể sẽ lỗi nhưng để Prisma báo lỗi)
+                whereClause = where;
+              }
+
               // Lấy bản ghi sau update
               const updated = await (this as any).prescriptionService.findUnique({
-                where: where?.prescriptionId_serviceId ?? where,
+                where: whereClause,
                 include: {
                   prescription: {
                     include: { patientProfile: true },
@@ -55,16 +75,25 @@ export class PrismaService
 
               if (updated) {
                 // Cập nhật queue cho doctor / technician nếu có
-                const domainSvc = this.moduleRef.get<any>('PrescriptionService' as any, { strict: false });
-                if (updated.doctorId) {
-                  await domainSvc.updateQueueInRedis(updated.doctorId, 'DOCTOR');
-                }
-                if (updated.technicianId) {
-                  await domainSvc.updateQueueInRedis(updated.technicianId, 'TECHNICIAN');
+                try {
+                  // Lazy import để tránh circular dependency
+                  const { PrescriptionService } = await import('../prescription/prescription.service');
+                  const domainSvc = this.moduleRef.get(PrescriptionService, { strict: false });
+                  if (domainSvc && updated.doctorId) {
+                    await domainSvc.updateQueueInRedis(updated.doctorId, 'DOCTOR');
+                  }
+                  if (domainSvc && updated.technicianId) {
+                    await domainSvc.updateQueueInRedis(updated.technicianId, 'TECHNICIAN');
+                  }
+                } catch (err) {
+                  this.logger.warn(`Failed to update queue in Redis: ${(err as Error).message}`);
                 }
 
                 // Phát sự kiện websocket đến các bên liên quan
-                const ws = this.moduleRef.get<any>('WebSocketService' as any, { strict: false });
+                try {
+                  // Lazy import để tránh circular dependency
+                  const { WebSocketService } = await import('../websocket/websocket.service');
+                  const ws = this.moduleRef.get(WebSocketService, { strict: false });
                 const payload = {
                   patientProfileId: updated.prescription.patientProfileId,
                   patientName: updated.prescription.patientProfile.name,
@@ -77,7 +106,12 @@ export class PrismaService
                   clinicRoomIds: updated.clinicRoomId ? [updated.clinicRoomId] : [],
                   boothIds: updated.boothId ? [updated.boothId] : [],
                 };
-                await ws.notifyPatientStatusChanged(payload);
+                  if (ws) {
+                    await ws.notifyPatientStatusChanged(payload);
+                  }
+                } catch (err) {
+                  this.logger.warn(`Failed to send WebSocket notification: ${(err as Error).message}`);
+                }
               }
             } catch (err) {
               this.logger.warn(`Middleware post-update handling failed: ${(err as Error).message}`);
@@ -102,28 +136,38 @@ export class PrismaService
                   prescription: { include: { patientProfile: true } },
                 },
               });
-              const domainSvc = this.moduleRef.get<any>('PrescriptionService' as any, { strict: false });
-              const ws = this.moduleRef.get<any>('WebSocketService' as any, { strict: false });
+              
+              try {
+                // Lazy import để tránh circular dependency
+                const { PrescriptionService } = await import('../prescription/prescription.service');
+                const { WebSocketService } = await import('../websocket/websocket.service');
+                const domainSvc = this.moduleRef.get(PrescriptionService, { strict: false });
+                const ws = this.moduleRef.get(WebSocketService, { strict: false });
 
-              for (const rec of affected) {
-                if (rec.doctorId) {
-                  await domainSvc.updateQueueInRedis(rec.doctorId, 'DOCTOR');
+                if (domainSvc && ws) {
+                  for (const rec of affected) {
+                    if (rec.doctorId) {
+                      await domainSvc.updateQueueInRedis(rec.doctorId, 'DOCTOR');
+                    }
+                    if (rec.technicianId) {
+                      await domainSvc.updateQueueInRedis(rec.technicianId, 'TECHNICIAN');
+                    }
+                    await ws.notifyPatientStatusChanged({
+                      patientProfileId: rec.prescription.patientProfileId,
+                      patientName: rec.prescription.patientProfile.name,
+                      prescriptionCode: rec.prescription.prescriptionCode,
+                      oldStatus: 'UNKNOWN',
+                      newStatus: newStatus,
+                      doctorId: rec.doctorId ?? undefined,
+                      technicianId: rec.technicianId ?? undefined,
+                      serviceIds: [rec.serviceId],
+                      clinicRoomIds: rec.clinicRoomId ? [rec.clinicRoomId] : [],
+                      boothIds: rec.boothId ? [rec.boothId] : [],
+                    });
+                  }
                 }
-                if (rec.technicianId) {
-                  await domainSvc.updateQueueInRedis(rec.technicianId, 'TECHNICIAN');
-                }
-                await ws.notifyPatientStatusChanged({
-                  patientProfileId: rec.prescription.patientProfileId,
-                  patientName: rec.prescription.patientProfile.name,
-                  prescriptionCode: rec.prescription.prescriptionCode,
-                  oldStatus: 'UNKNOWN',
-                  newStatus: newStatus,
-                  doctorId: rec.doctorId ?? undefined,
-                  technicianId: rec.technicianId ?? undefined,
-                  serviceIds: [rec.serviceId],
-                  clinicRoomIds: rec.clinicRoomId ? [rec.clinicRoomId] : [],
-                  boothIds: rec.boothId ? [rec.boothId] : [],
-                });
+              } catch (err) {
+                this.logger.warn(`Failed to update queue/notify for updateMany: ${(err as Error).message}`);
               }
             } catch (err) {
               this.logger.warn(`Middleware post-updateMany handling failed: ${(err as Error).message}`);
