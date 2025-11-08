@@ -155,10 +155,10 @@ export class PrescriptionController {
 
   @Post('assign-next-service')
   @Public()
-  async assignNextService(
-    @Body() body: { prescriptionCode: string },
-  ) {
-    return this.prescriptionService.assignNextPendingService(body.prescriptionCode);
+  async assignNextService(@Body() body: { prescriptionCode: string }) {
+    return this.prescriptionService.assignNextPendingService(
+      body.prescriptionCode,
+    );
   }
 
   // // OpenFDA proxy endpoints for drug lookup
@@ -247,7 +247,6 @@ export class PrescriptionController {
   async callNextPatient(@Request() req: { user: JwtUserPayload }) {
     return this.prescriptionService.callNextPatient(req.user);
   }
-
 
   @Get('queue/status')
   @Roles(Role.DOCTOR, Role.TECHNICIAN)
