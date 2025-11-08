@@ -80,15 +80,49 @@ export class DoctorController {
       patientProfile?.name || 'Unknown',
     );
 
+    // Nếu có appointmentCode, tìm appointment theo code và lấy id
+    let appointmentId: string | undefined;
+    if (body.appointmentCode) {
+      const appointment = await this.prisma.appointment.findFirst({
+        where: {
+          appointmentCode: body.appointmentCode,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!appointment) {
+        throw new NotFoundException(
+          `Không tìm thấy cuộc hẹn với mã code: ${body.appointmentCode}`,
+        );
+      }
+
+      appointmentId = appointment.id;
+    }
+
+    const data: {
+      medicalRecordCode: string;
+      doctorId: string;
+      patientProfileId: string;
+      templateId: string;
+      content: object;
+      appointmentId?: string;
+    } = {
+      medicalRecordCode,
+      doctorId,
+      patientProfileId: body.patientProfileId,
+      templateId: body.templateId,
+      content: body.content,
+    };
+
+    // Thêm appointmentId nếu có
+    if (appointmentId) {
+      data.appointmentId = appointmentId;
+    }
+
     return this.prisma.medicalRecord.create({
-      data: {
-        medicalRecordCode,
-        doctorId,
-        patientProfileId: body.patientProfileId,
-        templateId: body.templateId,
-        content: body.content,
-        appointmentId: body.appointmentId,
-      },
+      data,
     });
   }
 

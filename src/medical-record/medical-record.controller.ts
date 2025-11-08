@@ -77,9 +77,9 @@ export class MedicalRecordController {
           description:
             'ID của bác sĩ hoặc authId của bác sĩ (tùy chọn cho admin)',
         },
-        appointmentId: {
+        appointmentCode: {
           type: 'string',
-          description: 'ID của cuộc hẹn (tùy chọn)',
+          description: 'Mã code của cuộc hẹn (tùy chọn)',
         },
         status: {
           type: 'string',
@@ -121,7 +121,7 @@ export class MedicalRecordController {
         patientProfileId: body.patientProfileId,
         templateId: body.templateId,
         doctorId: body.doctorId,
-        appointmentId: body.appointmentId,
+        appointmentCode: body.appointmentCode,
         status: body.status,
         content: content || {},
       };
