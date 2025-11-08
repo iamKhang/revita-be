@@ -28,12 +28,13 @@ export class CounterWebSocketGateway implements OnGatewayConnection, OnGatewayDi
   }
 
   handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
+    console.log(`[CASHIER SOCKET] 🔌 Client connected: ${client.id} on namespace /counters`);
   }
 
   handleDisconnect(client: Socket) {
+    console.log(`[CASHIER SOCKET] 🔌 Client disconnecting: ${client.id} on namespace /counters`);
     this.webSocketService.disconnect(client);
-    console.log(`Client disconnected: ${client.id}`);
+    console.log(`[CASHIER SOCKET] ✅ Client disconnected: ${client.id}`);
   }
 
   @SubscribeMessage('join_counter')
@@ -65,16 +66,23 @@ export class CounterWebSocketGateway implements OnGatewayConnection, OnGatewayDi
     @MessageBody() data: { cashierId: string },
   ) {
     if (!data.cashierId) {
+      console.error(`[CASHIER SOCKET] ❌ Socket ${client.id} attempted to join without cashierId`);
       client.emit('error', { message: 'Cashier ID is required' });
       return;
     }
-    console.log('join_cashier', data);
+    
+    console.log(`[CASHIER SOCKET] 📥 Received 'join_cashier' event from socket ${client.id}`);
+    console.log(`[CASHIER SOCKET] 💼 Cashier ID: ${data.cashierId}`);
+    console.log(`[CASHIER SOCKET] 🌐 Namespace: /counters`);
 
     this.webSocketService.connectToCashier(client, data.cashierId);
+    
     client.emit('joined_cashier', { 
       cashierId: data.cashierId,
       message: `Connected to cashier ${data.cashierId}` 
     });
+    
+    console.log(`[CASHIER SOCKET] ✅ Sent 'joined_cashier' confirmation to socket ${client.id}`);
   }
 
   @SubscribeMessage('leave_cashier')

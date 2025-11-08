@@ -83,7 +83,10 @@ export class WebSocketService {
     // Join room để dễ quản lý
     socket.join(`cashier:${cashierId}`);
 
-    console.log(`Socket ${socket.id} connected to cashier ${cashierId}`);
+    const connectionCount = this.cashierConnections.get(cashierId)!.size;
+    console.log(`[CASHIER SOCKET] ✅ Socket ${socket.id} connected to cashier ${cashierId}`);
+    console.log(`[CASHIER SOCKET] 📊 Cashier ${cashierId} now has ${connectionCount} active connection(s)`);
+    console.log(`[CASHIER SOCKET] 🏠 Socket joined room: cashier:${cashierId}`);
   }
 
   /**
@@ -159,8 +162,12 @@ export class WebSocketService {
       const cashierSockets = this.cashierConnections.get(cashierId);
       if (cashierSockets) {
         cashierSockets.delete(socket.id);
+        const remainingConnections = cashierSockets.size;
+        console.log(`[CASHIER SOCKET] 🔌 Socket ${socket.id} disconnected from cashier ${cashierId}`);
+        console.log(`[CASHIER SOCKET] 📊 Cashier ${cashierId} now has ${remainingConnections} remaining connection(s)`);
         if (cashierSockets.size === 0) {
           this.cashierConnections.delete(cashierId);
+          console.log(`[CASHIER SOCKET] ⚠️ Cashier ${cashierId} is now OFFLINE (no active connections)`);
         }
       }
       this.socketToCashier.delete(socket.id);
@@ -319,7 +326,24 @@ export class WebSocketService {
    * Gửi thông báo đến cashier cụ thể
    */
   async sendToCashier(cashierId: string, event: string, data: any) {
-    this.server.to(`cashier:${cashierId}`).emit(event, data);
+    const namespace = '/counters';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[CASHIER SOCKET] ❌ Cannot emit '${event}': No server found for namespace ${namespace}`);
+      return;
+    }
+
+    const connectionCount = this.getCashierConnectionCount(cashierId);
+    const room = `cashier:${cashierId}`;
+    
+    console.log(`[CASHIER SOCKET] 📤 Broadcasting '${event}' to room '${room}' on namespace '${namespace}'`);
+    console.log(`[CASHIER SOCKET] 📊 Cashier ${cashierId} has ${connectionCount} active connection(s)`);
+    console.log(`[CASHIER SOCKET] 📦 Event data:`, JSON.stringify(data, null, 2));
+    
+    server.to(room).emit(event, data);
+    
+    console.log(`[CASHIER SOCKET] ✅ Event '${event}' sent to cashier ${cashierId}`);
   }
 
   /**
@@ -455,7 +479,17 @@ export class WebSocketService {
    */
   isCashierOnline(cashierId: string): boolean {
     const sockets = this.cashierConnections.get(cashierId);
-    return sockets ? sockets.size > 0 : false;
+    const isOnline = sockets ? sockets.size > 0 : false;
+    const connectionCount = sockets ? sockets.size : 0;
+    
+    console.log(`[CASHIER SOCKET] 🔍 Checking cashier ${cashierId} online status: ${isOnline ? 'ONLINE' : 'OFFLINE'} (${connectionCount} connection(s))`);
+    
+    if (!isOnline) {
+      const allOnlineCashiers = this.getOnlineCashiers();
+      console.log(`[CASHIER SOCKET] 📋 Currently online cashiers:`, allOnlineCashiers);
+    }
+    
+    return isOnline;
   }
 
   /**
@@ -557,6 +591,10 @@ export class WebSocketService {
    */
   async notifyCashierInvoicePaymentSuccess(cashierId: string, invoiceData: any): Promise<void> {
     try {
+      console.log(`[CASHIER SOCKET] 🎯 Preparing to send invoice payment success notification`);
+      console.log(`[CASHIER SOCKET] 💼 Target cashier: ${cashierId}`);
+      console.log(`[CASHIER SOCKET] 🧾 Invoice code: ${invoiceData.invoiceCode}`);
+      
       const message: WebSocketMessage = {
         type: 'INVOICE_PAYMENT_SUCCESS',
         data: {
@@ -577,9 +615,9 @@ export class WebSocketService {
 
       // Gửi đến cashier cụ thể
       await this.sendToCashier(cashierId, 'invoice_payment_success', message);
-      console.log(`[WebSocket] Sent invoice payment success notification to cashier ${cashierId}: ${invoiceData.invoiceCode}`);
+      console.log(`[CASHIER SOCKET] ✅ Successfully sent invoice payment success notification to cashier ${cashierId}: ${invoiceData.invoiceCode}`);
     } catch (error) {
-      console.error('Error sending invoice payment success notification to cashier:', error);
+      console.error(`[CASHIER SOCKET] ❌ Error sending invoice payment success notification to cashier ${cashierId}:`, error);
     }
   }
 
