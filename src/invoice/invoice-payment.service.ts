@@ -1124,21 +1124,27 @@ export class InvoicePaymentService {
     try {
       const cashierId = invoice.cashierId;
       if (!cashierId) {
-        this.logger.warn(`No cashierId found for invoice ${invoice.invoiceCode}, skipping notification`);
+        this.logger.warn(`[INVOICE PAYMENT] ⚠️ No cashierId found for invoice ${invoice.invoiceCode}, skipping notification`);
         return;
       }
+
+      this.logger.debug(`[INVOICE PAYMENT] 🔍 Checking notification for invoice ${invoice.invoiceCode}`);
+      this.logger.debug(`[INVOICE PAYMENT] 💼 Invoice cashierId: ${cashierId}`);
 
       // Kiểm tra cashier có online không
       const isCashierOnline = this.webSocketService.isCashierOnline(cashierId);
       if (!isCashierOnline) {
-        this.logger.debug(`Cashier ${cashierId} is not online, skipping notification for invoice ${invoice.invoiceCode}`);
+        const allOnlineCashiers = this.webSocketService.getOnlineCashiers();
+        this.logger.warn(`[INVOICE PAYMENT] ❌ Cashier ${cashierId} is not online, skipping notification for invoice ${invoice.invoiceCode}`);
+        this.logger.warn(`[INVOICE PAYMENT] 📋 Currently online cashiers: ${allOnlineCashiers.length > 0 ? allOnlineCashiers.join(', ') : 'NONE'}`);
         return;
       }
 
+      this.logger.debug(`[INVOICE PAYMENT] ✅ Cashier ${cashierId} is online, sending notification...`);
       await this.webSocketService.notifyCashierInvoicePaymentSuccess(cashierId, invoice);
-      this.logger.debug(`Sent invoice payment success notification to cashier ${cashierId} for invoice: ${invoice.invoiceCode}`);
+      this.logger.debug(`[INVOICE PAYMENT] ✅ Sent invoice payment success notification to cashier ${cashierId} for invoice ${invoice.invoiceCode}`);
     } catch (error) {
-      this.logger.error(`Failed to send invoice payment success notification: ${error.message}`, error.stack);
+      this.logger.error(`[INVOICE PAYMENT] ❌ Failed to send invoice payment success notification: ${error.message}`, error.stack);
     }
   }
 
