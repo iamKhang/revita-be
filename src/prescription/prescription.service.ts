@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
@@ -16,8 +17,14 @@ import { PrescriptionStatus } from '@prisma/client';
 import { CodeGeneratorService } from '../user-management/patient-profile/code-generator.service';
 import { JwtUserPayload } from '../medical-record/dto/jwt-user-payload.dto';
 import { QueueResponseDto, QueuePatientDto } from './dto/queue-item.dto';
-import { StartServicesDto, StartServicesResponseDto, ServiceToStartDto } from './dto/start-services.dto';
-import { PendingServicesResponseDto, PendingServiceDto } from './dto/pending-services.dto';
+import {
+  StartServicesDto,
+  StartServicesResponseDto,
+} from './dto/start-services.dto';
+import {
+  PendingServicesResponseDto,
+  PendingServiceDto,
+} from './dto/pending-services.dto';
 import { RedisService } from '../cache/redis.service';
 import { WebSocketService } from '../websocket/websocket.service';
 
@@ -122,9 +129,14 @@ export class PrescriptionService {
     if (user.role === 'RECEPTIONIST') {
       const allResolved = [
         ...servicesById,
-        ...servicesByCode.map((s) => ({ id: s.id, requiresDoctor: s.requiresDoctor })),
+        ...servicesByCode.map((s) => ({
+          id: s.id,
+          requiresDoctor: s.requiresDoctor,
+        })),
       ];
-      const requiresDoctorIds = allResolved.filter((s) => s.requiresDoctor === true).map((s) => s.id);
+      const requiresDoctorIds = allResolved
+        .filter((s) => s.requiresDoctor === true)
+        .map((s) => s.id);
       if (requiresDoctorIds.length > 0) {
         throw new BadRequestException(
           `Receptionist cannot assign services that require doctor: ${requiresDoctorIds.join(', ')}`,
@@ -162,7 +174,8 @@ export class PrescriptionService {
       });
 
       finalPrescriptionCode = this.codeGenerator.generatePrescriptionCode(
-        doctor?.auth?.name || (user.role === 'RECEPTIONIST' ? 'Receptionist' : 'Unknown'),
+        doctor?.auth?.name ||
+          (user.role === 'RECEPTIONIST' ? 'Receptionist' : 'Unknown'),
         patientProfile?.name || 'Unknown',
       );
     }
@@ -399,9 +412,10 @@ export class PrescriptionService {
     if (!current) throw new NotFoundException('Service not in prescription');
 
     // Nếu đã có bác sĩ/kỹ thuật viên được gán sẵn → chuyển WAITING, ngược lại → PENDING
-    const nextStatus = current.doctorId || current.technicianId
-      ? PrescriptionStatus.WAITING
-      : PrescriptionStatus.PENDING;
+    const nextStatus =
+      current.doctorId || current.technicianId
+        ? PrescriptionStatus.WAITING
+        : PrescriptionStatus.PENDING;
 
     await this.prisma.prescriptionService.update({
       where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
@@ -507,7 +521,7 @@ export class PrescriptionService {
 
     await this.prisma.prescriptionService.update({
       where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-      data: { 
+      data: {
         status: PrescriptionStatus.SKIPPED,
         skipCount: (currentService?.skipCount || 0) + 1,
       },
@@ -550,18 +564,22 @@ export class PrescriptionService {
       where: { id: prescriptionId },
       select: { doctorId: true },
     });
-    
+
     // Lấy technicianId từ PrescriptionService
-    const prescriptionServiceData = await this.prisma.prescriptionService.findUnique({
-      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-      select: { technicianId: true },
-    });
-    
+    const prescriptionServiceData =
+      await this.prisma.prescriptionService.findUnique({
+        where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+        select: { technicianId: true },
+      });
+
     if (prescriptionData?.doctorId) {
       await this.updateQueueInRedis(prescriptionData.doctorId, 'DOCTOR');
     }
     if (prescriptionServiceData?.technicianId) {
-      await this.updateQueueInRedis(prescriptionServiceData.technicianId, 'TECHNICIAN');
+      await this.updateQueueInRedis(
+        prescriptionServiceData.technicianId,
+        'TECHNICIAN',
+      );
     }
 
     return {
@@ -720,7 +738,9 @@ export class PrescriptionService {
       throw new NotFoundException('Prescription not found');
     }
 
-    const pendingServices = prescription.services.filter((s) => s.status === PrescriptionStatus.PENDING);
+    const pendingServices = prescription.services.filter(
+      (s) => s.status === PrescriptionStatus.PENDING,
+    );
     if (pendingServices.length === 0) {
       throw new BadRequestException('No pending services to assign');
     }
@@ -746,8 +766,14 @@ export class PrescriptionService {
       throw new BadRequestException('No active work sessions');
     }
 
-    const pendingServiceIds = new Set(pendingServices.map((ps) => ps.serviceId));
-    const serviceIdToDuration = new Map(prescription.services.map((ps) => [ps.serviceId, ps.service?.durationMinutes ?? 15] as const));
+    const pendingServiceIds = new Set(
+      pendingServices.map((ps) => ps.serviceId),
+    );
+    const serviceIdToDuration = new Map(
+      prescription.services.map(
+        (ps) => [ps.serviceId, ps.service?.durationMinutes ?? 15] as const,
+      ),
+    );
 
     type ScoredSession = {
       session: any;
@@ -759,10 +785,17 @@ export class PrescriptionService {
 
     const scored: ScoredSession[] = [];
     for (const session of sessions) {
-      const timeLeftMin = Math.max(0, Math.ceil((session.endTime.getTime() - now.getTime()) / 60000));
-      const sessionServiceIds = new Set(session.services.map((ws: any) => ws.serviceId));
+      const timeLeftMin = Math.max(
+        0,
+        Math.ceil((session.endTime.getTime() - now.getTime()) / 60000),
+      );
+      const sessionServiceIds = new Set(
+        session.services.map((ws: any) => ws.serviceId),
+      );
       // Candidate pending in this prescription that this session can do
-      const canDo = pendingServices.filter((ps) => sessionServiceIds.has(ps.serviceId));
+      const canDo = pendingServices.filter((ps) =>
+        sessionServiceIds.has(ps.serviceId),
+      );
       if (canDo.length === 0) continue;
 
       // Filter sessions that at least can finish the first pending service
@@ -777,7 +810,10 @@ export class PrescriptionService {
         },
         include: { service: true },
       });
-      const currentWorkloadMin = startedHere.reduce((sum, x) => sum + (x.service?.durationMinutes ?? 15), 0);
+      const currentWorkloadMin = startedHere.reduce(
+        (sum, x) => sum + (x.service?.durationMinutes ?? 15),
+        0,
+      );
 
       scored.push({
         session,
@@ -795,14 +831,20 @@ export class PrescriptionService {
     // Rank: most pending services it can do, then least workload, then most time left
     scored.sort((a, b) => {
       if (b.canDoCount !== a.canDoCount) return b.canDoCount - a.canDoCount;
-      if (a.currentWorkloadMin !== b.currentWorkloadMin) return a.currentWorkloadMin - b.currentWorkloadMin;
+      if (a.currentWorkloadMin !== b.currentWorkloadMin)
+        return a.currentWorkloadMin - b.currentWorkloadMin;
       return b.timeLeftMin - a.timeLeftMin;
     });
 
     const chosen = scored[0].session;
 
     const updated = await this.prisma.prescriptionService.update({
-      where: { prescriptionId_serviceId: { prescriptionId: prescription.id, serviceId: target.serviceId } },
+      where: {
+        prescriptionId_serviceId: {
+          prescriptionId: prescription.id,
+          serviceId: target.serviceId,
+        },
+      },
       data: {
         status: PrescriptionStatus.WAITING,
         doctorId: chosen.doctorId ?? null,
@@ -815,7 +857,11 @@ export class PrescriptionService {
     // Xây dựng preview queue cho user (doctor/technician) được gán
     let queuePreview: QueueResponseDto | null = null as any;
     try {
-      const role = chosen.doctorId ? 'DOCTOR' : (chosen.technicianId ? 'TECHNICIAN' : null);
+      const role = chosen.doctorId
+        ? 'DOCTOR'
+        : chosen.technicianId
+          ? 'TECHNICIAN'
+          : null;
       const userId = chosen.doctorId ?? chosen.technicianId ?? null;
       if (role && userId) {
         queuePreview = await this.buildQueueFromDatabase({
@@ -825,7 +871,9 @@ export class PrescriptionService {
           technician: role === 'TECHNICIAN' ? { id: userId } : undefined,
         } as any);
       }
-    } catch {}
+    } catch {
+      /* empty */
+    }
 
     return {
       assignedService: {
@@ -869,7 +917,10 @@ export class PrescriptionService {
   /**
    * Tính toán xem bệnh nhân có đến đúng giờ không dựa trên lịch hẹn
    */
-  private calculateIsOnTime(hasAppointment: boolean, appointmentDetails: any): boolean {
+  private calculateIsOnTime(
+    hasAppointment: boolean,
+    appointmentDetails: any,
+  ): boolean {
     if (!hasAppointment || !appointmentDetails) {
       return false; // Không có lịch hẹn thì không tính là đúng giờ
     }
@@ -881,7 +932,7 @@ export class PrescriptionService {
 
     // Tính khoảng cách thời gian (tính bằng phút)
     const timeDifferenceMinutes = Math.abs(
-      (checkInTime.getTime() - appointmentTime.getTime()) / (1000 * 60)
+      (checkInTime.getTime() - appointmentTime.getTime()) / (1000 * 60),
     );
 
     // Đúng giờ nếu trong khoảng ±20 phút
@@ -891,7 +942,7 @@ export class PrescriptionService {
   /**
    * Tính toán độ ưu tiên cho dịch vụ dựa trên logic từ take-number.service.ts
    * Thứ tự ưu tiên: 1. Đang phục vụ 2. Tiếp theo 3. Bị skip (skipCount nhỏ nhất) 4. Miss (1) 5. Miss (2) 6. Miss (3) ... 7. Già (>75) 8. Trẻ em (<6) 9. Khuyết tật 10. Mang thai 11. Có lịch hẹn 12. Thường
-   * 
+   *
    * QUAN TRỌNG: SERVING và PREPARING luôn ở vị trí đầu queue, không bị chen lên bởi bệnh nhân mới
    */
   private calculateServicePriority(
@@ -910,17 +961,17 @@ export class PrescriptionService {
     if (status === PrescriptionStatus.SERVING) {
       return 0;
     }
-    
+
     // 2. Tiếp theo (PREPARING) - ưu tiên cao thứ 2, KHÔNG BAO GIỜ bị chen lên
     if (status === PrescriptionStatus.PREPARING) {
       return 100000;
     }
-    
+
     // 3. Bị skip (SKIPPED) - ưu tiên cao thứ 3, skipCount nhỏ hơn thì ưu tiên hơn
     if (status === PrescriptionStatus.SKIPPED) {
       return 200000 + skipCount; // skipCount nhỏ hơn = ưu tiên cao hơn
     }
-    
+
     // 4. Đang trả kết quả (RETURNING) - ưu tiên cao thứ 4
     if (status === PrescriptionStatus.RETURNING) {
       return 400000;
@@ -966,17 +1017,21 @@ export class PrescriptionService {
 
   async getQueueForUser(user: JwtUserPayload): Promise<QueueResponseDto> {
     // Lấy queue từ Redis cho user cụ thể
-    const userId = user.role === 'DOCTOR' ? user.doctor?.id : user.technician?.id;
+    const userId =
+      user.role === 'DOCTOR' ? user.doctor?.id : user.technician?.id;
     if (!userId) {
       return { patients: [], totalCount: 0 };
     }
 
     const queueKey = `prescriptionQueue:${user.role.toLowerCase()}:${userId}`;
-    
+
     try {
       // Lấy queue từ Redis ZSET (đã được sắp xếp theo priority)
-      const queueData = await this.redis.getPrescriptionQueue(userId, user.role as 'DOCTOR' | 'TECHNICIAN');
-      
+      const queueData = await this.redis.getPrescriptionQueue(
+        userId,
+        user.role as 'DOCTOR' | 'TECHNICIAN',
+      );
+
       if (!queueData || queueData.length === 0) {
         // Nếu không có queue trong Redis, tạo queue mới từ database
         return await this.buildQueueFromDatabase(user);
@@ -997,7 +1052,10 @@ export class PrescriptionService {
         totalCount: patients.length,
       };
     } catch (error) {
-      console.warn('Error getting queue from Redis, falling back to database:', error);
+      console.warn(
+        'Error getting queue from Redis, falling back to database:',
+        error,
+      );
       return await this.buildQueueFromDatabase(user);
     }
   }
@@ -1005,66 +1063,67 @@ export class PrescriptionService {
   /**
    * Xây dựng queue từ database (fallback method)
    */
-  private async buildQueueFromDatabase(user: JwtUserPayload): Promise<QueueResponseDto> {
+  private async buildQueueFromDatabase(
+    user: JwtUserPayload,
+  ): Promise<QueueResponseDto> {
     // Lấy tất cả PrescriptionService có trạng thái đang chờ
     const queueStatuses = [
       PrescriptionStatus.WAITING,
-      PrescriptionStatus.PREPARING, 
+      PrescriptionStatus.PREPARING,
       PrescriptionStatus.SERVING,
       PrescriptionStatus.SKIPPED,
       PrescriptionStatus.WAITING_RESULT,
       PrescriptionStatus.RETURNING,
     ];
 
-    const prescriptionServices = await this.prisma.prescriptionService.findMany({
-      where: {
-        status: { in: queueStatuses },
-        ...(user.role === 'DOCTOR' && user.doctor?.id
-          ? { doctorId: user.doctor.id }
-          : {}),
-        ...(user.role === 'TECHNICIAN' && user.technician?.id
-          ? { technicianId: user.technician.id }
-          : {}),
-      },
-      include: {
-        prescription: {
-          include: {
-            patientProfile: {
-              select: {
-                id: true,
-                name: true,
-                dateOfBirth: true,
-                gender: true,
-                isPregnant: true,
-                isDisabled: true,
+    const prescriptionServices = await this.prisma.prescriptionService.findMany(
+      {
+        where: {
+          status: { in: queueStatuses },
+          ...(user.role === 'DOCTOR' && user.doctor?.id
+            ? { doctorId: user.doctor.id }
+            : {}),
+          ...(user.role === 'TECHNICIAN' && user.technician?.id
+            ? { technicianId: user.technician.id }
+            : {}),
+        },
+        include: {
+          prescription: {
+            include: {
+              patientProfile: {
+                select: {
+                  id: true,
+                  name: true,
+                  dateOfBirth: true,
+                  gender: true,
+                  isPregnant: true,
+                  isDisabled: true,
+                },
               },
-            },
-            medicalRecord: {
-              select: {
-                appointment: {
-                  select: {
-                    appointmentCode: true,
-                    date: true,
-                    startTime: true,
-                    endTime: true,
+              medicalRecord: {
+                select: {
+                  appointment: {
+                    select: {
+                      appointmentCode: true,
+                      date: true,
+                      startTime: true,
+                      endTime: true,
+                    },
                   },
                 },
               },
             },
           },
-        },
-        service: {
-          select: {
-            id: true,
-            name: true,
+          service: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
+        orderBy: [{ order: 'asc' }, { prescription: { id: 'asc' } }],
       },
-      orderBy: [
-        { order: 'asc' },
-        { prescription: { id: 'asc' } },
-      ],
-    });
+    );
 
     // Gom nhóm theo bệnh nhân và tính toán độ ưu tiên
     const patientMap = new Map<string, any>();
@@ -1098,7 +1157,10 @@ export class PrescriptionService {
           hasAppointment,
           isOnTime,
           earliestStartedAt: ps.startedAt,
-          earliestCompletedAt: ps.status === PrescriptionStatus.WAITING_RESULT ? ps.completedAt : null,
+          earliestCompletedAt:
+            ps.status === PrescriptionStatus.WAITING_RESULT
+              ? ps.completedAt
+              : null,
           minSkipCount: ps.skipCount || 0,
         });
       }
@@ -1122,13 +1184,19 @@ export class PrescriptionService {
       }
 
       // Cập nhật thời gian bắt đầu sớm nhất
-      if (ps.startedAt && (!patient.earliestStartedAt || ps.startedAt < patient.earliestStartedAt)) {
+      if (
+        ps.startedAt &&
+        (!patient.earliestStartedAt || ps.startedAt < patient.earliestStartedAt)
+      ) {
         patient.earliestStartedAt = ps.startedAt;
       }
 
       // Cập nhật thời gian hoàn thành sớm nhất cho WAITING_RESULT
       if (ps.status === PrescriptionStatus.WAITING_RESULT && ps.completedAt) {
-        if (!patient.earliestCompletedAt || ps.completedAt < patient.earliestCompletedAt) {
+        if (
+          !patient.earliestCompletedAt ||
+          ps.completedAt < patient.earliestCompletedAt
+        ) {
           patient.earliestCompletedAt = ps.completedAt;
         }
       }
@@ -1140,9 +1208,10 @@ export class PrescriptionService {
 
       // Tính toán độ ưu tiên cho từng dịch vụ
       // Với WAITING_RESULT, sử dụng completedAt thay vì startedAt để sắp xếp theo thời gian hoàn thành
-      const timeForPriority = ps.status === PrescriptionStatus.WAITING_RESULT && ps.completedAt 
-        ? ps.completedAt 
-        : ps.startedAt;
+      const timeForPriority =
+        ps.status === PrescriptionStatus.WAITING_RESULT && ps.completedAt
+          ? ps.completedAt
+          : ps.startedAt;
       const servicePriority = this.calculateServicePriority(
         ps.status,
         patient.age,
@@ -1161,17 +1230,26 @@ export class PrescriptionService {
     const patients = Array.from(patientMap.values()).map((patient) => {
       // Lấy trạng thái có độ ưu tiên cao nhất
       const highestPriorityStatus = Math.min(...patient.priorities);
-      
+
       // Xác định overallStatus dựa trên priority score
       let overallStatus: QueuePatientDto['overallStatus'] = 'WAITING';
-      
+
       if (highestPriorityStatus === 0) {
         overallStatus = 'SERVING';
-      } else if (highestPriorityStatus >= 100000 && highestPriorityStatus < 200000) {
+      } else if (
+        highestPriorityStatus >= 100000 &&
+        highestPriorityStatus < 200000
+      ) {
         overallStatus = 'PREPARING';
-      } else if (highestPriorityStatus >= 200000 && highestPriorityStatus < 300000) {
+      } else if (
+        highestPriorityStatus >= 200000 &&
+        highestPriorityStatus < 300000
+      ) {
         overallStatus = 'SKIPPED';
-      } else if (highestPriorityStatus >= 400000 && highestPriorityStatus < 500000) {
+      } else if (
+        highestPriorityStatus >= 400000 &&
+        highestPriorityStatus < 500000
+      ) {
         overallStatus = 'RETURNING';
       } else if (highestPriorityStatus >= 999999999) {
         overallStatus = 'WAITING_RESULT';
@@ -1188,54 +1266,86 @@ export class PrescriptionService {
         queueOrder: 0, // Sẽ được cập nhật sau khi sắp xếp
         // Thông tin ưu tiên để sắp xếp
         priorityScore: Math.min(...patient.priorities),
-          earliestStartedAt: patient.earliestStartedAt,
-          earliestCompletedAt: patient.earliestCompletedAt,
-          age: patient.age,
-          isPregnant: patient.isPregnant,
-          isDisabled: patient.isDisabled,
-          hasAppointment: patient.hasAppointment,
-          isOnTime: patient.isOnTime,
-          skipCount: patient.minSkipCount,
-        };
+        earliestStartedAt: patient.earliestStartedAt,
+        earliestCompletedAt: patient.earliestCompletedAt,
+        age: patient.age,
+        isPregnant: patient.isPregnant,
+        isDisabled: patient.isDisabled,
+        hasAppointment: patient.hasAppointment,
+        isOnTime: patient.isOnTime,
+        skipCount: patient.minSkipCount,
+      };
     });
 
     // Sắp xếp theo độ ưu tiên: SERVING và PREPARING luôn ở đầu, WAITING_RESULT luôn ở cuối
     patients.sort((a, b) => {
       // WAITING_RESULT luôn ở vị trí cuối cùng
-      if (a.overallStatus === 'WAITING_RESULT' && b.overallStatus !== 'WAITING_RESULT') return 1;
-      if (b.overallStatus === 'WAITING_RESULT' && a.overallStatus !== 'WAITING_RESULT') return -1;
-      
+      if (
+        a.overallStatus === 'WAITING_RESULT' &&
+        b.overallStatus !== 'WAITING_RESULT'
+      )
+        return 1;
+      if (
+        b.overallStatus === 'WAITING_RESULT' &&
+        a.overallStatus !== 'WAITING_RESULT'
+      )
+        return -1;
+
       // Nếu cả hai đều là WAITING_RESULT, sắp xếp theo thời gian hoàn thành (càng về sau càng đứng cuối)
-      if (a.overallStatus === 'WAITING_RESULT' && b.overallStatus === 'WAITING_RESULT') {
-        const aTime = (a as any).earliestCompletedAt ? new Date((a as any).earliestCompletedAt).getTime() : 
-                      (a.earliestStartedAt ? new Date(a.earliestStartedAt).getTime() : 0);
-        const bTime = (b as any).earliestCompletedAt ? new Date((b as any).earliestCompletedAt).getTime() : 
-                      (b.earliestStartedAt ? new Date(b.earliestStartedAt).getTime() : 0);
+      if (
+        a.overallStatus === 'WAITING_RESULT' &&
+        b.overallStatus === 'WAITING_RESULT'
+      ) {
+        const aTime = (a as any).earliestCompletedAt
+          ? new Date((a as any).earliestCompletedAt).getTime()
+          : a.earliestStartedAt
+            ? new Date(a.earliestStartedAt).getTime()
+            : 0;
+        const bTime = (b as any).earliestCompletedAt
+          ? new Date((b as any).earliestCompletedAt).getTime()
+          : b.earliestStartedAt
+            ? new Date(b.earliestStartedAt).getTime()
+            : 0;
         return aTime - bTime; // Thời gian sớm hơn đứng trước (càng về sau càng đứng cuối)
       }
-      
+
       // SERVING luôn ở vị trí đầu tiên
-      if (a.overallStatus === 'SERVING' && b.overallStatus !== 'SERVING') return -1;
-      if (b.overallStatus === 'SERVING' && a.overallStatus !== 'SERVING') return 1;
-      
+      if (a.overallStatus === 'SERVING' && b.overallStatus !== 'SERVING')
+        return -1;
+      if (b.overallStatus === 'SERVING' && a.overallStatus !== 'SERVING')
+        return 1;
+
       // PREPARING luôn ở vị trí thứ 2 (sau SERVING)
-      if (a.overallStatus === 'PREPARING' && b.overallStatus !== 'PREPARING' && b.overallStatus !== 'SERVING') return -1;
-      if (b.overallStatus === 'PREPARING' && a.overallStatus !== 'PREPARING' && a.overallStatus !== 'SERVING') return 1;
-      
+      if (
+        a.overallStatus === 'PREPARING' &&
+        b.overallStatus !== 'PREPARING' &&
+        b.overallStatus !== 'SERVING'
+      )
+        return -1;
+      if (
+        b.overallStatus === 'PREPARING' &&
+        a.overallStatus !== 'PREPARING' &&
+        a.overallStatus !== 'SERVING'
+      )
+        return 1;
+
       // Các trạng thái khác sắp xếp theo priorityScore
       if (a.priorityScore !== b.priorityScore) {
         return a.priorityScore - b.priorityScore;
       }
-      
+
       // Nếu cùng priorityScore, sắp xếp theo startedAt (sớm hơn = ưu tiên cao hơn)
       if (a.earliestStartedAt && b.earliestStartedAt) {
-        return new Date(a.earliestStartedAt).getTime() - new Date(b.earliestStartedAt).getTime();
+        return (
+          new Date(a.earliestStartedAt).getTime() -
+          new Date(b.earliestStartedAt).getTime()
+        );
       }
-      
+
       // Nếu một trong hai không có startedAt, ưu tiên cái có startedAt
       if (a.earliestStartedAt && !b.earliestStartedAt) return -1;
       if (!a.earliestStartedAt && b.earliestStartedAt) return 1;
-      
+
       // Nếu cả hai đều không có startedAt, sắp xếp theo patientProfileId
       return a.patientProfileId.localeCompare(b.patientProfileId);
     });
@@ -1245,7 +1355,8 @@ export class PrescriptionService {
       patient.queueOrder = index + 1;
       // Xóa các trường tạm thời không cần thiết cho response
       if ('priorityScore' in patient) delete (patient as any).priorityScore;
-      if ('earliestStartedAt' in patient) delete (patient as any).earliestStartedAt;
+      if ('earliestStartedAt' in patient)
+        delete (patient as any).earliestStartedAt;
       if ('age' in patient) delete (patient as any).age;
       if ('isPregnant' in patient) delete (patient as any).isPregnant;
       if ('isDisabled' in patient) delete (patient as any).isDisabled;
@@ -1263,12 +1374,15 @@ export class PrescriptionService {
   /**
    * Cập nhật queue vào Redis cho user cụ thể
    */
-  async updateQueueInRedis(userId: string, userRole: 'DOCTOR' | 'TECHNICIAN'): Promise<void> {
+  async updateQueueInRedis(
+    userId: string,
+    userRole: 'DOCTOR' | 'TECHNICIAN',
+  ): Promise<void> {
     try {
       // Lấy dữ liệu queue từ database
       const queueData = await this.buildQueueFromDatabase({
         id: userId,
-        role: userRole as 'DOCTOR' | 'TECHNICIAN',
+        role: userRole,
         doctor: userRole === 'DOCTOR' ? { id: userId } : undefined,
         technician: userRole === 'TECHNICIAN' ? { id: userId } : undefined,
       } as JwtUserPayload);
@@ -1277,7 +1391,7 @@ export class PrescriptionService {
       const redisQueueData = queueData.patients.map((patient, index) => {
         // Tính lại priority để đảm bảo SERVING và PREPARING luôn ở đầu, WAITING_RESULT ở cuối
         let redisPriority = this.calculatePatientPriority(patient);
-        
+
         // Đảm bảo SERVING và PREPARING có priority cao nhất
         if (patient.overallStatus === 'SERVING') {
           redisPriority = 0;
@@ -1287,11 +1401,14 @@ export class PrescriptionService {
           // WAITING_RESULT: đảm bảo đứng cuối, càng về sau càng đứng cuối
           // Ưu tiên dùng completedAt nếu có, nếu không thì dùng startedAt
           const patientAny = patient as any;
-          const completedAt = patientAny.earliestCompletedAt || patientAny.earliestStartedAt;
-          const timestamp = completedAt ? new Date(completedAt).getTime() : Date.now();
+          const completedAt =
+            patientAny.earliestCompletedAt || patientAny.earliestStartedAt;
+          const timestamp = completedAt
+            ? new Date(completedAt).getTime()
+            : Date.now();
           redisPriority = 999999999 + timestamp;
         }
-        
+
         return {
           patientProfileId: patient.patientProfileId,
           patientName: patient.patientName,
@@ -1305,7 +1422,11 @@ export class PrescriptionService {
       });
 
       // Lưu vào Redis ZSET
-      await this.redis.updatePrescriptionQueue(userId, userRole, redisQueueData);
+      await this.redis.updatePrescriptionQueue(
+        userId,
+        userRole,
+        redisQueueData,
+      );
     } catch (error) {
       console.warn('Error updating queue in Redis:', error);
     }
@@ -1332,7 +1453,7 @@ export class PrescriptionService {
       hasAppointment,
       order,
       null,
-      skipCount
+      skipCount,
     );
   }
 
@@ -1340,9 +1461,9 @@ export class PrescriptionService {
    * Thêm bệnh nhân vào queue Redis
    */
   async addPatientToQueue(
-    userId: string, 
+    userId: string,
     userRole: 'DOCTOR' | 'TECHNICIAN',
-    patientData: any
+    patientData: any,
   ): Promise<void> {
     try {
       await this.redis.addToPrescriptionQueue(userId, userRole, patientData);
@@ -1356,11 +1477,15 @@ export class PrescriptionService {
    */
   async removePatientFromQueue(
     userId: string,
-    userRole: 'DOCTOR' | 'TECHNICIAN', 
-    patientProfileId: string
+    userRole: 'DOCTOR' | 'TECHNICIAN',
+    patientProfileId: string,
   ): Promise<void> {
     try {
-      await this.redis.removeFromPrescriptionQueue(userId, userRole, patientProfileId);
+      await this.redis.removeFromPrescriptionQueue(
+        userId,
+        userRole,
+        patientProfileId,
+      );
     } catch (error) {
       console.warn('Error removing patient from queue:', error);
     }
@@ -1373,10 +1498,15 @@ export class PrescriptionService {
     userId: string,
     userRole: 'DOCTOR' | 'TECHNICIAN',
     patientProfileId: string,
-    newStatus: string
+    newStatus: string,
   ): Promise<void> {
     try {
-      await this.redis.updatePrescriptionQueueStatus(userId, userRole, patientProfileId, newStatus);
+      await this.redis.updatePrescriptionQueueStatus(
+        userId,
+        userRole,
+        patientProfileId,
+        newStatus,
+      );
     } catch (error) {
       console.warn('Error updating patient status in queue:', error);
     }
@@ -1385,7 +1515,10 @@ export class PrescriptionService {
   /**
    * Chuyển các PrescriptionService từ PENDING sang WAITING và thêm vào queue
    */
-  async startServices(dto: StartServicesDto, user?: JwtUserPayload): Promise<StartServicesResponseDto> {
+  async startServices(
+    dto: StartServicesDto,
+    user?: JwtUserPayload,
+  ): Promise<StartServicesResponseDto> {
     const startedServices: any[] = [];
     const failedServices: any[] = [];
     const startedAt = new Date();
@@ -1397,7 +1530,7 @@ export class PrescriptionService {
           serviceToStart.prescriptionId,
           serviceToStart.serviceId,
           user,
-          startedAt
+          startedAt,
         );
 
         if (result.success) {
@@ -1439,26 +1572,27 @@ export class PrescriptionService {
     prescriptionId: string,
     serviceId: string,
     user: JwtUserPayload | undefined,
-    startedAt: Date
+    startedAt: Date,
   ): Promise<{ success: boolean; reason?: string }> {
     try {
       // Tìm PrescriptionService
-      const prescriptionService = await this.prisma.prescriptionService.findUnique({
-        where: {
-          prescriptionId_serviceId: {
-            prescriptionId,
-            serviceId,
-          },
-        },
-        include: {
-          prescription: {
-            select: {
-              doctorId: true,
-              patientProfileId: true,
+      const prescriptionService =
+        await this.prisma.prescriptionService.findUnique({
+          where: {
+            prescriptionId_serviceId: {
+              prescriptionId,
+              serviceId,
             },
           },
-        },
-      });
+          include: {
+            prescription: {
+              select: {
+                doctorId: true,
+                patientProfileId: true,
+              },
+            },
+          },
+        });
 
       if (!prescriptionService) {
         return {
@@ -1468,14 +1602,20 @@ export class PrescriptionService {
       }
 
       // Kiểm tra quyền truy cập
-      if (user?.role === 'DOCTOR' && prescriptionService.prescription.doctorId !== user.doctor?.id) {
+      if (
+        user?.role === 'DOCTOR' &&
+        prescriptionService.prescription.doctorId !== user.doctor?.id
+      ) {
         return {
           success: false,
           reason: 'You can only start services in prescriptions you created',
         };
       }
 
-      if (user?.role === 'TECHNICIAN' && prescriptionService.technicianId !== user.technician?.id) {
+      if (
+        user?.role === 'TECHNICIAN' &&
+        prescriptionService.technicianId !== user.technician?.id
+      ) {
         return {
           success: false,
           reason: 'You can only start services assigned to you',
@@ -1506,12 +1646,18 @@ export class PrescriptionService {
 
       // Cập nhật queue trong Redis cho doctor
       if (prescriptionService.prescription.doctorId) {
-        await this.updateQueueInRedis(prescriptionService.prescription.doctorId, 'DOCTOR');
+        await this.updateQueueInRedis(
+          prescriptionService.prescription.doctorId,
+          'DOCTOR',
+        );
       }
 
       // Cập nhật queue trong Redis cho technician nếu có
       if (prescriptionService.technicianId) {
-        await this.updateQueueInRedis(prescriptionService.technicianId, 'TECHNICIAN');
+        await this.updateQueueInRedis(
+          prescriptionService.technicianId,
+          'TECHNICIAN',
+        );
       }
 
       return { success: true };
@@ -1527,7 +1673,9 @@ export class PrescriptionService {
   /**
    * Lấy các dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên thực hiện
    */
-  async getPendingServicesByPrescriptionCode(prescriptionCode: string): Promise<PendingServicesResponseDto> {
+  async getPendingServicesByPrescriptionCode(
+    prescriptionCode: string,
+  ): Promise<PendingServicesResponseDto> {
     try {
       // Tìm prescription theo mã
       const prescription = await this.prisma.prescription.findFirst({
@@ -1563,12 +1711,16 @@ export class PrescriptionService {
       }
 
       // Tìm nhóm dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên
-      const consecutivePendingServices = this.findConsecutivePendingServices(prescription.services);
+      const consecutivePendingServices = this.findConsecutivePendingServices(
+        prescription.services,
+      );
 
-      const services: PendingServiceDto[] = consecutivePendingServices.map(ps => ({
-        serviceId: ps.serviceId,
-        serviceName: ps.service.name,
-      }));
+      const services: PendingServiceDto[] = consecutivePendingServices.map(
+        (ps) => ({
+          serviceId: ps.serviceId,
+          serviceName: ps.service.name,
+        }),
+      );
 
       return {
         prescriptionId: prescription.id,
@@ -1602,10 +1754,13 @@ export class PrescriptionService {
       const serviceTechnicianId = service.technicianId;
 
       // Kiểm tra xem có cùng bác sĩ/kỹ thuật viên với nhóm hiện tại không
-      const isSameAssignee = 
+      const isSameAssignee =
         (serviceDoctorId && serviceDoctorId === currentDoctorId) ||
         (serviceTechnicianId && serviceTechnicianId === currentTechnicianId) ||
-        (!serviceDoctorId && !serviceTechnicianId && !currentDoctorId && !currentTechnicianId);
+        (!serviceDoctorId &&
+          !serviceTechnicianId &&
+          !currentDoctorId &&
+          !currentTechnicianId);
 
       if (isSameAssignee) {
         // Thêm vào nhóm hiện tại
@@ -1617,7 +1772,7 @@ export class PrescriptionService {
         if (currentGroup.length > 0) {
           result.push(...currentGroup);
         }
-        
+
         // Bắt đầu nhóm mới
         currentGroup = [service];
         currentDoctorId = serviceDoctorId;
@@ -1635,7 +1790,7 @@ export class PrescriptionService {
 
   /**
    * Gọi bệnh nhân tiếp theo trong queue
-   * Logic: 
+   * Logic:
    * 1. Lấy bệnh nhân đầu queue
    * 2. Nếu không phải SERVING → cập nhật thành SERVING
    * 3. Cập nhật bệnh nhân đang SERVING thành COMPLETED và xóa khỏi queue
@@ -1649,14 +1804,15 @@ export class PrescriptionService {
     message: string;
   }> {
     try {
-      const userId = user.role === 'DOCTOR' ? user.doctor?.id : user.technician?.id;
+      const userId =
+        user.role === 'DOCTOR' ? user.doctor?.id : user.technician?.id;
       if (!userId) {
         throw new BadRequestException('User ID not found');
       }
 
       // Lấy queue hiện tại từ database để đảm bảo dữ liệu chính xác
       const queueData = await this.buildQueueFromDatabase(user);
-      
+
       if (queueData.patients.length === 0) {
         return {
           success: false,
@@ -1666,23 +1822,28 @@ export class PrescriptionService {
 
       // Lấy bệnh nhân đầu queue (ưu tiên cao nhất)
       const nextPatient = queueData.patients[0];
-      
+
       // Tìm bệnh nhân đang SERVING hiện tại
-      const currentServingPatient = queueData.patients.find(p => p.overallStatus === 'SERVING');
-      
+      const currentServingPatient = queueData.patients.find(
+        (p) => p.overallStatus === 'SERVING',
+      );
+
       // Tìm bệnh nhân tiếp theo để chuẩn bị (PREPARING)
-      // Logic: 
+      // Logic:
       // - Nếu có bệnh nhân SERVING hiện tại: bệnh nhân tiếp theo sau SERVING sẽ là PREPARING
       // - Nếu không có bệnh nhân SERVING: bệnh nhân đầu queue sẽ thành SERVING, bệnh nhân thứ 2 sẽ thành PREPARING
       let preparingPatient: any = null;
-      
+
       if (currentServingPatient) {
         // Nếu có bệnh nhân SERVING, tìm bệnh nhân tiếp theo sau SERVING
-        const servingIndex = queueData.patients.findIndex(p => p.overallStatus === 'SERVING');
+        const servingIndex = queueData.patients.findIndex(
+          (p) => p.overallStatus === 'SERVING',
+        );
         preparingPatient = queueData.patients[servingIndex + 1] || null;
       } else {
         // Nếu không có bệnh nhân SERVING, bệnh nhân thứ 2 sẽ là PREPARING
-        preparingPatient = queueData.patients.length > 1 ? queueData.patients[1] : null;
+        preparingPatient =
+          queueData.patients.length > 1 ? queueData.patients[1] : null;
       }
 
       // Thực hiện các cập nhật trong transaction
@@ -1711,7 +1872,11 @@ export class PrescriptionService {
         // Nếu không có bệnh nhân SERVING hiện tại, thì bệnh nhân đầu queue sẽ thành SERVING
         // Nếu có bệnh nhân SERVING hiện tại, thì bệnh nhân đầu queue sẽ thành SERVING (thay thế)
         for (const service of nextPatient.services) {
-          if (service.status === 'WAITING' || service.status === 'SKIPPED' || service.status === 'PREPARING') {
+          if (
+            service.status === 'WAITING' ||
+            service.status === 'SKIPPED' ||
+            service.status === 'PREPARING'
+          ) {
             await tx.prescriptionService.update({
               where: {
                 prescriptionId_serviceId: {
@@ -1728,7 +1893,10 @@ export class PrescriptionService {
         }
 
         // 3. Cập nhật bệnh nhân tiếp theo thành PREPARING (nếu có)
-        if (preparingPatient && preparingPatient.patientProfileId !== nextPatient.patientProfileId) {
+        if (
+          preparingPatient &&
+          preparingPatient.patientProfileId !== nextPatient.patientProfileId
+        ) {
           for (const service of preparingPatient.services) {
             if (service.status === 'WAITING' || service.status === 'SKIPPED') {
               await tx.prescriptionService.update({
@@ -1748,7 +1916,10 @@ export class PrescriptionService {
       });
 
       // Cập nhật queue trong Redis
-      await this.updateQueueInRedis(userId, user.role as 'DOCTOR' | 'TECHNICIAN');
+      await this.updateQueueInRedis(
+        userId,
+        user.role as 'DOCTOR' | 'TECHNICIAN',
+      );
 
       // Gửi WebSocket notification cho hành động gọi bệnh nhân
       await this.notifyPatientAction({
@@ -1762,27 +1933,30 @@ export class PrescriptionService {
 
       return {
         success: true,
-        currentPatient: currentServingPatient ? {
-          patientProfileId: currentServingPatient.patientProfileId,
-          patientName: currentServingPatient.patientName,
-          prescriptionCode: currentServingPatient.prescriptionCode,
-          status: 'COMPLETED',
-        } : null,
+        currentPatient: currentServingPatient
+          ? {
+              patientProfileId: currentServingPatient.patientProfileId,
+              patientName: currentServingPatient.patientName,
+              prescriptionCode: currentServingPatient.prescriptionCode,
+              status: 'COMPLETED',
+            }
+          : null,
         nextPatient: {
           patientProfileId: nextPatient.patientProfileId,
           patientName: nextPatient.patientName,
           prescriptionCode: nextPatient.prescriptionCode,
           status: 'SERVING',
         },
-        preparingPatient: preparingPatient ? {
-          patientProfileId: preparingPatient.patientProfileId,
-          patientName: preparingPatient.patientName,
-          prescriptionCode: preparingPatient.prescriptionCode,
-          status: 'PREPARING',
-        } : null,
+        preparingPatient: preparingPatient
+          ? {
+              patientProfileId: preparingPatient.patientProfileId,
+              patientName: preparingPatient.patientName,
+              prescriptionCode: preparingPatient.prescriptionCode,
+              status: 'PREPARING',
+            }
+          : null,
         message: `Đã gọi bệnh nhân: ${nextPatient.patientName}`,
       };
-
     } catch (error) {
       console.error('Error calling next patient:', error);
       return {
@@ -1801,7 +1975,8 @@ export class PrescriptionService {
     try {
       // Lấy thông tin về các phòng và buồng liên quan
       const serviceIds = prescription.services.map((s: any) => s.serviceId);
-      const { clinicRoomIds, boothIds } = await this.getRelatedRoomsAndBooths(serviceIds);
+      const { clinicRoomIds, boothIds } =
+        await this.getRelatedRoomsAndBooths(serviceIds);
 
       await this.webSocketService.notifyNewPrescriptionPatient({
         patientProfileId: prescription.patientProfileId,
@@ -1869,7 +2044,8 @@ export class PrescriptionService {
         };
 
         // Lấy serviceIds từ nextPatient
-        serviceIds = actionData.nextPatient.services?.map((s: any) => s.serviceId) || [];
+        serviceIds =
+          actionData.nextPatient.services?.map((s: any) => s.serviceId) || [];
         const roomsData = await this.getRelatedRoomsAndBooths(serviceIds);
         clinicRoomIds = roomsData.clinicRoomIds;
         boothIds = roomsData.boothIds;
@@ -1922,10 +2098,10 @@ export class PrescriptionService {
       const clinicRoomIds: string[] = [];
       const boothIds: string[] = [];
 
-      services.forEach(service => {
-        service.clinicRoomServices.forEach(crs => {
+      services.forEach((service) => {
+        service.clinicRoomServices.forEach((crs) => {
           clinicRoomIds.push(crs.clinicRoom.id);
-          crs.clinicRoom.booth.forEach(booth => {
+          crs.clinicRoom.booth.forEach((booth) => {
             boothIds.push(booth.id);
           });
         });
@@ -1954,22 +2130,27 @@ export class PrescriptionService {
       },
     });
     if (!appt) throw new NotFoundException('Appointment not found');
-    if (!appt.patientProfile) throw new NotFoundException('Patient profile not found');
+    if (!appt.patientProfile)
+      throw new NotFoundException('Patient profile not found');
 
     const doctorId = appt.doctorId ?? user.doctor?.id ?? null;
-    const servicesToCreate = (appt.appointmentServices || []).map((as, idx) => ({
-      serviceId: as.serviceId,
-      status: PrescriptionStatus.NOT_STARTED,
-      order: idx + 1,
-      note: null,
-      doctorId: doctorId,
-      technicianId: null,
-    }));
+    const servicesToCreate = (appt.appointmentServices || []).map(
+      (as, idx) => ({
+        serviceId: as.serviceId,
+        status: PrescriptionStatus.NOT_STARTED,
+        order: idx + 1,
+        note: null,
+        doctorId: doctorId,
+        technicianId: null,
+      }),
+    );
     if (servicesToCreate.length === 0) {
       throw new BadRequestException('Appointment has no services');
     }
 
-    const doctorName = appt.doctor?.auth?.name || (user.role === 'RECEPTIONIST' ? 'Receptionist' : 'Unknown');
+    const doctorName =
+      appt.doctor?.auth?.name ||
+      (user.role === 'RECEPTIONIST' ? 'Receptionist' : 'Unknown');
     const code = this.codeGenerator.generatePrescriptionCode(
       doctorName,
       appt.patientProfile.name,
@@ -1993,7 +2174,6 @@ export class PrescriptionService {
 
     return prescription;
   }
-
 
   async getAppointmentByCode(appointmentCode: string) {
     const appt = await this.prisma.appointment.findFirst({
@@ -2224,6 +2404,55 @@ export class PrescriptionService {
 
     const currentTime = new Date();
 
+    // Lấy local time components (GMT+7 - Asia/Ho_Chi_Minh)
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    const parts = formatter.formatToParts(currentTime);
+    const year = parseInt(parts.find((p) => p.type === 'year')?.value || '0');
+    const month = parseInt(parts.find((p) => p.type === 'month')?.value || '0');
+    const day = parseInt(parts.find((p) => p.type === 'day')?.value || '0');
+    const hour = parseInt(parts.find((p) => p.type === 'hour')?.value || '0');
+    const minute = parseInt(
+      parts.find((p) => p.type === 'minute')?.value || '0',
+    );
+    const second = parseInt(
+      parts.find((p) => p.type === 'second')?.value || '0',
+    );
+
+    // Tạo Date object từ local time components
+    // Nếu database lưu thời gian theo local time (GMT+7), cần tạo Date object
+    // đại diện cho cùng thời điểm nhưng được interpret như UTC
+    // Ví dụ: Local time 21:52:22 GMT+7 = UTC 14:52:22
+    // Nhưng nếu DB lưu "21:52:22" như UTC string, thì cần tạo Date từ đó
+    // Giả sử DB lưu local time như UTC (không có timezone info), tạo Date từ components
+    const localTime = new Date(
+      Date.UTC(year, month - 1, day, hour, minute, second),
+    );
+
+    const localTimeString = currentTime.toLocaleString('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    console.log('currentTime (UTC):', currentTime.toISOString());
+    console.log('currentTime (Local - GMT+7):', localTimeString);
+    console.log('localTime (Date for DB comparison):', localTime.toISOString());
+    console.log('service', service);
     // Approach 1: Find through WorkSessionService (work sessions that have this service)
     const workSessionServices = await this.prisma.workSessionService.findMany({
       where: { serviceId: service.id },
@@ -2274,8 +2503,8 @@ export class PrescriptionService {
         workSession &&
         workSession.doctorId &&
         workSession.doctor &&
-        workSession.startTime <= currentTime &&
-        workSession.endTime >= currentTime &&
+        workSession.startTime <= localTime &&
+        workSession.endTime >= localTime &&
         (workSession.status === 'APPROVED' ||
           workSession.status === 'IN_PROGRESS')
       ) {
@@ -2313,8 +2542,8 @@ export class PrescriptionService {
                   workSessions: {
                     where: {
                       doctorId: { not: null },
-                      startTime: { lte: currentTime },
-                      endTime: { gte: currentTime },
+                      startTime: { lte: localTime },
+                      endTime: { gte: localTime },
                       status: {
                         in: ['APPROVED', 'IN_PROGRESS'],
                       },
@@ -2367,5 +2596,4 @@ export class PrescriptionService {
     }
     return Array.from(doctorMap.values());
   }
-
 }
