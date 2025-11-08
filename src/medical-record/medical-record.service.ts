@@ -111,6 +111,27 @@ export class MedicalRecordService {
       patientProfile?.name || 'Unknown',
     );
 
+    // Nếu có appointmentCode, tìm appointment theo code và lấy id
+    let appointmentId: string | undefined;
+    if (dto.appointmentCode) {
+      const appointment = await this.prisma.appointment.findFirst({
+        where: {
+          appointmentCode: dto.appointmentCode,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!appointment) {
+        throw new NotFoundException(
+          `Không tìm thấy cuộc hẹn với mã code: ${dto.appointmentCode}`,
+        );
+      }
+
+      appointmentId = appointment.id;
+    }
+
     const data: any = {
       patientProfileId: dto.patientProfileId,
       templateId: dto.templateId,
@@ -119,6 +140,12 @@ export class MedicalRecordService {
       status: MedicalRecordStatus.DRAFT,
       doctorId,
     };
+
+    // Thêm appointmentId nếu có
+    if (appointmentId) {
+      data.appointmentId = appointmentId;
+    }
+
     const created = await this.prisma.medicalRecord.create({ data });
     
     // Lưu lịch sử tạo mới

@@ -25,9 +25,9 @@ export class CreateMedicalRecordDto {
   @IsOptional()
   doctorId?: string;
 
-  @ApiPropertyOptional({ description: 'ID của cuộc hẹn (tùy chọn)' })
+  @ApiPropertyOptional({ description: 'Mã code của cuộc hẹn (tùy chọn)' })
   @IsOptional()
-  appointmentId?: string;
+  appointmentCode?: string;
 
   @ApiPropertyOptional({
     enum: MedicalRecordStatus,
