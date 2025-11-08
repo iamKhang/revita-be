@@ -248,7 +248,6 @@ export class PrescriptionController {
     return this.prescriptionService.callNextPatient(req.user);
   }
 
-
   @Get('queue/status')
   @Roles(Role.DOCTOR, Role.TECHNICIAN)
   async getQueueStatus(@Request() req: { user: JwtUserPayload }) {

@@ -129,14 +129,9 @@ export class PrescriptionService {
     if (user.role === 'RECEPTIONIST') {
       const allResolved = [
         ...servicesById,
-        ...servicesByCode.map((s) => ({
-          id: s.id,
-          requiresDoctor: s.requiresDoctor,
-        })),
+        ...servicesByCode.map((s) => ({ id: s.id, requiresDoctor: s.requiresDoctor })),
       ];
-      const requiresDoctorIds = allResolved
-        .filter((s) => s.requiresDoctor === true)
-        .map((s) => s.id);
+      const requiresDoctorIds = allResolved.filter((s) => s.requiresDoctor === true).map((s) => s.id);
       if (requiresDoctorIds.length > 0) {
         throw new BadRequestException(
           `Receptionist cannot assign services that require doctor: ${requiresDoctorIds.join(', ')}`,
@@ -563,18 +558,22 @@ export class PrescriptionService {
       where: { id: prescriptionId },
       select: { doctorId: true },
     });
-    
+
     // Lấy technicianId từ PrescriptionService
-    const prescriptionServiceData = await this.prisma.prescriptionService.findUnique({
-      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-      select: { technicianId: true },
-    });
-    
+    const prescriptionServiceData =
+      await this.prisma.prescriptionService.findUnique({
+        where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+        select: { technicianId: true },
+      });
+
     if (prescriptionData?.doctorId) {
       await this.updateQueueInRedis(prescriptionData.doctorId, 'DOCTOR');
     }
     if (prescriptionServiceData?.technicianId) {
-      await this.updateQueueInRedis(prescriptionServiceData.technicianId, 'TECHNICIAN');
+      await this.updateQueueInRedis(
+        prescriptionServiceData.technicianId,
+        'TECHNICIAN',
+      );
     }
 
     return {
@@ -1317,7 +1316,7 @@ export class PrescriptionService {
     if (status === PrescriptionStatus.SKIPPED) {
       return 200000 + skipCount; // skipCount nhỏ hơn = ưu tiên cao hơn
     }
-    
+
     // 4. Đang trả kết quả (RETURNING) - ưu tiên cao thứ 4
     if (status === PrescriptionStatus.RETURNING) {
       return 400000;
@@ -1503,7 +1502,10 @@ export class PrescriptionService {
           hasAppointment,
           isOnTime,
           earliestStartedAt: ps.startedAt,
-          earliestCompletedAt: ps.status === PrescriptionStatus.WAITING_RESULT ? ps.completedAt : null,
+          earliestCompletedAt:
+            ps.status === PrescriptionStatus.WAITING_RESULT
+              ? ps.completedAt
+              : null,
           minSkipCount: ps.skipCount || 0,
         });
       }
@@ -1536,7 +1538,10 @@ export class PrescriptionService {
 
       // Cập nhật thời gian hoàn thành sớm nhất cho WAITING_RESULT
       if (ps.status === PrescriptionStatus.WAITING_RESULT && ps.completedAt) {
-        if (!patient.earliestCompletedAt || ps.completedAt < patient.earliestCompletedAt) {
+        if (
+          !patient.earliestCompletedAt ||
+          ps.completedAt < patient.earliestCompletedAt
+        ) {
           patient.earliestCompletedAt = ps.completedAt;
         }
       }
@@ -1548,9 +1553,10 @@ export class PrescriptionService {
 
       // Tính toán độ ưu tiên cho từng dịch vụ
       // Với WAITING_RESULT, sử dụng completedAt thay vì startedAt để sắp xếp theo thời gian hoàn thành
-      const timeForPriority = ps.status === PrescriptionStatus.WAITING_RESULT && ps.completedAt 
-        ? ps.completedAt 
-        : ps.startedAt;
+      const timeForPriority =
+        ps.status === PrescriptionStatus.WAITING_RESULT && ps.completedAt
+          ? ps.completedAt
+          : ps.startedAt;
       const servicePriority = this.calculateServicePriority(
         ps.status,
         patient.age,
@@ -1585,7 +1591,10 @@ export class PrescriptionService {
         highestPriorityStatus < 300000
       ) {
         overallStatus = 'SKIPPED';
-      } else if (highestPriorityStatus >= 400000 && highestPriorityStatus < 500000) {
+      } else if (
+        highestPriorityStatus >= 400000 &&
+        highestPriorityStatus < 500000
+      ) {
         overallStatus = 'RETURNING';
       } else if (highestPriorityStatus >= 999999999) {
         overallStatus = 'WAITING_RESULT';
@@ -1602,32 +1611,49 @@ export class PrescriptionService {
         queueOrder: 0, // Sẽ được cập nhật sau khi sắp xếp
         // Thông tin ưu tiên để sắp xếp
         priorityScore: Math.min(...patient.priorities),
-          earliestStartedAt: patient.earliestStartedAt,
-          earliestCompletedAt: patient.earliestCompletedAt,
-          age: patient.age,
-          isPregnant: patient.isPregnant,
-          isDisabled: patient.isDisabled,
-          hasAppointment: patient.hasAppointment,
-          isOnTime: patient.isOnTime,
-          skipCount: patient.minSkipCount,
-        };
+        earliestStartedAt: patient.earliestStartedAt,
+        earliestCompletedAt: patient.earliestCompletedAt,
+        age: patient.age,
+        isPregnant: patient.isPregnant,
+        isDisabled: patient.isDisabled,
+        hasAppointment: patient.hasAppointment,
+        isOnTime: patient.isOnTime,
+        skipCount: patient.minSkipCount,
+      };
     });
 
     // Sắp xếp theo độ ưu tiên: SERVING và PREPARING luôn ở đầu, WAITING_RESULT luôn ở cuối
     patients.sort((a, b) => {
       // WAITING_RESULT luôn ở vị trí cuối cùng
-      if (a.overallStatus === 'WAITING_RESULT' && b.overallStatus !== 'WAITING_RESULT') return 1;
-      if (b.overallStatus === 'WAITING_RESULT' && a.overallStatus !== 'WAITING_RESULT') return -1;
-      
+      if (
+        a.overallStatus === 'WAITING_RESULT' &&
+        b.overallStatus !== 'WAITING_RESULT'
+      )
+        return 1;
+      if (
+        b.overallStatus === 'WAITING_RESULT' &&
+        a.overallStatus !== 'WAITING_RESULT'
+      )
+        return -1;
+
       // Nếu cả hai đều là WAITING_RESULT, sắp xếp theo thời gian hoàn thành (càng về sau càng đứng cuối)
-      if (a.overallStatus === 'WAITING_RESULT' && b.overallStatus === 'WAITING_RESULT') {
-        const aTime = (a as any).earliestCompletedAt ? new Date((a as any).earliestCompletedAt).getTime() : 
-                      (a.earliestStartedAt ? new Date(a.earliestStartedAt).getTime() : 0);
-        const bTime = (b as any).earliestCompletedAt ? new Date((b as any).earliestCompletedAt).getTime() : 
-                      (b.earliestStartedAt ? new Date(b.earliestStartedAt).getTime() : 0);
+      if (
+        a.overallStatus === 'WAITING_RESULT' &&
+        b.overallStatus === 'WAITING_RESULT'
+      ) {
+        const aTime = (a as any).earliestCompletedAt
+          ? new Date((a as any).earliestCompletedAt).getTime()
+          : a.earliestStartedAt
+            ? new Date(a.earliestStartedAt).getTime()
+            : 0;
+        const bTime = (b as any).earliestCompletedAt
+          ? new Date((b as any).earliestCompletedAt).getTime()
+          : b.earliestStartedAt
+            ? new Date(b.earliestStartedAt).getTime()
+            : 0;
         return aTime - bTime; // Thời gian sớm hơn đứng trước (càng về sau càng đứng cuối)
       }
-      
+
       // SERVING luôn ở vị trí đầu tiên
       if (a.overallStatus === 'SERVING' && b.overallStatus !== 'SERVING')
         return -1;
@@ -1720,8 +1746,11 @@ export class PrescriptionService {
           // WAITING_RESULT: đảm bảo đứng cuối, càng về sau càng đứng cuối
           // Ưu tiên dùng completedAt nếu có, nếu không thì dùng startedAt
           const patientAny = patient as any;
-          const completedAt = patientAny.earliestCompletedAt || patientAny.earliestStartedAt;
-          const timestamp = completedAt ? new Date(completedAt).getTime() : Date.now();
+          const completedAt =
+            patientAny.earliestCompletedAt || patientAny.earliestStartedAt;
+          const timestamp = completedAt
+            ? new Date(completedAt).getTime()
+            : Date.now();
           redisPriority = 999999999 + timestamp;
         }
 
