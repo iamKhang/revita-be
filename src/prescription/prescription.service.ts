@@ -746,19 +746,27 @@ export class PrescriptionService {
     }
 
     const target = pendingServices[0];
+    const pendingServiceIds = new Set(pendingServices.map((ps) => ps.serviceId));
 
     // Fetch IN_PROGRESS work sessions active now, with declared services
+    // Filter by pending serviceIds to avoid cartesian product issues
     const sessions = await this.prisma.workSession.findMany({
       where: {
         status: 'IN_PROGRESS' as any,
         startTime: { lte: now },
         endTime: { gte: now },
         services: {
-          some: {},
+          some: {
+            serviceId: { in: Array.from(pendingServiceIds) },
+          },
         },
       },
       include: {
-        services: true,
+        services: {
+          where: {
+            serviceId: { in: Array.from(pendingServiceIds) },
+          },
+        },
       },
     });
 
@@ -766,14 +774,18 @@ export class PrescriptionService {
       throw new BadRequestException('No active work sessions');
     }
 
-    const pendingServiceIds = new Set(
-      pendingServices.map((ps) => ps.serviceId),
-    );
     const serviceIdToDuration = new Map(
       prescription.services.map(
         (ps) => [ps.serviceId, ps.service?.durationMinutes ?? 15] as const,
       ),
     );
+
+    // Filter sessions to only include those that have at least one of the pending services
+    // This avoids cartesian product issues when multiple work sessions have the same service
+    const filteredSessions = sessions.filter((session) => {
+      const sessionServiceIds = new Set(session.services.map((ws: any) => ws.serviceId));
+      return pendingServices.some((ps) => sessionServiceIds.has(ps.serviceId));
+    });
 
     type ScoredSession = {
       session: any;
@@ -784,7 +796,7 @@ export class PrescriptionService {
     };
 
     const scored: ScoredSession[] = [];
-    for (const session of sessions) {
+    for (const session of filteredSessions) {
       const timeLeftMin = Math.max(
         0,
         Math.ceil((session.endTime.getTime() - now.getTime()) / 60000),
