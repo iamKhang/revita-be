@@ -13,7 +13,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
-import { PrescriptionStatus } from '@prisma/client';
+import { PrescriptionStatus, WorkSessionStatus } from '@prisma/client';
 import { CodeGeneratorService } from '../user-management/patient-profile/code-generator.service';
 import { JwtUserPayload } from '../medical-record/dto/jwt-user-payload.dto';
 import { QueueResponseDto, QueuePatientDto } from './dto/queue-item.dto';
@@ -748,11 +748,82 @@ export class PrescriptionService {
     const target = pendingServices[0];
     const pendingServiceIds = new Set(pendingServices.map((ps) => ps.serviceId));
 
-    // Fetch IN_PROGRESS work sessions active now, with declared services
-    // Filter by pending serviceIds to avoid cartesian product issues
+    // DEBUG: Query tất cả work sessions có status APPROVED hoặc IN_PROGRESS để kiểm tra
+    const allActiveSessions = await this.prisma.workSession.findMany({
+      where: {
+        status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
+      },
+      include: {
+        services: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceCode: true,
+                name: true,
+              },
+            },
+          },
+        },
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        technician: {
+          include: {
+            auth: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        startTime: 'desc',
+      },
+    });
+
+    // DEBUG: Log tất cả work sessions tìm thấy
+    console.log('=== DEBUG: All work sessions with APPROVED/IN_PROGRESS status ===');
+    console.log(`Total sessions found: ${allActiveSessions.length}`);
+    console.log(`Current time (now): ${now.toISOString()}`);
+    console.log(`Pending service IDs: ${Array.from(pendingServiceIds).join(', ')}`);
+    
+    allActiveSessions.forEach((session, index) => {
+      const isInTimeRange = session.startTime <= now && session.endTime >= now;
+      const sessionServiceIds = session.services.map(ws => ws.serviceId);
+      const hasMatchingService = sessionServiceIds.some(id => pendingServiceIds.has(id));
+      
+      console.log(`\nSession ${index + 1}:`);
+      console.log(`  - ID: ${session.id}`);
+      console.log(`  - Status: ${session.status}`);
+      console.log(`  - StartTime: ${session.startTime.toISOString()}`);
+      console.log(`  - EndTime: ${session.endTime.toISOString()}`);
+      console.log(`  - Is in time range: ${isInTimeRange} (startTime <= now: ${session.startTime <= now}, endTime >= now: ${session.endTime >= now})`);
+      console.log(`  - Doctor: ${session.doctor?.auth?.name || 'N/A'} (ID: ${session.doctorId || 'N/A'})`);
+      console.log(`  - Technician: ${session.technician?.auth?.name || 'N/A'} (ID: ${session.technicianId || 'N/A'})`);
+      console.log(`  - Services (${session.services.length}):`, session.services.map(ws => ({
+        serviceId: ws.serviceId,
+        serviceCode: ws.service?.serviceCode,
+        serviceName: ws.service?.name,
+      })));
+      console.log(`  - Has matching service: ${hasMatchingService}`);
+      console.log(`  - Session service IDs: ${sessionServiceIds.join(', ')}`);
+    });
+    console.log('=== END DEBUG ===\n');
+
+    // Query work sessions với điều kiện đầy đủ
+    // Lưu ý: Include TẤT CẢ services của work session, không filter trong include
+    // để có thể debug được đầy đủ thông tin
     const sessions = await this.prisma.workSession.findMany({
       where: {
-        status: 'IN_PROGRESS' as any,
+        status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
         startTime: { lte: now },
         endTime: { gte: now },
         services: {
@@ -763,15 +834,201 @@ export class PrescriptionService {
       },
       include: {
         services: {
-          where: {
-            serviceId: { in: Array.from(pendingServiceIds) },
+          // Include TẤT CẢ services, không filter ở đây
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceCode: true,
+                name: true,
+              },
+            },
+          },
+        },
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        technician: {
+          include: {
+            auth: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
     });
 
+    console.log(`=== Sessions after filtering (time range + services): ${sessions.length} ===`);
+    sessions.forEach((session, index) => {
+      console.log(`Session ${index + 1}: ID=${session.id}, Status=${session.status}, Doctor=${session.doctor?.auth?.name || 'N/A'}, Services=${session.services.map(ws => ws.serviceId).join(',')}`);
+    });
+
+    // Fallback: Nếu query qua relation không tìm thấy, thử query trực tiếp qua WorkSessionService
+    let finalSessions = sessions;
     if (sessions.length === 0) {
-      throw new BadRequestException('No active work sessions');
+      console.warn('No sessions found via relation query, trying direct WorkSessionService query...');
+      const workSessionServices = await this.prisma.workSessionService.findMany({
+        where: {
+          serviceId: { in: Array.from(pendingServiceIds) },
+          workSession: {
+            status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
+            startTime: { lte: now },
+            endTime: { gte: now },
+          },
+        },
+        include: {
+          workSession: {
+            include: {
+              services: {
+                include: {
+                  service: {
+                    select: {
+                      id: true,
+                      serviceCode: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
+              doctor: {
+                include: {
+                  auth: {
+                    select: {
+                      name: true,
+                    },
+                  },
+                },
+              },
+              technician: {
+                include: {
+                  auth: {
+                    select: {
+                      name: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // Lấy unique work sessions
+      const sessionMap = new Map();
+      workSessionServices.forEach(wss => {
+        if (!sessionMap.has(wss.workSessionId)) {
+          sessionMap.set(wss.workSessionId, wss.workSession);
+        }
+      });
+      finalSessions = Array.from(sessionMap.values());
+      
+      console.log(`=== Fallback query found ${finalSessions.length} sessions ===`);
+      finalSessions.forEach((session, index) => {
+        console.log(`Session ${index + 1}: ID=${session.id}, Status=${session.status}, Doctor=${session.doctor?.auth?.name || 'N/A'}, Services=${session.services.map(ws => ws.serviceId).join(',')}`);
+      });
+    }
+
+    if (finalSessions.length === 0) {
+      // Kiểm tra từng điều kiện riêng lẻ
+      const sessionsByStatus = await this.prisma.workSession.findMany({
+        where: {
+          status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
+        },
+        select: { id: true, status: true, startTime: true, endTime: true },
+      });
+
+      const sessionsByTime = await this.prisma.workSession.findMany({
+        where: {
+          status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
+          startTime: { lte: now },
+          endTime: { gte: now },
+        },
+        select: { id: true, status: true, startTime: true, endTime: true },
+      });
+
+      // Kiểm tra WorkSessionService trực tiếp
+      const workSessionServices = await this.prisma.workSessionService.findMany({
+        where: {
+          serviceId: { in: Array.from(pendingServiceIds) },
+          workSession: {
+            status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
+            startTime: { lte: now },
+            endTime: { gte: now },
+          },
+        },
+        include: {
+          workSession: {
+            select: {
+              id: true,
+              status: true,
+              startTime: true,
+              endTime: true,
+              doctorId: true,
+              technicianId: true,
+            },
+          },
+        },
+      });
+
+      console.error(`\nWorkSessionServices found (direct query): ${workSessionServices.length}`);
+      workSessionServices.forEach((wss, i) => {
+        console.error(`  [${i + 1}] WorkSessionID=${wss.workSessionId}, ServiceID=${wss.serviceId}, SessionStatus=${wss.workSession.status}`);
+      });
+
+      const sessionsByServices = await this.prisma.workSession.findMany({
+        where: {
+          status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
+          startTime: { lte: now },
+          endTime: { gte: now },
+          services: {
+            some: {
+              serviceId: { in: Array.from(pendingServiceIds) },
+            },
+          },
+        },
+        include: {
+          services: {
+            select: { serviceId: true },
+          },
+        },
+      });
+
+      console.error('=== DEBUG: Breakdown by condition ===');
+      console.error(`Sessions with correct status: ${sessionsByStatus.length}`);
+      sessionsByStatus.forEach((s, i) => {
+        console.error(`  [${i + 1}] ID=${s.id}, Status=${s.status}, Start=${s.startTime.toISOString()}, End=${s.endTime.toISOString()}, InRange=${s.startTime <= now && s.endTime >= now}`);
+      });
+      
+      console.error(`\nSessions with correct status + time range: ${sessionsByTime.length}`);
+      sessionsByTime.forEach((s, i) => {
+        console.error(`  [${i + 1}] ID=${s.id}, Status=${s.status}, Start=${s.startTime.toISOString()}, End=${s.endTime.toISOString()}`);
+      });
+      
+      console.error(`\nSessions with correct status + time range + services: ${sessionsByServices.length}`);
+      sessionsByServices.forEach((s, i) => {
+        const serviceIds = s.services.map(ws => ws.serviceId);
+        console.error(`  [${i + 1}] ID=${s.id}, Status=${s.status}, Services=[${serviceIds.join(', ')}]`);
+      });
+      
+      console.error(`\nPending service IDs: ${Array.from(pendingServiceIds).join(', ')}`);
+      console.error(`Current time (now): ${now.toISOString()}`);
+
+      throw new BadRequestException(
+        `No active work sessions found for services: ${Array.from(pendingServiceIds).join(', ')}. ` +
+        `Current time: ${now.toISOString()}. ` +
+        `Found ${sessionsByStatus.length} sessions with correct status, ` +
+        `${sessionsByTime.length} sessions in time range, ` +
+        `${sessionsByServices.length} sessions with matching services. ` +
+        `Check console logs for detailed session information.`,
+      );
     }
 
     const serviceIdToDuration = new Map(
@@ -782,10 +1039,22 @@ export class PrescriptionService {
 
     // Filter sessions to only include those that have at least one of the pending services
     // This avoids cartesian product issues when multiple work sessions have the same service
-    const filteredSessions = sessions.filter((session) => {
+    const filteredSessions = finalSessions.filter((session) => {
       const sessionServiceIds = new Set(session.services.map((ws: any) => ws.serviceId));
       return pendingServices.some((ps) => sessionServiceIds.has(ps.serviceId));
     });
+
+    if (filteredSessions.length === 0 && finalSessions.length > 0) {
+      console.warn('Work sessions found but none match pending services', {
+        totalSessions: finalSessions.length,
+        sessionServiceIds: finalSessions.map(s => s.services.map((ws: any) => ws.serviceId)),
+        pendingServiceIds: Array.from(pendingServiceIds),
+      });
+      throw new BadRequestException(
+        `Found ${finalSessions.length} work session(s) but none of them have the required services. ` +
+        `Pending services: ${Array.from(pendingServiceIds).join(', ')}`,
+      );
+    }
 
     type ScoredSession = {
       session: any;
@@ -837,7 +1106,18 @@ export class PrescriptionService {
     }
 
     if (scored.length === 0) {
-      throw new BadRequestException('No suitable work session found');
+      console.warn('No suitable work session found after scoring', {
+        filteredSessionsCount: filteredSessions.length,
+        pendingServiceIds: Array.from(pendingServiceIds),
+        targetServiceId: target.serviceId,
+        targetDuration: serviceIdToDuration.get(target.serviceId) ?? 15,
+        now: now.toISOString(),
+      });
+      throw new BadRequestException(
+        `No suitable work session found. ` +
+        `Found ${filteredSessions.length} session(s) but none can complete the service within the available time. ` +
+        `Target service: ${target.serviceId}, required duration: ${serviceIdToDuration.get(target.serviceId) ?? 15} minutes.`,
+      );
     }
 
     // Rank: most pending services it can do, then least workload, then most time left
