@@ -796,7 +796,10 @@ export class PrescriptionService {
     console.log(`Pending service IDs: ${Array.from(pendingServiceIds).join(', ')}`);
     
     allActiveSessions.forEach((session, index) => {
-      const isInTimeRange = session.startTime <= now && session.endTime >= now;
+      // Logic mới: IN_PROGRESS chỉ cần check endTime, APPROVED cần check cả startTime và endTime
+      const isInTimeRange = session.status === WorkSessionStatus.IN_PROGRESS
+        ? session.endTime >= now
+        : session.startTime <= now && session.endTime >= now;
       const sessionServiceIds = session.services.map(ws => ws.serviceId);
       const hasMatchingService = sessionServiceIds.some(id => pendingServiceIds.has(id));
       
@@ -805,6 +808,7 @@ export class PrescriptionService {
       console.log(`  - Status: ${session.status}`);
       console.log(`  - StartTime: ${session.startTime.toISOString()}`);
       console.log(`  - EndTime: ${session.endTime.toISOString()}`);
+      console.log(`  - Time check logic: ${session.status === WorkSessionStatus.IN_PROGRESS ? 'IN_PROGRESS (only endTime >= now)' : 'APPROVED (startTime <= now AND endTime >= now)'}`);
       console.log(`  - Is in time range: ${isInTimeRange} (startTime <= now: ${session.startTime <= now}, endTime >= now: ${session.endTime >= now})`);
       console.log(`  - Doctor: ${session.doctor?.auth?.name || 'N/A'} (ID: ${session.doctorId || 'N/A'})`);
       console.log(`  - Technician: ${session.technician?.auth?.name || 'N/A'} (ID: ${session.technicianId || 'N/A'})`);
@@ -819,18 +823,35 @@ export class PrescriptionService {
     console.log('=== END DEBUG ===\n');
 
     // Query work sessions với điều kiện đầy đủ
-    // Lưu ý: Include TẤT CẢ services của work session, không filter trong include
-    // để có thể debug được đầy đủ thông tin
+    // Lưu ý: 
+    // - IN_PROGRESS sessions: Không cần check startTime (vì đã active rồi), chỉ check endTime
+    // - APPROVED sessions: Cần check cả startTime và endTime
+    // - Include TẤT CẢ services của work session, không filter trong include để có thể debug được đầy đủ thông tin
     const sessions = await this.prisma.workSession.findMany({
       where: {
-        status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
-        startTime: { lte: now },
-        endTime: { gte: now },
-        services: {
-          some: {
-            serviceId: { in: Array.from(pendingServiceIds) },
+        OR: [
+          // IN_PROGRESS: Chỉ cần check endTime >= now (đã bắt đầu rồi)
+          {
+            status: WorkSessionStatus.IN_PROGRESS,
+            endTime: { gte: now },
+            services: {
+              some: {
+                serviceId: { in: Array.from(pendingServiceIds) },
+              },
+            },
           },
-        },
+          // APPROVED: Cần check cả startTime và endTime (chưa bắt đầu nhưng sắp bắt đầu)
+          {
+            status: WorkSessionStatus.APPROVED,
+            startTime: { lte: now },
+            endTime: { gte: now },
+            services: {
+              some: {
+                serviceId: { in: Array.from(pendingServiceIds) },
+              },
+            },
+          },
+        ],
       },
       include: {
         services: {
@@ -879,9 +900,17 @@ export class PrescriptionService {
         where: {
           serviceId: { in: Array.from(pendingServiceIds) },
           workSession: {
-            status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
-            startTime: { lte: now },
-            endTime: { gte: now },
+            OR: [
+              {
+                status: WorkSessionStatus.IN_PROGRESS,
+                endTime: { gte: now },
+              },
+              {
+                status: WorkSessionStatus.APPROVED,
+                startTime: { lte: now },
+                endTime: { gte: now },
+              },
+            ],
           },
         },
         include: {
@@ -945,23 +974,40 @@ export class PrescriptionService {
         select: { id: true, status: true, startTime: true, endTime: true },
       });
 
+      // Check sessions by time với logic tương tự (IN_PROGRESS chỉ check endTime, APPROVED check cả hai)
       const sessionsByTime = await this.prisma.workSession.findMany({
         where: {
-          status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
-          startTime: { lte: now },
-          endTime: { gte: now },
+          OR: [
+            {
+              status: WorkSessionStatus.IN_PROGRESS,
+              endTime: { gte: now },
+            },
+            {
+              status: WorkSessionStatus.APPROVED,
+              startTime: { lte: now },
+              endTime: { gte: now },
+            },
+          ],
         },
         select: { id: true, status: true, startTime: true, endTime: true },
       });
 
-      // Kiểm tra WorkSessionService trực tiếp
+      // Kiểm tra WorkSessionService trực tiếp với logic tương tự
       const workSessionServices = await this.prisma.workSessionService.findMany({
         where: {
           serviceId: { in: Array.from(pendingServiceIds) },
           workSession: {
-            status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
-            startTime: { lte: now },
-            endTime: { gte: now },
+            OR: [
+              {
+                status: WorkSessionStatus.IN_PROGRESS,
+                endTime: { gte: now },
+              },
+              {
+                status: WorkSessionStatus.APPROVED,
+                startTime: { lte: now },
+                endTime: { gte: now },
+              },
+            ],
           },
         },
         include: {
@@ -985,14 +1031,27 @@ export class PrescriptionService {
 
       const sessionsByServices = await this.prisma.workSession.findMany({
         where: {
-          status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
-          startTime: { lte: now },
-          endTime: { gte: now },
-          services: {
-            some: {
-              serviceId: { in: Array.from(pendingServiceIds) },
+          OR: [
+            {
+              status: WorkSessionStatus.IN_PROGRESS,
+              endTime: { gte: now },
+              services: {
+                some: {
+                  serviceId: { in: Array.from(pendingServiceIds) },
+                },
+              },
             },
-          },
+            {
+              status: WorkSessionStatus.APPROVED,
+              startTime: { lte: now },
+              endTime: { gte: now },
+              services: {
+                some: {
+                  serviceId: { in: Array.from(pendingServiceIds) },
+                },
+              },
+            },
+          ],
         },
         include: {
           services: {
