@@ -13,9 +13,14 @@ import {
   UseGuards,
   Req,
   BadRequestException,
+  HttpException,
 } from '@nestjs/common';
 import { WorkSessionService } from './work-session.service';
-import { CreateWorkSessionsDto, UpdateWorkSessionDto } from './dto';
+import {
+  CreateWorkSessionsDto,
+  UpdateWorkSessionDto,
+  GetWorkSessionsBySpecialtyDto,
+} from './dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
@@ -101,7 +106,10 @@ export class WorkSessionController {
     const userRole = req.user?.role as Role;
     const authId = req.user?.sub as string;
 
-    const userInfo = await this.workSessionService["getUserInfo"](authId, userRole); // reuse resolver
+    const userInfo = await this.workSessionService['getUserInfo'](
+      authId,
+      userRole,
+    ); // reuse resolver
     const userType = userInfo.userType; // 'DOCTOR' | 'TECHNICIAN'
 
     return this.workSessionService.getTodayWorkSessionsByUser(
@@ -148,6 +156,35 @@ export class WorkSessionController {
       endDate,
       status,
     );
+  }
+
+  /**
+   * Lấy work sessions theo chuyên khoa (chỉ ADMIN)
+   */
+  @Get('by-specialty')
+  @Roles(Role.ADMIN)
+  async getWorkSessionsBySpecialty(
+    @Query() query: GetWorkSessionsBySpecialtyDto,
+  ) {
+    try {
+      const result =
+        await this.workSessionService.getWorkSessionsBySpecialty(query);
+      return {
+        success: true,
+        message: 'Lấy danh sách work session theo chuyên khoa thành công',
+        data: result,
+      };
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      throw new BadRequestException(
+        'Không thể lấy danh sách work session theo chuyên khoa',
+      );
+    }
   }
 
   /**
