@@ -10,8 +10,9 @@ import {
   CreateWorkSessionDto,
   CreateWorkSessionsDto,
   UpdateWorkSessionDto,
+  GetWorkSessionsBySpecialtyDto,
 } from './dto';
-import { WorkSessionStatus, Role } from '@prisma/client';
+import { Prisma, WorkSessionStatus, Role } from '@prisma/client';
 
 @Injectable()
 export class WorkSessionService {
@@ -134,14 +135,28 @@ export class WorkSessionService {
 
     try {
       // Luôn parse as UTC để tránh timezone conversion issues
-      parsedStartTime = new Date(startTime + (startTime.includes('Z') ? '' : 'Z'));
+      parsedStartTime = new Date(
+        startTime + (startTime.includes('Z') ? '' : 'Z'),
+      );
       parsedEndTime = new Date(endTime + (endTime.includes('Z') ? '' : 'Z'));
 
-      console.log('🔍 Debug timezone - Input startTime:', startTime, '-> Parsed as UTC:', parsedStartTime.toISOString());
-      console.log('🔍 Debug timezone - Input endTime:', endTime, '-> Parsed as UTC:', parsedEndTime.toISOString());
+      console.log(
+        '🔍 Debug timezone - Input startTime:',
+        startTime,
+        '-> Parsed as UTC:',
+        parsedStartTime.toISOString(),
+      );
+      console.log(
+        '🔍 Debug timezone - Input endTime:',
+        endTime,
+        '-> Parsed as UTC:',
+        parsedEndTime.toISOString(),
+      );
     } catch (error) {
       console.error('🔍 Debug timezone - Error parsing time:', error);
-      throw new BadRequestException('Invalid time format. Use ISO 8601 format (e.g., 2025-09-17T21:00:00Z)');
+      throw new BadRequestException(
+        'Invalid time format. Use ISO 8601 format (e.g., 2025-09-17T21:00:00Z)',
+      );
     }
 
     // Validate services exist
@@ -538,7 +553,9 @@ export class WorkSessionService {
       status: {
         in: statuses,
       },
-      ...(userType === 'DOCTOR' ? { doctorId: userId } : { technicianId: userId }),
+      ...(userType === 'DOCTOR'
+        ? { doctorId: userId }
+        : { technicianId: userId }),
     };
 
     return this.prisma.workSession.findMany({
@@ -855,5 +872,172 @@ export class WorkSessionService {
         startTime: 'asc',
       },
     });
+  }
+
+  /**
+   * Lấy work sessions theo chuyên khoa (dành cho admin)
+   */
+  async getWorkSessionsBySpecialty(query: GetWorkSessionsBySpecialtyDto) {
+    const specialtyId =
+      typeof query.specialtyId === 'string' ? query.specialtyId : undefined;
+    const specialtyCode =
+      typeof query.specialtyCode === 'string' ? query.specialtyCode : undefined;
+    const startDate =
+      typeof query.startDate === 'string' ? query.startDate : undefined;
+    const endDate =
+      typeof query.endDate === 'string' ? query.endDate : undefined;
+    const status =
+      typeof query.status === 'string'
+        ? (query.status as WorkSessionStatus)
+        : undefined;
+    const doctorId =
+      typeof query.doctorId === 'string' ? query.doctorId : undefined;
+    const technicianId =
+      typeof query.technicianId === 'string' ? query.technicianId : undefined;
+
+    const where: Prisma.WorkSessionWhereInput = {};
+
+    if (doctorId) {
+      where.doctorId = doctorId;
+    }
+
+    if (technicianId) {
+      where.technicianId = technicianId;
+    }
+
+    const timeFilter: Prisma.DateTimeFilter = {};
+    if (typeof startDate === 'string') {
+      timeFilter.gte = new Date(startDate);
+    }
+    if (typeof endDate === 'string') {
+      timeFilter.lte = new Date(endDate);
+    }
+    if (Object.keys(timeFilter).length > 0) {
+      where.startTime = timeFilter;
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (specialtyId || specialtyCode) {
+      const specialtyFilter: Prisma.ClinicRoomWhereInput = {};
+      if (specialtyId) {
+        specialtyFilter.specialtyId = specialtyId;
+      }
+      if (specialtyCode) {
+        specialtyFilter.specialty = {
+          is: {
+            specialtyCode,
+          },
+        };
+      }
+
+      where.booth = {
+        is: {
+          room: {
+            is: specialtyFilter,
+          },
+        },
+      };
+    }
+
+    const sessions = await this.prisma.workSession.findMany({
+      where,
+      include: {
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        technician: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        booth: {
+          include: {
+            room: {
+              include: {
+                specialty: true,
+              },
+            },
+          },
+        },
+        services: {
+          include: {
+            service: true,
+          },
+        },
+      },
+      orderBy: {
+        startTime: 'asc',
+      },
+    });
+
+    type SpecialtySummary = {
+      specialty: {
+        id: string;
+        name: string;
+        specialtyCode: string;
+      } | null;
+      total: number;
+      statusCounts: Partial<Record<WorkSessionStatus, number>>;
+    };
+
+    const statsMap = new Map<string, SpecialtySummary>();
+
+    sessions.forEach((session) => {
+      const specialty = session.booth?.room?.specialty;
+      const key = specialty?.id ?? 'NO_SPECIALTY';
+
+      if (!statsMap.has(key)) {
+        statsMap.set(key, {
+          specialty: specialty
+            ? {
+                id: specialty.id,
+                name: specialty.name,
+                specialtyCode: specialty.specialtyCode,
+              }
+            : null,
+          total: 0,
+          statusCounts: {},
+        });
+      }
+
+      const summary = statsMap.get(key)!;
+      summary.total += 1;
+      summary.statusCounts[session.status] =
+        (summary.statusCounts[session.status] ?? 0) + 1;
+    });
+
+    return {
+      total: sessions.length,
+      filters: {
+        specialtyId,
+        specialtyCode,
+        startDate,
+        endDate,
+        status,
+        doctorId,
+        technicianId,
+      },
+      specialtyStats: Array.from(statsMap.values()),
+      sessions,
+    };
   }
 }

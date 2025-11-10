@@ -12,7 +12,31 @@ import {
   CreatePackageDto,
   UpdatePackageDto,
   PackageItemInputDto,
+  DoctorServiceQueryDto,
+  ServiceLocationQueryDto,
 } from './dto';
+
+type DoctorServiceQueryOptions = {
+  keyword?: string;
+  limit?: number;
+  offset?: number;
+  includeInactive?: boolean;
+  requiresDoctor?: boolean;
+};
+
+type ServiceLocationQueryOptions = {
+  serviceIds?: string[];
+  serviceId?: string; // Deprecated: use serviceIds instead
+  boothId?: string;
+  clinicRoomId?: string;
+  excludeServiceIds?: string[];
+  excludeServiceId?: string; // Deprecated: use excludeServiceIds instead
+  keyword?: string;
+  limit?: number;
+  offset?: number;
+  includeInactive?: boolean;
+  requiresDoctor?: boolean;
+};
 
 @Injectable()
 export class ServiceService {
@@ -47,6 +71,96 @@ export class ServiceService {
       },
     },
   } satisfies Prisma.ServiceInclude;
+
+  private readonly serviceLocationInclude = {
+    specialty: {
+      select: {
+        id: true,
+        name: true,
+        specialtyCode: true,
+      },
+    },
+    boothServices: {
+      select: {
+        boothId: true,
+        booth: {
+          select: {
+            id: true,
+            boothCode: true,
+            name: true,
+            roomId: true,
+            room: {
+              select: {
+                id: true,
+                roomCode: true,
+                roomName: true,
+                specialtyId: true,
+                specialty: {
+                  select: {
+                    id: true,
+                    name: true,
+                    specialtyCode: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    clinicRoomServices: {
+      select: {
+        clinicRoomId: true,
+        clinicRoom: {
+          select: {
+            id: true,
+            roomCode: true,
+            roomName: true,
+            specialtyId: true,
+            specialty: {
+              select: {
+                id: true,
+                name: true,
+                specialtyCode: true,
+              },
+            },
+          },
+        },
+      },
+    },
+  } satisfies Prisma.ServiceInclude;
+
+  /**
+   * Map service data to compact format for work session creation
+   */
+  private mapServiceToCompactFormat(service: {
+    id: string;
+    serviceCode: string;
+    name: string;
+    price?: number | null;
+    requiresDoctor?: boolean;
+    boothServices?: Array<{ boothId: string }> | null;
+    clinicRoomServices?: Array<{ clinicRoomId: string }> | null;
+  }) {
+    const boothIds =
+      service.boothServices
+        ?.map((bs) => bs.boothId)
+        .filter((id): id is string => Boolean(id)) ?? [];
+    const clinicRoomIds =
+      service.clinicRoomServices
+        ?.map((crs) => crs.clinicRoomId)
+        .filter((id): id is string => Boolean(id)) ?? [];
+
+    return {
+      id: service.id,
+      serviceCode: service.serviceCode,
+      name: service.name,
+      price: service.price ?? null,
+      requiresDoctor: service.requiresDoctor ?? false,
+      boothIds,
+      clinicRoomIds,
+    };
+  }
 
   private readonly packageInclude = {
     category: {
@@ -84,11 +198,7 @@ export class ServiceService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async searchServices(
-    query: string,
-    limit: number = 10,
-    offset: number = 0,
-  ) {
+  async searchServices(query: string, limit: number = 10, offset: number = 0) {
     const { take, skip } = this.normalizePagination(limit, offset, 100);
 
     const where: Prisma.ServiceWhereInput = query
@@ -215,10 +325,7 @@ export class ServiceService {
         where,
         skip,
         take,
-        orderBy: [
-          { name: 'asc' },
-          { serviceCode: 'asc' },
-        ],
+        orderBy: [{ name: 'asc' }, { serviceCode: 'asc' }],
         include: this.serviceInclude,
       }),
     ]);
@@ -240,6 +347,471 @@ export class ServiceService {
     }
 
     return service;
+  }
+
+  async getServicesByDoctorCode(
+    doctorCode: string,
+    query: DoctorServiceQueryDto,
+  ) {
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { doctorCode },
+      select: {
+        id: true,
+        doctorCode: true,
+        specialtyId: true,
+        subSpecialties: true,
+        isActive: true,
+        auth: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+            specialtyCode: true,
+          },
+        },
+      },
+    });
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    if (!doctor.specialtyId) {
+      throw new BadRequestException(
+        'Doctor does not have a primary specialty configured',
+      );
+    }
+
+    const specialtyIds = Array.from(
+      new Set(
+        [doctor.specialtyId, ...(doctor.subSpecialties ?? [])].filter(
+          (id): id is string => Boolean(id?.trim()),
+        ),
+      ),
+    );
+
+    const queryOptions = query as DoctorServiceQueryOptions;
+
+    const limitInput =
+      typeof queryOptions.limit === 'number' ? queryOptions.limit : undefined;
+    const offsetInput =
+      typeof queryOptions.offset === 'number' ? queryOptions.offset : undefined;
+    const includeInactive =
+      typeof queryOptions.includeInactive === 'boolean'
+        ? queryOptions.includeInactive
+        : false;
+    const requiresDoctorFilter =
+      typeof queryOptions.requiresDoctor === 'boolean'
+        ? queryOptions.requiresDoctor
+        : undefined;
+    const keyword =
+      typeof queryOptions.keyword === 'string' &&
+      queryOptions.keyword.length > 0
+        ? queryOptions.keyword
+        : undefined;
+
+    const { take, skip } = this.normalizePagination(
+      limitInput,
+      offsetInput,
+      100,
+    );
+
+    const conditions: Prisma.ServiceWhereInput[] = [
+      { specialtyId: { in: specialtyIds } },
+    ];
+
+    if (!includeInactive) {
+      conditions.push({ isActive: true });
+    }
+
+    if (requiresDoctorFilter !== undefined) {
+      conditions.push({ requiresDoctor: requiresDoctorFilter });
+    }
+
+    if (keyword) {
+      conditions.push({
+        OR: [
+          {
+            name: {
+              contains: keyword,
+              mode: 'insensitive',
+            },
+          },
+          {
+            serviceCode: {
+              contains: keyword,
+              mode: 'insensitive',
+            },
+          },
+          {
+            description: {
+              contains: keyword,
+              mode: 'insensitive',
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.ServiceWhereInput =
+      conditions.length > 1 ? { AND: conditions } : conditions[0];
+
+    const [total, services] = await this.prisma.$transaction([
+      this.prisma.service.count({ where }),
+      this.prisma.service.findMany({
+        where,
+        include: this.serviceLocationInclude,
+        orderBy: [
+          { requiresDoctor: 'desc' },
+          { name: 'asc' },
+          { serviceCode: 'asc' },
+        ],
+        skip,
+        take,
+      }),
+    ]);
+
+    return {
+      doctor: {
+        id: doctor.id,
+        doctorCode: doctor.doctorCode,
+        name: doctor.auth?.name ?? null,
+        isActive: doctor.isActive,
+        specialty: doctor.specialty,
+        specialtyIds,
+      },
+      services: services.map((s) => this.mapServiceToCompactFormat(s)),
+      pagination: this.buildPagination(total, take, skip),
+    };
+  }
+
+  async getServicesByLocation(query: ServiceLocationQueryDto) {
+    const queryOptions = query as ServiceLocationQueryOptions;
+
+    const limitInput =
+      typeof queryOptions.limit === 'number' ? queryOptions.limit : undefined;
+    const offsetInput =
+      typeof queryOptions.offset === 'number' ? queryOptions.offset : undefined;
+    const includeInactive =
+      typeof queryOptions.includeInactive === 'boolean'
+        ? queryOptions.includeInactive
+        : false;
+    const requiresDoctorFilter =
+      typeof queryOptions.requiresDoctor === 'boolean'
+        ? queryOptions.requiresDoctor
+        : undefined;
+
+    // Merge serviceIds and serviceId (backward compatibility)
+    const serviceIdsSet = new Set<string>();
+    if (
+      Array.isArray(queryOptions.serviceIds) &&
+      queryOptions.serviceIds.length > 0
+    ) {
+      queryOptions.serviceIds.forEach((id) => serviceIdsSet.add(id));
+    }
+    if (
+      typeof queryOptions.serviceId === 'string' &&
+      queryOptions.serviceId.length > 0
+    ) {
+      serviceIdsSet.add(queryOptions.serviceId);
+    }
+    const allServiceIds = Array.from(serviceIdsSet);
+
+    const boothIdFilter =
+      typeof queryOptions.boothId === 'string' &&
+      queryOptions.boothId.length > 0
+        ? queryOptions.boothId
+        : undefined;
+    const clinicRoomIdFilter =
+      typeof queryOptions.clinicRoomId === 'string' &&
+      queryOptions.clinicRoomId.length > 0
+        ? queryOptions.clinicRoomId
+        : undefined;
+
+    // Merge excludeServiceIds and excludeServiceId (backward compatibility)
+    const excludeServiceIdsSet = new Set<string>();
+    if (
+      Array.isArray(queryOptions.excludeServiceIds) &&
+      queryOptions.excludeServiceIds.length > 0
+    ) {
+      queryOptions.excludeServiceIds.forEach((id) =>
+        excludeServiceIdsSet.add(id),
+      );
+    }
+    if (
+      typeof queryOptions.excludeServiceId === 'string' &&
+      queryOptions.excludeServiceId.length > 0
+    ) {
+      excludeServiceIdsSet.add(queryOptions.excludeServiceId);
+    }
+    const allExcludeServiceIds = Array.from(excludeServiceIdsSet);
+
+    const keyword =
+      typeof queryOptions.keyword === 'string' &&
+      queryOptions.keyword.length > 0
+        ? queryOptions.keyword
+        : undefined;
+
+    const { take, skip } = this.normalizePagination(
+      limitInput,
+      offsetInput,
+      100,
+    );
+
+    // Collect boothIds and clinicRoomIds from all referenced services
+    const allBoothIds: Set<string>[] = [];
+    const allClinicRoomIds: Set<string>[] = [];
+
+    // If specific boothId or clinicRoomId is provided, use them directly
+    if (boothIdFilter) {
+      allBoothIds.push(new Set([boothIdFilter]));
+    }
+    if (clinicRoomIdFilter) {
+      allClinicRoomIds.push(new Set([clinicRoomIdFilter]));
+    }
+
+    // Fetch location data from all referenced services
+    if (allServiceIds.length > 0) {
+      const sourceServices = await this.prisma.service.findMany({
+        where: {
+          id: { in: allServiceIds },
+        },
+        select: {
+          id: true,
+          boothServices: {
+            select: {
+              boothId: true,
+              booth: {
+                select: {
+                  roomId: true,
+                },
+              },
+            },
+          },
+          clinicRoomServices: {
+            select: {
+              clinicRoomId: true,
+            },
+          },
+        },
+      });
+
+      if (sourceServices.length === 0) {
+        throw new NotFoundException(
+          `None of the provided service IDs were found: ${allServiceIds.join(', ')}`,
+        );
+      }
+
+      // Collect boothIds and clinicRoomIds from each service
+      for (const service of sourceServices) {
+        const serviceBoothIds = new Set<string>();
+        const serviceClinicRoomIds = new Set<string>();
+
+        for (const booth of service.boothServices) {
+          if (booth.boothId) {
+            serviceBoothIds.add(booth.boothId);
+          }
+          if (booth.booth?.roomId) {
+            serviceClinicRoomIds.add(booth.booth.roomId);
+          }
+        }
+
+        for (const room of service.clinicRoomServices) {
+          if (room.clinicRoomId) {
+            serviceClinicRoomIds.add(room.clinicRoomId);
+          }
+        }
+
+        if (serviceBoothIds.size > 0) {
+          allBoothIds.push(serviceBoothIds);
+        }
+        if (serviceClinicRoomIds.size > 0) {
+          allClinicRoomIds.push(serviceClinicRoomIds);
+        }
+      }
+    }
+
+    // Calculate intersection: only boothIds and clinicRoomIds that are common to ALL services
+    // If no services provided, use the sets directly (from boothId/clinicRoomId filters)
+    let intersectionBoothIds: Set<string>;
+    let intersectionClinicRoomIds: Set<string>;
+
+    if (allBoothIds.length === 0 && allClinicRoomIds.length === 0) {
+      throw new BadRequestException(
+        'At least one of serviceIds, boothId, or clinicRoomId must identify a location',
+      );
+    }
+
+    if (allBoothIds.length > 0) {
+      // Intersection of all boothId sets: only IDs that exist in ALL sets
+      if (allBoothIds.length === 1) {
+        intersectionBoothIds = allBoothIds[0];
+      } else {
+        // Start with first set, then intersect with each subsequent set
+        intersectionBoothIds = new Set(allBoothIds[0]);
+        for (let i = 1; i < allBoothIds.length; i++) {
+          const currentSet = allBoothIds[i];
+          const newIntersection = new Set<string>();
+          for (const id of intersectionBoothIds) {
+            if (currentSet.has(id)) {
+              newIntersection.add(id);
+            }
+          }
+          intersectionBoothIds = newIntersection;
+        }
+      }
+    } else {
+      intersectionBoothIds = new Set<string>();
+    }
+
+    if (allClinicRoomIds.length > 0) {
+      // Intersection of all clinicRoomId sets: only IDs that exist in ALL sets
+      if (allClinicRoomIds.length === 1) {
+        intersectionClinicRoomIds = allClinicRoomIds[0];
+      } else {
+        // Start with first set, then intersect with each subsequent set
+        intersectionClinicRoomIds = new Set(allClinicRoomIds[0]);
+        for (let i = 1; i < allClinicRoomIds.length; i++) {
+          const currentSet = allClinicRoomIds[i];
+          const newIntersection = new Set<string>();
+          for (const id of intersectionClinicRoomIds) {
+            if (currentSet.has(id)) {
+              newIntersection.add(id);
+            }
+          }
+          intersectionClinicRoomIds = newIntersection;
+        }
+      }
+    } else {
+      intersectionClinicRoomIds = new Set<string>();
+    }
+
+    // If intersection is empty but we have multiple services, use union instead
+    // This means: find services that share at least one booth or room with at least one reference service
+    // This is more flexible when services don't have common locations
+    if (
+      intersectionBoothIds.size === 0 &&
+      intersectionClinicRoomIds.size === 0 &&
+      allServiceIds.length > 1
+    ) {
+      // Use union: combine all boothIds and clinicRoomIds from all services
+      intersectionBoothIds = new Set<string>();
+      for (const boothSet of allBoothIds) {
+        for (const id of boothSet) {
+          intersectionBoothIds.add(id);
+        }
+      }
+
+      intersectionClinicRoomIds = new Set<string>();
+      for (const roomSet of allClinicRoomIds) {
+        for (const id of roomSet) {
+          intersectionClinicRoomIds.add(id);
+        }
+      }
+    }
+
+    // Build location filters
+    const locationFilters: Prisma.ServiceWhereInput[] = [];
+
+    if (intersectionBoothIds.size > 0) {
+      locationFilters.push({
+        boothServices: {
+          some: {
+            boothId: { in: Array.from(intersectionBoothIds) },
+          },
+        },
+      });
+    }
+
+    if (intersectionClinicRoomIds.size > 0) {
+      locationFilters.push({
+        clinicRoomServices: {
+          some: {
+            clinicRoomId: { in: Array.from(intersectionClinicRoomIds) },
+          },
+        },
+      });
+    }
+
+    // Build all filters
+    const filters: Prisma.ServiceWhereInput[] = [];
+
+    if (locationFilters.length === 1) {
+      filters.push(locationFilters[0]);
+    } else if (locationFilters.length > 1) {
+      // Services that have at least one matching booth OR one matching clinic room
+      filters.push({ OR: locationFilters });
+    }
+
+    if (!includeInactive) {
+      filters.push({ isActive: true });
+    }
+
+    if (requiresDoctorFilter !== undefined) {
+      filters.push({ requiresDoctor: requiresDoctorFilter });
+    }
+
+    if (allExcludeServiceIds.length > 0) {
+      filters.push({ id: { notIn: allExcludeServiceIds } });
+    }
+
+    if (keyword) {
+      filters.push({
+        OR: [
+          {
+            name: {
+              contains: keyword,
+              mode: 'insensitive',
+            },
+          },
+          {
+            serviceCode: {
+              contains: keyword,
+              mode: 'insensitive',
+            },
+          },
+          {
+            description: {
+              contains: keyword,
+              mode: 'insensitive',
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.ServiceWhereInput =
+      filters.length > 1
+        ? { AND: filters }
+        : (filters[0] ?? ({} as Prisma.ServiceWhereInput));
+
+    const [total, services] = await this.prisma.$transaction([
+      this.prisma.service.count({ where }),
+      this.prisma.service.findMany({
+        where,
+        include: this.serviceLocationInclude,
+        orderBy: [
+          { requiresDoctor: 'desc' },
+          { name: 'asc' },
+          { serviceCode: 'asc' },
+        ],
+        skip,
+        take,
+      }),
+    ]);
+
+    return {
+      referenceServiceIds: allServiceIds,
+      boothIds: Array.from(intersectionBoothIds),
+      clinicRoomIds: Array.from(intersectionClinicRoomIds),
+      services: services.map((s) => this.mapServiceToCompactFormat(s)),
+      pagination: this.buildPagination(total, take, skip),
+    };
   }
 
   async createService(data: CreateServiceDto) {
@@ -287,9 +859,9 @@ export class ServiceService {
     ]);
 
     try {
-    await this.prisma.service.update({
-      where: { id },
-      data: {
+      await this.prisma.service.update({
+        where: { id },
+        data: {
           ...(data.name && { name: data.name }),
           ...(data.price !== undefined && { price: data.price }),
           ...(data.description !== undefined && {
@@ -346,10 +918,7 @@ export class ServiceService {
         where,
         skip,
         take,
-        orderBy: [
-          { name: 'asc' },
-          { code: 'asc' },
-        ],
+        orderBy: [{ name: 'asc' }, { code: 'asc' }],
         include: this.packageInclude,
       }),
     ]);
@@ -439,9 +1008,7 @@ export class ServiceService {
 
     if (data.items !== undefined) {
       this.ensureNoDuplicateServiceIds(data.items);
-      await this.ensureServicesExist(
-        data.items.map((item) => item.serviceId),
-      );
+      await this.ensureServicesExist(data.items.map((item) => item.serviceId));
     }
 
     try {
@@ -649,36 +1216,27 @@ export class ServiceService {
     }
 
     const searchTerm = keyword.trim();
-    const searchPattern = `%${searchTerm}%`;
-
-    // Build common filter conditions
-    const commonServiceFilter: any = {
-      name: {
-        contains: searchTerm,
-        mode: 'insensitive',
-      },
+    const serviceBaseFilter: Prisma.ServiceWhereInput = {
+      isActive: isActive ?? true,
+    };
+    const packageBaseFilter: Prisma.PackageWhereInput = {
+      isActive: isActive ?? true,
     };
 
-    const commonPackageFilter: any = {};
-
-    // Apply isActive filter (default to true if not specified)
-    if (isActive !== undefined) {
-      commonServiceFilter.isActive = isActive;
-      commonPackageFilter.isActive = isActive;
-    } else {
-      commonServiceFilter.isActive = true;
-      commonPackageFilter.isActive = true;
-    }
-
-    // Apply requiresDoctor filter
     if (requiresDoctor !== undefined) {
-      commonServiceFilter.requiresDoctor = requiresDoctor;
-      commonPackageFilter.requiresDoctor = requiresDoctor;
+      serviceBaseFilter.requiresDoctor = requiresDoctor;
+      packageBaseFilter.requiresDoctor = requiresDoctor;
     }
 
     // Priority 1: Services with name containing keyword
     const servicesWithNameMatch = await this.prisma.service.findMany({
-      where: commonServiceFilter,
+      where: {
+        ...serviceBaseFilter,
+        name: {
+          contains: searchTerm,
+          mode: 'insensitive',
+        },
+      },
       select: {
         id: true,
         serviceCode: true,
@@ -709,7 +1267,7 @@ export class ServiceService {
     // Priority 2: Packages with name containing keyword
     const packagesWithNameMatch = await this.prisma.package.findMany({
       where: {
-        ...commonPackageFilter,
+        ...packageBaseFilter,
         name: {
           contains: searchTerm,
           mode: 'insensitive',
@@ -751,7 +1309,7 @@ export class ServiceService {
     // Priority 3: Packages containing services with name matching keyword
     const packagesWithServiceMatch = await this.prisma.package.findMany({
       where: {
-        ...commonPackageFilter,
+        ...packageBaseFilter,
         items: {
           some: {
             service: {
@@ -804,25 +1362,20 @@ export class ServiceService {
     });
 
     // Priority 4: Services and Packages with description containing keyword
-    const serviceDescFilter: any = {
-      ...commonServiceFilter,
-      description: {
-        contains: searchTerm,
-        mode: 'insensitive',
-      },
-      // Exclude services already found in priority 1
-      NOT: {
-        name: {
+    const servicesWithDescMatch = await this.prisma.service.findMany({
+      where: {
+        ...serviceBaseFilter,
+        description: {
           contains: searchTerm,
           mode: 'insensitive',
         },
+        NOT: {
+          name: {
+            contains: searchTerm,
+            mode: 'insensitive',
+          },
+        },
       },
-    };
-    // Remove name filter from commonServiceFilter for description search
-    delete serviceDescFilter.name;
-
-    const servicesWithDescMatch = await this.prisma.service.findMany({
-      where: serviceDescFilter,
       select: {
         id: true,
         serviceCode: true,
@@ -852,7 +1405,7 @@ export class ServiceService {
 
     const packagesWithDescMatch = await this.prisma.package.findMany({
       where: {
-        ...commonPackageFilter,
+        ...packageBaseFilter,
         description: {
           contains: searchTerm,
           mode: 'insensitive',

@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Controller,
   Get,
@@ -18,6 +21,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiParam,
 } from '@nestjs/swagger';
 import { ServiceService } from './service.service';
 import { PrescriptionServiceManagementService } from './prescription-service-management.service';
@@ -25,9 +29,6 @@ import {
   SearchServiceDto,
   AdvancedSearchDto,
   GetAllServicesDto,
-  ScanPrescriptionDto,
-  UpdateServiceStatusDto,
-  ScanPrescriptionResponseDto,
   GetServicesDto,
   GetRoomWaitingListDto,
   GetRoomWaitingListResponseDto,
@@ -36,6 +37,8 @@ import {
   UpdateServiceDto,
   CreatePackageDto,
   UpdatePackageDto,
+  DoctorServiceQueryDto,
+  ServiceLocationQueryDto,
 } from './dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -180,10 +183,7 @@ Hỗ trợ filter:
         data: result,
       };
     } catch (error) {
-      this.logger.error(
-        `Advanced search error: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Advanced search error: ${error.message}`, error.stack);
       throw new HttpException(
         {
           success: false,
@@ -220,9 +220,7 @@ Hỗ trợ filter:
   }
 
   @Get('management/services')
-  async getManagementServices(
-    @Query() query: ServiceManagementQueryDto,
-  ) {
+  async getManagementServices(@Query() query: ServiceManagementQueryDto) {
     try {
       const result = await this.serviceService.getServiceManagementList(query);
       return {
@@ -287,10 +285,7 @@ Hỗ trợ filter:
         data: service,
       };
     } catch (error) {
-      this.logger.error(
-        `Create service error: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Create service error: ${error.message}`, error.stack);
       if (error instanceof HttpException) {
         throw error;
       }
@@ -318,10 +313,7 @@ Hỗ trợ filter:
         data: service,
       };
     } catch (error) {
-      this.logger.error(
-        `Update service error: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Update service error: ${error.message}`, error.stack);
       if (error instanceof HttpException) {
         throw error;
       }
@@ -337,9 +329,7 @@ Hỗ trợ filter:
   }
 
   @Get('management/packages')
-  async getManagementPackages(
-    @Query() query: ServiceManagementQueryDto,
-  ) {
+  async getManagementPackages(@Query() query: ServiceManagementQueryDto) {
     try {
       const result = await this.serviceService.getPackageManagementList(query);
       return {
@@ -404,10 +394,7 @@ Hỗ trợ filter:
         data: pkg,
       };
     } catch (error) {
-      this.logger.error(
-        `Create package error: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Create package error: ${error.message}`, error.stack);
       if (error instanceof HttpException) {
         throw error;
       }
@@ -435,10 +422,7 @@ Hỗ trợ filter:
         data: pkg,
       };
     } catch (error) {
-      this.logger.error(
-        `Update package error: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Update package error: ${error.message}`, error.stack);
       if (error instanceof HttpException) {
         throw error;
       }
@@ -530,6 +514,234 @@ Hỗ trợ filter:
       }
       throw new HttpException(
         'Lỗi khi lấy danh sách services',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('doctors/:doctorCode/services')
+  @ApiOperation({
+    summary: 'Lấy danh sách dịch vụ theo chuyên khoa của bác sĩ',
+  })
+  @ApiParam({
+    name: 'doctorCode',
+    description: 'Mã bác sĩ',
+    example: 'DOC001',
+  })
+  @ApiQuery({
+    name: 'keyword',
+    required: false,
+    description: 'Từ khóa tìm kiếm theo tên, code hoặc mô tả dịch vụ',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Số lượng dịch vụ',
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    description: 'Vị trí bắt đầu',
+    example: 0,
+  })
+  @ApiQuery({
+    name: 'includeInactive',
+    required: false,
+    description: 'Bao gồm dịch vụ không hoạt động',
+    type: Boolean,
+  })
+  @ApiQuery({
+    name: 'requiresDoctor',
+    required: false,
+    description: 'Lọc theo dịch vụ cần bác sĩ',
+    type: Boolean,
+  })
+  async getServicesByDoctorCode(
+    @Param('doctorCode') doctorCode: string,
+    @Query() query: DoctorServiceQueryDto,
+  ) {
+    try {
+      const startedAt = Date.now();
+      this.logger.debug(
+        `[getServicesByDoctorCode] doctorCode=${doctorCode} query=${JSON.stringify(
+          query,
+        )}`,
+      );
+      const result = await this.serviceService.getServicesByDoctorCode(
+        doctorCode,
+        query,
+      );
+      const durationMs = Date.now() - startedAt;
+      this.logger.debug(
+        `[getServicesByDoctorCode] doctorCode=${doctorCode} services=${
+          Array.isArray((result as any)?.services)
+            ? (result as any).services.length
+            : 0
+        } total=${(result as any)?.pagination?.total ?? 'n/a'} durationMs=${durationMs}`,
+      );
+      return {
+        success: true,
+        message: 'Lấy danh sách dịch vụ theo bác sĩ thành công',
+        data: result,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        this.logger.error(
+          `Get services by doctor error: ${error.message}`,
+          error.stack,
+        );
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Có lỗi xảy ra khi lấy dịch vụ theo bác sĩ',
+            error: error.message,
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+      this.logger.error('Get services by doctor error: Unknown error');
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi lấy dịch vụ theo bác sĩ',
+          error: 'Unknown error',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('by-location')
+  @ApiOperation({
+    summary:
+      'Lấy danh sách dịch vụ cùng booth hoặc phòng khám với các dịch vụ đã chọn',
+    description: `
+Tìm các dịch vụ có cùng booth/phòng với các dịch vụ tham chiếu.
+- serviceIds: Mảng các ID dịch vụ đã chọn (có thể truyền nhiều serviceId)
+- API sẽ tìm giao (intersection) của các booth/phòng từ tất cả các service đã chọn
+- Nếu không có booth/phòng chung, sẽ dùng hợp (union) để tìm các service có ít nhất một booth/phòng chung
+- excludeServiceIds: Loại trừ các service đã chọn khỏi kết quả
+    `,
+  })
+  @ApiQuery({
+    name: 'serviceIds',
+    required: false,
+    description:
+      'Mảng các ID dịch vụ tham chiếu (có thể truyền nhiều, cách nhau bởi dấu phẩy hoặc array)',
+    type: [String],
+    example: 'service-id-1,service-id-2',
+  })
+  @ApiQuery({
+    name: 'serviceId',
+    required: false,
+    description: 'ID dịch vụ tham chiếu (deprecated: dùng serviceIds thay thế)',
+  })
+  @ApiQuery({
+    name: 'boothId',
+    required: false,
+    description: 'Lọc dịch vụ theo booth cụ thể',
+  })
+  @ApiQuery({
+    name: 'clinicRoomId',
+    required: false,
+    description: 'Lọc dịch vụ theo phòng khám cụ thể',
+  })
+  @ApiQuery({
+    name: 'excludeServiceIds',
+    required: false,
+    description:
+      'Mảng các ID dịch vụ cần loại trừ (có thể truyền nhiều, cách nhau bởi dấu phẩy)',
+    type: [String],
+  })
+  @ApiQuery({
+    name: 'excludeServiceId',
+    required: false,
+    description: 'Loại trừ một ID dịch vụ (deprecated: dùng excludeServiceIds)',
+  })
+  @ApiQuery({
+    name: 'keyword',
+    required: false,
+    description: 'Từ khóa tìm kiếm theo tên, code hoặc mô tả dịch vụ',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Số lượng dịch vụ',
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    description: 'Vị trí bắt đầu',
+    example: 0,
+  })
+  @ApiQuery({
+    name: 'includeInactive',
+    required: false,
+    description: 'Bao gồm dịch vụ không hoạt động',
+    type: Boolean,
+  })
+  @ApiQuery({
+    name: 'requiresDoctor',
+    required: false,
+    description: 'Lọc theo dịch vụ cần bác sĩ',
+    type: Boolean,
+  })
+  async getServicesByLocation(@Query() query: ServiceLocationQueryDto) {
+    try {
+      const startedAt = Date.now();
+      this.logger.debug(
+        `[getServicesByLocation] query=${JSON.stringify(query)}`,
+      );
+      const result = await this.serviceService.getServicesByLocation(query);
+      const durationMs = Date.now() - startedAt;
+      this.logger.debug(
+        `[getServicesByLocation] referenceServiceIds=${JSON.stringify(
+          (result as any)?.referenceServiceIds ?? [],
+        )} boothIds=${JSON.stringify(
+          (result as any)?.boothIds ?? [],
+        )} clinicRoomIds=${JSON.stringify(
+          (result as any)?.clinicRoomIds ?? [],
+        )} services=${
+          Array.isArray((result as any)?.services)
+            ? (result as any).services.length
+            : 0
+        } total=${(result as any)?.pagination?.total ?? 'n/a'} durationMs=${durationMs}`,
+      );
+      return {
+        success: true,
+        message: 'Lấy danh sách dịch vụ theo vị trí thành công',
+        data: result,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        this.logger.error(
+          `Get services by location error: ${error.message}`,
+          error.stack,
+        );
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Có lỗi xảy ra khi lấy dịch vụ theo vị trí',
+            error: error.message,
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+      this.logger.error('Get services by location error: Unknown error');
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi lấy dịch vụ theo vị trí',
+          error: 'Unknown error',
+        },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
