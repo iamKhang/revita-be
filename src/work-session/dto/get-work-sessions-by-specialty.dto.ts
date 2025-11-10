@@ -30,3 +30,5 @@ export class GetWorkSessionsBySpecialtyDto {
   @IsString()
   technicianId?: string;
 }
+
+
