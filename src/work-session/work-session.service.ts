@@ -888,7 +888,8 @@ export class WorkSessionService {
       typeof query.endDate === 'string' ? query.endDate : undefined;
     const status =
       typeof query.status === 'string'
-        ? (query.status as WorkSessionStatus)
+        ? // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+          (query.status as WorkSessionStatus)
         : undefined;
     const doctorId =
       typeof query.doctorId === 'string' ? query.doctorId : undefined;
@@ -908,9 +909,11 @@ export class WorkSessionService {
     const timeFilter: Prisma.DateTimeFilter = {};
     if (typeof startDate === 'string') {
       timeFilter.gte = new Date(startDate);
+      console.log('🔍 Debug timeFilter - startDate:', timeFilter.gte);
     }
     if (typeof endDate === 'string') {
       timeFilter.lte = new Date(endDate);
+      console.log('🔍 Debug timeFilter - endDate:', timeFilter.lte);
     }
     if (Object.keys(timeFilter).length > 0) {
       where.startTime = timeFilter;
