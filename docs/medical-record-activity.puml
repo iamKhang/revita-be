@@ -1,0 +1,52 @@
+@startuml Medical Record Activity Diagram
+!theme plain
+
+|Bác sĩ|
+start
+
+: Xem danh sách mẫu hồ sơ;
+|Hệ thống|
+: Lấy danh sách mẫu hồ sơ;
+: Trả về danh sách mẫu hồ sơ;
+|Bác sĩ|
+: Hiển thị danh sách mẫu hồ sơ;
+
+: Chọn mẫu và tạo hồ sơ bệnh án;
+|Hệ thống|
+: Kiểm tra quyền tạo hồ sơ;
+
+if (Có quyền?) then (có)
+  : Xác thực thông tin bệnh nhân;
+  : Tạo mã hồ sơ bệnh án;
+  : Tạo hồ sơ bệnh án mới;
+  : Tạo lịch sử thay đổi;
+  : Trả về thông tin hồ sơ bệnh án;
+  |Bác sĩ|
+  : Hiển thị thông báo tạo thành công;
+else (không)
+  |Bác sĩ|
+  : Hiển thị thông báo không có quyền;
+  stop
+endif
+
+: Xem danh sách hồ sơ bệnh án;
+|Hệ thống|
+: Kiểm tra vai trò bác sĩ;
+: Lấy danh sách hồ sơ bệnh án của bác sĩ;
+: Phân trang kết quả;
+: Trả về danh sách hồ sơ bệnh án;
+|Bác sĩ|
+: Hiển thị danh sách hồ sơ bệnh án;
+
+: Xem chi tiết hồ sơ bệnh án;
+|Hệ thống|
+: Lấy thông tin hồ sơ bệnh án;
+: Kiểm tra quyền xem;
+: Lấy lịch sử thay đổi;
+: Trả về chi tiết hồ sơ bệnh án;
+|Bác sĩ|
+: Hiển thị chi tiết hồ sơ bệnh án;
+stop
+
+@enduml
+
