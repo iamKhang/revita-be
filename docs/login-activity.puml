@@ -1,0 +1,46 @@
+@startuml Login Activity Diagram
+!theme plain
+
+|Người dùng|
+start
+: Nhập thông tin đăng nhập (số điện thoại/email và mật khẩu);
+|Hệ thống|
+: Kiểm tra thông tin đăng nhập;
+: Tìm tài khoản theo số điện thoại/email;
+
+if (Tài khoản tồn tại?) then (có)
+  : So sánh mật khẩu;
+  
+  if (Mật khẩu đúng?) then (đúng)
+    : Lấy thông tin người dùng;
+    : Xác định vai trò người dùng;
+    
+    if (Vai trò là Bệnh nhân?) then (đúng)
+      : Lấy thông tin hồ sơ bệnh nhân;
+    else if (Vai trò là Bác sĩ?)
+      : Lấy thông tin hồ sơ bác sĩ;
+    else if (Vai trò là Lễ tân?)
+      : Lấy thông tin hồ sơ lễ tân;
+    else (Vai trò là Admin?)
+      : Lấy thông tin hồ sơ admin;
+    endif
+    
+    : Tạo JWT token;
+    : Trả về token và thông tin người dùng;
+    |Người dùng|
+    : Hiển thị đăng nhập thành công;
+    : Chuyển hướng đến trang chủ;
+    stop
+  else (sai)
+    |Người dùng|
+    : Hiển thị thông báo sai thông tin đăng nhập;
+    stop
+  endif
+else (không)
+  |Người dùng|
+  : Hiển thị thông báo tài khoản không tồn tại;
+  stop
+endif
+
+@enduml
+

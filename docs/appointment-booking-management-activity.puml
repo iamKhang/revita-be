@@ -1,0 +1,64 @@
+@startuml Appointment Booking Management Activity Diagram
+!theme plain
+
+|Bác sĩ|
+start
+
+: Tạo ca làm việc;
+|Hệ thống|
+: Kiểm tra dữ liệu ca làm việc;
+: Kiểm tra xung đột lịch;
+
+if (Có xung đột?) then (có)
+  |Bác sĩ|
+  : Hiển thị thông báo xung đột;
+  stop
+else (không)
+  |Hệ thống|
+  : Tạo ca làm việc mới;
+  |Bác sĩ|
+  : Hiển thị thông báo tạo thành công;
+endif
+
+: Xem danh sách ca làm việc;
+|Hệ thống|
+: Lấy danh sách ca làm việc của bác sĩ;
+: Trả về danh sách ca làm việc;
+|Bác sĩ|
+: Hiển thị danh sách ca làm việc;
+
+: Cập nhật ca làm việc;
+|Hệ thống|
+: Kiểm tra ca làm việc tồn tại;
+: Kiểm tra ca có lịch hẹn chưa;
+
+if (Đã có lịch hẹn?) then (có)
+  |Bác sĩ|
+  : Hiển thị thông báo không thể chỉnh sửa;
+  stop
+else (chưa)
+  |Hệ thống|
+  : Cập nhật ca làm việc;
+  |Bác sĩ|
+  : Hiển thị thông báo cập nhật thành công;
+endif
+
+: Hủy ca làm việc;
+|Hệ thống|
+: Kiểm tra ca làm việc tồn tại;
+: Kiểm tra ca có lịch hẹn chưa;
+
+if (Đã có lịch hẹn?) then (có)
+  |Bác sĩ|
+  : Hiển thị thông báo không thể hủy;
+  stop
+else (chưa)
+  |Hệ thống|
+  : Đánh dấu ca làm việc đã hủy;
+  |Bác sĩ|
+  : Hiển thị thông báo hủy thành công;
+  stop
+endif
+
+@enduml
+

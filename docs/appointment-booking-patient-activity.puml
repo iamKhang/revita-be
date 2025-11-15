@@ -1,0 +1,56 @@
+@startuml Appointment Booking Patient Activity Diagram
+!theme plain
+
+|Bệnh nhân|
+start
+
+: Tìm kiếm chuyên khoa;
+|Hệ thống|
+: Lấy danh sách chuyên khoa;
+: Trả về danh sách chuyên khoa;
+|Bệnh nhân|
+: Hiển thị danh sách chuyên khoa;
+
+: Chọn chuyên khoa;
+|Hệ thống|
+: Lấy danh sách bác sĩ theo chuyên khoa;
+: Trả về danh sách bác sĩ;
+|Bệnh nhân|
+: Hiển thị danh sách bác sĩ;
+
+: Chọn bác sĩ và ngày;
+|Hệ thống|
+: Lấy danh sách ngày làm việc của bác sĩ;
+: Trả về danh sách ngày làm việc;
+|Bệnh nhân|
+: Hiển thị các ngày làm việc;
+
+: Chọn dịch vụ và khung giờ;
+|Hệ thống|
+: Tính toán các khung giờ trống;
+: Kiểm tra xung đột với lịch hẹn hiện có;
+: Trả về danh sách khung giờ trống;
+|Bệnh nhân|
+: Hiển thị các khung giờ trống;
+
+: Gửi thông tin đặt lịch;
+|Hệ thống|
+: Kiểm tra xung đột khung giờ;
+
+if (Có xung đột?) then (có)
+  |Bệnh nhân|
+  : Hiển thị thông báo khung giờ không còn trống;
+  stop
+else (không)
+  |Hệ thống|
+  : Tạo lịch hẹn mới;
+  : Tạo mã đặt lịch;
+  : Trả về thông tin lịch hẹn;
+  |Bệnh nhân|
+  : Hiển thị thông báo đặt lịch thành công;
+  : Hiển thị mã đặt lịch;
+  stop
+endif
+
+@enduml
+

@@ -1,0 +1,38 @@
+@startuml Medication Prescription Activity Diagram
+!theme plain
+
+|Bác sĩ|
+start
+
+: Tìm kiếm thuốc;
+|Hệ thống|
+: Tìm kiếm trong danh mục thuốc;
+: Trả về danh sách thuốc tìm được;
+|Bác sĩ|
+: Hiển thị danh sách thuốc;
+
+: Chọn thuốc từ danh sách;
+|Bác sĩ|
+: Thêm thuốc vào danh sách kê đơn;
+
+: Tạo đơn thuốc;
+|Hệ thống|
+: Kiểm tra danh sách thuốc không rỗng;
+
+if (Danh sách rỗng?) then (có)
+  |Bác sĩ|
+  : Hiển thị thông báo chưa chọn thuốc;
+  stop
+else (không)
+  |Hệ thống|
+  : Tạo mã đơn thuốc;
+  : Tạo đơn thuốc mới;
+  : Thêm các thuốc vào đơn;
+  : Trả về thông tin đơn thuốc;
+  |Bác sĩ|
+  : Hiển thị thông báo tạo đơn thuốc thành công;
+  stop
+endif
+
+@enduml
+

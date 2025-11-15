@@ -1,0 +1,30 @@
+@startuml AI Chatbot Activity Diagram
+!theme plain
+
+|Người dùng|
+start
+: Gửi câu hỏi đến chatbot;
+|Hệ thống|
+: Xác thực người dùng;
+: Phân tích câu hỏi;
+
+if (Câu hỏi liên quan đến dữ liệu?) then (có)
+  : Tạo truy vấn cơ sở dữ liệu bằng AI;
+  : Kiểm tra và làm sạch truy vấn;
+  : Thực thi truy vấn;
+  : Lấy kết quả từ cơ sở dữ liệu;
+  : Tạo giải thích bằng ngôn ngữ tự nhiên;
+  : Trả về kết quả với giải thích;
+else (câu hỏi y tế thông thường)
+  : Tạo câu trả lời y tế bằng AI;
+  : Kiểm tra nội dung tư vấn y tế;
+  : Thêm cảnh báo y tế;
+  : Trả về câu trả lời với cảnh báo;
+endif
+
+|Người dùng|
+: Hiển thị câu trả lời từ AI;
+stop
+
+@enduml
+

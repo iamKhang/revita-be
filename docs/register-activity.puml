@@ -1,0 +1,74 @@
+@startuml Register Activity Diagram
+!theme plain
+
+|Người dùng|
+start
+: Nhập số điện thoại hoặc email;
+|Hệ thống|
+: Kiểm tra số điện thoại/email đã tồn tại chưa;
+
+if (Đã tồn tại?) then (có)
+  |Người dùng|
+  : Hiển thị thông báo đã đăng ký;
+  stop
+else (chưa)
+  |Hệ thống|
+  : Tạo mã OTP;
+  : Tạo session ID;
+  : Lưu session vào Redis (15 phút);
+  : Lưu OTP vào Redis (5 phút);
+  
+  if (Có số điện thoại?) then (có)
+    : Gửi OTP qua SMS;
+  else (có email)
+    : Gửi OTP qua email;
+  endif
+  
+  |Người dùng|
+  : Hiển thị thông báo đã gửi OTP;
+  : Nhập mã OTP;
+  |Hệ thống|
+  : Lấy session từ Redis;
+  : Lấy OTP từ Redis;
+  
+  if (OTP hợp lệ?) then (đúng)
+    : Đánh dấu session đã xác thực;
+    : Xóa OTP sau khi sử dụng;
+    |Người dùng|
+    : Hiển thị xác thực thành công;
+    : Nhập thông tin cá nhân và mật khẩu;
+    |Hệ thống|
+    : Kiểm tra session hợp lệ và đã xác thực;
+    
+    if (Session hợp lệ?) then (có)
+      : Kiểm tra CMND/CCCD đã tồn tại chưa;
+      
+      if (CMND/CCCD đã tồn tại?) then (có)
+        |Người dùng|
+        : Hiển thị thông báo CMND/CCCD đã đăng ký;
+        stop
+      else (chưa)
+        |Hệ thống|
+        : Mã hóa mật khẩu;
+        : Tạo tài khoản mới;
+        : Tạo hồ sơ bệnh nhân;
+        : Xóa session;
+        : Gửi email chào mừng;
+        |Người dùng|
+        : Hiển thị đăng ký thành công;
+        stop
+      endif
+    else (không)
+      |Người dùng|
+      : Hiển thị thông báo session hết hạn;
+      stop
+    endif
+  else (sai)
+    |Người dùng|
+    : Hiển thị thông báo OTP sai hoặc hết hạn;
+    stop
+  endif
+endif
+
+@enduml
+

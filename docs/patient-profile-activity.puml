@@ -1,0 +1,52 @@
+@startuml Patient Profile Activity Diagram
+!theme plain
+
+|Nhân viên y tế|
+start
+
+: Tạo hồ sơ bệnh nhân độc lập;
+|Hệ thống|
+: Kiểm tra quyền nhân viên;
+
+if (Có quyền?) then (có)
+  : Tạo mã hồ sơ bệnh nhân;
+  : Tạo hồ sơ bệnh nhân mới;
+  : Trả về thông tin hồ sơ;
+  |Nhân viên y tế|
+  : Hiển thị thông báo tạo thành công;
+else (không)
+  |Nhân viên y tế|
+  : Hiển thị thông báo không có quyền;
+  stop
+endif
+
+|Bệnh nhân|
+: Tạo hồ sơ bệnh nhân;
+|Hệ thống|
+: Kiểm tra tài khoản bệnh nhân;
+: Kiểm tra quyền tự tạo;
+
+if (Có quyền?) then (có)
+  : Tạo mã hồ sơ bệnh nhân;
+  : Tạo hồ sơ bệnh nhân liên kết với tài khoản;
+  : Trả về thông tin hồ sơ;
+  |Bệnh nhân|
+  : Hiển thị thông báo tạo thành công;
+else (không)
+  |Bệnh nhân|
+  : Hiển thị thông báo không có quyền;
+  stop
+endif
+
+|Bác sĩ|
+: Xem danh sách hồ sơ bệnh nhân;
+|Hệ thống|
+: Kiểm tra quyền xem;
+: Lấy danh sách hồ sơ bệnh nhân theo quyền;
+: Trả về danh sách hồ sơ;
+|Bác sĩ|
+: Hiển thị danh sách hồ sơ bệnh nhân;
+stop
+
+@enduml
+
