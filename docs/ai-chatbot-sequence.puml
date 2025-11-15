@@ -1,6 +1,5 @@
 @startuml AI Chatbot Sequence Diagram
 !theme plain
-title AI Chatbot Sequence
 
 actor "User" as U
 boundary "Frontend" as F
@@ -9,8 +8,6 @@ control "AiChatbotService" as ACS
 control "DatabaseQueryService" as DQS
 entity "Gemini AI" as GAI
 entity "PrismaService" as PS
-
-== Chat with AI Chatbot ==
 
 U -> F: Send message
 F -> C: POST /ai-chatbot/chat
