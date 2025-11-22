@@ -140,8 +140,11 @@ export class TakeNumberService {
     const isOnTime = this.calculateIsOnTime(hasAppointment, appointmentDetails);
     t = tlog('calculate on-time status', t);
 
-    // Chọn counter phù hợp
-    const counter = await this.selectBestCounter();
+    // Chọn counter phù hợp (có thể filter theo VIP)
+    // Hỗ trợ cả isVip và isVIP (chữ hoa)
+    const isVip = (request.isVip === true) || ((request as any).isVIP === true);
+    console.log(`[takeNumber] Request isVip: ${request.isVip}, isVIP: ${(request as any).isVIP}, processed isVip: ${isVip}`);
+    const counter = await this.selectBestCounter(isVip);
     t = tlog('select counter', t);
 
     // Tính toán priority score cho queue
@@ -350,31 +353,70 @@ export class TakeNumberService {
 
   /**
    * Chọn counter tốt nhất
+   * @param isVip - Nếu true, chỉ chọn các counter có isVip = true. Nếu false/null, chọn counter bình thường (isVip = null/false)
    */
-  private async selectBestCounter(): Promise<any> {
-    const counters = await this.prisma.counter.findMany({
+  private async selectBestCounter(isVip: boolean = false): Promise<any> {
+    // Query tất cả assignment ACTIVE trước, sau đó filter trong code để đảm bảo chính xác
+    const allAssignments = await this.prisma.counterAssignment.findMany({
       where: {
-        isActive: true,
-        assignments: {
-          some: {
-            status: 'ACTIVE',
-            completedAt: null,
+        status: 'ACTIVE',
+        completedAt: null,
+      },
+      select: {
+        counterId: true,
+        isVip: true,
+        counter: {
+          select: {
+            id: true,
+            counterCode: true,
+            counterName: true,
+            isActive: true,
           },
         },
       },
-      select: { id: true, counterCode: true, counterName: true },
     });
 
-    if (counters.length === 0) {
+    console.log(`[selectBestCounter] isVip=${isVip}, found ${allAssignments.length} active assignments`);
+    allAssignments.forEach(a => {
+      console.log(`[selectBestCounter] Assignment: counterId=${a.counterId}, isVip=${a.isVip}, counterCode=${a.counter.counterCode}, isActive=${a.counter.isActive}`);
+    });
+
+    // Filter theo isVip trong code để đảm bảo chính xác
+    const filteredAssignments = allAssignments.filter(assignment => {
+      if (!assignment.counter.isActive) {
+        return false;
+      }
+
+      if (isVip) {
+        // Nếu là VIP, CHỈ lấy assignment có isVip === true (strict check)
+        return assignment.isVip === true;
+      } else {
+        // Nếu không phải VIP, chỉ lấy assignment có isVip === null hoặc isVip === false
+        return assignment.isVip === null || assignment.isVip === false;
+      }
+    });
+
+    console.log(`[selectBestCounter] After filtering: ${filteredAssignments.length} assignments`);
+
+    if (filteredAssignments.length === 0) {
+      if (isVip) {
+        throw new BadRequestException('Chưa có quầy khám dịch vụ nào đang mở');
+      }
       throw new NotFoundException('Không có counter nào đang hoạt động với nhân viên được phân công');
     }
 
-    // Sử dụng tất cả counter có assignment ACTIVE (không cần kiểm tra online status)
-    const availableCounters = counters;
+    // Loại bỏ duplicate counter (một counter có thể có nhiều assignment)
+    const counterMap = new Map<string, any>();
+    for (const assignment of filteredAssignments) {
+      counterMap.set(assignment.counter.id, assignment.counter);
+    }
+
+    const counters = Array.from(counterMap.values());
+    console.log(`[selectBestCounter] Unique counters: ${counters.length}`);
 
     // Ưu tiên counter có ít người đợi nhất
     const sortedCounters = await Promise.all(
-      availableCounters.map(async (counter) => {
+      counters.map(async (counter) => {
         const queueLength = await this.redis.getCounterQueueLength(counter.id);
         return { counter, queueLength };
       })
@@ -383,7 +425,9 @@ export class TakeNumberService {
     sortedCounters.sort((a, b) => a.queueLength - b.queueLength);
 
     // Lấy counter có ít người đợi nhất
-    return sortedCounters[0].counter;
+    const selectedCounter = sortedCounters[0].counter;
+    console.log(`[selectBestCounter] Selected counter: ${selectedCounter.counterCode}, queueLength=${sortedCounters[0].queueLength}, isVip=${isVip}`);
+    return selectedCounter;
   }
 
   /**
