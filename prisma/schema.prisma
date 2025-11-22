@@ -340,6 +340,10 @@ model Package {
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
+  isDeleted   Boolean?    @default(false) @map("is_deleted")
+  deletedAt   DateTime?  @map("deleted_at")
+  deletedBy   String?    @map("deleted_by")
+
   @@map("packages")
 }
 
@@ -357,6 +361,10 @@ model PackageItem {
   package       Package  @relation(fields: [packageId], references: [id])
   service       Service  @relation(fields: [serviceId], references: [id])
 
+  isDeleted   Boolean    @default(false) @map("is_deleted")
+  deletedAt   DateTime?  @map("deleted_at")
+  deletedBy   String?    @map("deleted_by")
+
   @@unique([packageId, serviceId])
   @@index([packageId])
   @@index([serviceId])
@@ -370,6 +378,10 @@ model ServiceCategory {
   description String?
   services    Service[]
   packages    Package[]
+
+  isDeleted   Boolean    @default(false) @map("is_deleted")
+  deletedAt   DateTime?  @map("deleted_at")
+  deletedBy   String?    @map("deleted_by")
 
   @@map("service_categories")
 }
@@ -696,6 +708,11 @@ model Booth {
   workSessions WorkSession[]
   boothServices BoothService[]
   prescriptionServices PrescriptionService[]
+
+  isDeleted   Boolean?    @default(false) @map("is_deleted")
+  deletedAt   DateTime?  @map("deleted_at")
+  deletedBy   String?    @map("deleted_by")
+
   @@map("booths")
 }
 

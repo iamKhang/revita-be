@@ -32,6 +32,11 @@ export class ServiceCategoryListQueryDto {
 }
 
 export class CreateServiceCategoryDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  code?: string;
+
   @IsString()
   @IsNotEmpty()
   name!: string;
@@ -42,6 +47,11 @@ export class CreateServiceCategoryDto {
 }
 
 export class UpdateServiceCategoryDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  code?: string;
+
   @IsOptional()
   @IsString()
   @IsNotEmpty()
