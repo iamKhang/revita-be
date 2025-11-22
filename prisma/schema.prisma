@@ -185,6 +185,7 @@ model CounterAssignment {
   assignedAt    DateTime    @default(now()) @map("assigned_at")
   completedAt   DateTime?   @map("completed_at")
   status        String      @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  isVip Boolean?     @map("is_vip")
   notes         String?     @map("notes")
   
   counter       Counter     @relation(fields: [counterId], references: [id])

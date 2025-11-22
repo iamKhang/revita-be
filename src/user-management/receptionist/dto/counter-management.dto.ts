@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
 
 export class OpenCounterDto {
   @IsString()
@@ -8,6 +8,10 @@ export class OpenCounterDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isVip?: boolean;
 }
 
 export class CloseCounterDto {
