@@ -212,9 +212,18 @@ export class WebSocketService {
       timestamp: new Date().toISOString(),
     };
 
+    // Sử dụng server của namespace /counters
+    const namespace = '/counters';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[WebSocket] ❌ Cannot emit 'new_ticket': No server found for namespace ${namespace}`);
+      return;
+    }
+
     // Chỉ gửi đến counter tương ứng
-    this.server.to(`counter:${counterId}`).emit('new_ticket', message);
-    console.log(`🔔 [WebSocket] Emitted 'new_ticket' to room: counter:${counterId}`);
+    server.to(`counter:${counterId}`).emit('new_ticket', message);
+    console.log(`🔔 [WebSocket] Emitted 'new_ticket' to room: counter:${counterId} on namespace ${namespace}`);
 
     console.log(`Notified counter ${counterId} about new ticket ${ticket.queueNumber}`);
   }
@@ -239,9 +248,18 @@ export class WebSocketService {
     console.log('🔔 [WebSocket] Ticket:', ticket.queueNumber);
     console.log('🔔 [WebSocket] Message:', JSON.stringify(message, null, 2));
 
+    // Sử dụng server của namespace /counters
+    const namespace = '/counters';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[WebSocket] ❌ Cannot emit 'ticket_called': No server found for namespace ${namespace}`);
+      return;
+    }
+
     // Gửi đến tất cả counter
-    this.server.emit('ticket_called', message);
-    console.log(`🔔 [WebSocket] Emitted 'ticket_called' to all clients`);
+    server.emit('ticket_called', message);
+    console.log(`🔔 [WebSocket] Emitted 'ticket_called' to all clients on namespace ${namespace}`);
 
     console.log(`✅ [WebSocket] Notified all counters about ticket ${ticket.queueNumber} called at counter ${counterId}`);
   }
@@ -260,8 +278,17 @@ export class WebSocketService {
       timestamp: new Date().toISOString(),
     };
 
+    // Sử dụng server của namespace /counters
+    const namespace = '/counters';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[WebSocket] ❌ Cannot emit 'ticket_completed': No server found for namespace ${namespace}`);
+      return;
+    }
+
     // Gửi đến tất cả counter
-    this.server.emit('ticket_completed', message);
+    server.emit('ticket_completed', message);
 
     console.log(`Notified all counters about ticket ${ticket.queueNumber} completed at counter ${counterId}`);
   }
@@ -281,8 +308,18 @@ export class WebSocketService {
       },
       timestamp: new Date().toISOString(),
     };
+    
+    // Sử dụng server của namespace /counters
+    const namespace = '/counters';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[WebSocket] ❌ Cannot emit 'ticket_status': No server found for namespace ${namespace}`);
+      return;
+    }
+    
     // Gửi đến tất cả để UI cập nhật danh sách
-    this.server.emit('ticket_status', message);
+    server.emit('ticket_status', message);
   }
 
   /**
@@ -298,15 +335,33 @@ export class WebSocketService {
       timestamp: new Date().toISOString(),
     };
 
+    // Sử dụng server của namespace /counters
+    const namespace = '/counters';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[WebSocket] ❌ Cannot emit 'counter_status': No server found for namespace ${namespace}`);
+      return;
+    }
+
     // Gửi đến tất cả counter
-    this.server.emit('counter_status', message);
+    server.emit('counter_status', message);
   }
 
   /**
    * Gửi thông báo đến tất cả counter
    */
   async broadcastToAllCounters(message: WebSocketMessage) {
-    this.server.emit('broadcast', message);
+    // Sử dụng server của namespace /counters
+    const namespace = '/counters';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[WebSocket] ❌ Cannot emit 'broadcast': No server found for namespace ${namespace}`);
+      return;
+    }
+    
+    server.emit('broadcast', message);
   }
 
   /**
@@ -318,8 +373,17 @@ export class WebSocketService {
     console.log('🔔 [WebSocket] Event:', event);
     console.log('🔔 [WebSocket] Data:', JSON.stringify(data, null, 2));
     
-    this.server.to(`counter:${counterId}`).emit(event, data);
-    console.log(`🔔 [WebSocket] Emitted '${event}' to room: counter:${counterId}`);
+    // Sử dụng server của namespace /counters
+    const namespace = '/counters';
+    const server = this.getServerForNamespace(namespace);
+    
+    if (!server) {
+      console.error(`[WebSocket] ❌ Cannot emit '${event}': No server found for namespace ${namespace}`);
+      return;
+    }
+    
+    server.to(`counter:${counterId}`).emit(event, data);
+    console.log(`🔔 [WebSocket] Emitted '${event}' to room: counter:${counterId} on namespace ${namespace}`);
   }
 
   /**
