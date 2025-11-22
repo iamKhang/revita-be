@@ -79,7 +79,21 @@ export class ServiceCategoryService {
   }
 
   async createCategory(dto: CreateServiceCategoryDto) {
-    const code = await this.generateUniqueCategoryCode(dto.name);
+    // Nếu có code được truyền vào, sử dụng code đó, nếu không thì tự động generate
+    let code = dto.code;
+    
+    if (!code || code.trim().length === 0) {
+      code = await this.generateUniqueCategoryCode(dto.name);
+    } else {
+      // Kiểm tra code đã tồn tại chưa
+      code = code.trim();
+      const existing = await this.prisma.serviceCategory.findUnique({
+        where: { code },
+      });
+      if (existing) {
+        throw new BadRequestException(`Service category code '${code}' already exists`);
+      }
+    }
 
     try {
       return await this.prisma.serviceCategory.create({
@@ -103,14 +117,29 @@ export class ServiceCategoryService {
       throw new NotFoundException('Service category not found');
     }
 
-    if (!dto.name && dto.description === undefined) {
+    if (!dto.name && dto.description === undefined && !dto.code) {
       return existing;
+    }
+
+    // Nếu có code mới được truyền vào, kiểm tra code đã tồn tại chưa (trừ chính nó)
+    if (dto.code && dto.code.trim().length > 0) {
+      const code = dto.code.trim();
+      const codeExists = await this.prisma.serviceCategory.findFirst({
+        where: {
+          code,
+          id: { not: id }, // Loại trừ chính category đang cập nhật
+        },
+      });
+      if (codeExists) {
+        throw new BadRequestException(`Service category code '${code}' already exists`);
+      }
     }
 
     try {
       return await this.prisma.serviceCategory.update({
         where: { id },
         data: {
+          ...(dto.code && { code: dto.code.trim() }),
           ...(dto.name && { name: dto.name }),
           ...(dto.description !== undefined && {
             description: dto.description,
@@ -129,18 +158,53 @@ export class ServiceCategoryService {
         services: {
           select: {
             id: true,
-            name: true,
             serviceCode: true,
+            name: true,
+            price: true,
+            description: true,
+            durationMinutes: true,
             isActive: true,
+            unit: true,
+            currency: true,
+            requiresDoctor: true,
+            specialty: {
+              select: {
+                id: true,
+                name: true,
+                specialtyCode: true,
+              },
+            },
+            createdAt: true,
+            updatedAt: true,
           },
+          orderBy: [
+            { name: 'asc' },
+            { serviceCode: 'asc' },
+          ],
         },
         packages: {
           select: {
             id: true,
-            name: true,
             code: true,
+            name: true,
+            description: true,
+            price: true,
             isActive: true,
+            requiresDoctor: true,
+            specialty: {
+              select: {
+                id: true,
+                name: true,
+                specialtyCode: true,
+              },
+            },
+            createdAt: true,
+            updatedAt: true,
           },
+          orderBy: [
+            { name: 'asc' },
+            { code: 'asc' },
+          ],
         },
       },
     });
@@ -150,6 +214,39 @@ export class ServiceCategoryService {
     }
 
     return category;
+  }
+
+  async deleteCategory(id: string) {
+    const category = await this.prisma.serviceCategory.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            services: true,
+            packages: true,
+          },
+        },
+      },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Service category not found');
+    }
+
+    // Kiểm tra xem category có đang được sử dụng không
+    if (category._count.services > 0 || category._count.packages > 0) {
+      throw new BadRequestException(
+        `Cannot delete service category. It is currently being used by ${category._count.services} service(s) and ${category._count.packages} package(s).`,
+      );
+    }
+
+    try {
+      await this.prisma.serviceCategory.delete({
+        where: { id },
+      });
+    } catch (error) {
+      this.handlePrismaError(error);
+    }
   }
 
   private async generateUniqueCategoryCode(name?: string) {
@@ -178,6 +275,94 @@ export class ServiceCategoryService {
       .toUpperCase()
       .slice(0, 4);
     return cleaned.length >= 3 ? `SC${cleaned}` : `SCAT`;
+  }
+
+  async addServiceToCategory(categoryId: string, serviceId: string) {
+    // Kiểm tra category tồn tại
+    const category = await this.prisma.serviceCategory.findUnique({
+      where: { id: categoryId },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Service category not found');
+    }
+
+    // Kiểm tra service tồn tại
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    // Cập nhật service để thêm vào category
+    try {
+      return await this.prisma.service.update({
+        where: { id: serviceId },
+        data: {
+          categoryId,
+        },
+        include: {
+          category: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      this.handlePrismaError(error);
+    }
+  }
+
+  async removeServiceFromCategory(categoryId: string, serviceId: string) {
+    // Kiểm tra category tồn tại
+    const category = await this.prisma.serviceCategory.findUnique({
+      where: { id: categoryId },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Service category not found');
+    }
+
+    // Kiểm tra service tồn tại và đang thuộc category này
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    if (service.categoryId !== categoryId) {
+      throw new BadRequestException(
+        'Service does not belong to this category',
+      );
+    }
+
+    // Xóa service khỏi category (set categoryId = null)
+    try {
+      return await this.prisma.service.update({
+        where: { id: serviceId },
+        data: {
+          categoryId: null,
+        },
+        include: {
+          category: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      this.handlePrismaError(error);
+    }
   }
 
   private handlePrismaError(error: unknown) {
