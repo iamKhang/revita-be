@@ -202,8 +202,7 @@ export class PrescriptionController {
     const userId = req.user.id;
     const userRole = req.user.role;
     return this.prescriptionServiceManagement.updateServiceStatus(
-      updateDto.prescriptionId,
-      updateDto.serviceId,
+      updateDto.prescriptionServiceId,
       updateDto.status,
       userId,
       userRole,
@@ -220,8 +219,7 @@ export class PrescriptionController {
     const userId = req.user.id;
     const userRole = req.user.role;
     return this.prescriptionServiceManagement.updateServiceResults(
-      updateDto.prescriptionId,
-      updateDto.serviceId,
+      updateDto.prescriptionServiceId,
       updateDto.results,
       userId,
       userRole,
@@ -232,12 +230,11 @@ export class PrescriptionController {
   @Put('prescription-service/skip')
   @Roles(Role.DOCTOR, Role.TECHNICIAN)
   async skipService(
-    @Body() body: { prescriptionId: string; serviceId: string },
+    @Body() body: { prescriptionServiceId: string },
     @Request() req: { user: JwtUserPayload },
   ) {
     return this.prescriptionService.markServiceSkipped(
-      body.prescriptionId,
-      body.serviceId,
+      body.prescriptionServiceId,
       req.user,
     );
   }
