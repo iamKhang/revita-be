@@ -36,6 +36,7 @@ export type PrescriptionDetails = {
     auth: { name: string };
   };
   services: Array<{
+    id: string; // ID của PrescriptionService
     serviceId: string;
     service: {
       id: string;
@@ -54,6 +55,7 @@ export type PrescriptionDetails = {
 export type PaymentPreview = {
   prescriptionDetails: PrescriptionDetails;
   selectedServices: Array<{
+    prescriptionServiceId: string;
     serviceId: string;
     serviceCode: string;
     name: string;
@@ -206,13 +208,21 @@ export class InvoicePaymentService {
     });
 
     // Determine selected services: if none provided, default to all
-    let selectedIds: string[] = [];
-    const allIds = prescription.services.map((s) => s.serviceId);
-    const codeToId = new Map(
+    // Note: selectedServiceIds/selectedServiceCodes can refer to either PrescriptionService.id or Service.id
+    let selectedPrescriptionServiceIds: string[] = [];
+    const allPrescriptionServiceIds = prescription.services.map((s) => s.id);
+    const allServiceIds = prescription.services.map((s) => s.serviceId);
+    const codeToPrescriptionServiceId = new Map(
       prescription.services.map(
-        (s) => [s.service.serviceCode, s.serviceId] as const,
+        (s) => [s.service.serviceCode, s.id] as const,
       ),
     );
+    const serviceIdToPrescriptionServiceIds = new Map<string, string[]>();
+    prescription.services.forEach((s) => {
+      const existing = serviceIdToPrescriptionServiceIds.get(s.serviceId) || [];
+      existing.push(s.id);
+      serviceIdToPrescriptionServiceIds.set(s.serviceId, existing);
+    });
 
     if (
       (dto.selectedServiceIds && dto.selectedServiceIds.length > 0) ||
@@ -220,25 +230,42 @@ export class InvoicePaymentService {
     ) {
       const idsFromIds = dto.selectedServiceIds || [];
       const idsFromCodes = (dto.selectedServiceCodes || [])
-        .map((code) => codeToId.get(code))
+        .map((code) => codeToPrescriptionServiceId.get(code))
         .filter(Boolean) as string[];
-      selectedIds = Array.from(new Set([...idsFromIds, ...idsFromCodes]));
+      
+      // Check if IDs are PrescriptionService IDs or Service IDs
+      const prescriptionServiceIds: string[] = [];
+      
+      [...idsFromIds, ...idsFromCodes].forEach((id) => {
+        if (allPrescriptionServiceIds.includes(id)) {
+          prescriptionServiceIds.push(id);
+        } else if (allServiceIds.includes(id)) {
+          // If it's a Service ID, get all PrescriptionService IDs for that service
+          const psIds = serviceIdToPrescriptionServiceIds.get(id) || [];
+          prescriptionServiceIds.push(...psIds);
+        }
+      });
+      
+      selectedPrescriptionServiceIds = Array.from(new Set(prescriptionServiceIds));
 
       // Validate selection in prescription
-      const invalidIds = selectedIds.filter((id) => !allIds.includes(id));
+      const invalidIds = selectedPrescriptionServiceIds.filter(
+        (id) => !allPrescriptionServiceIds.includes(id),
+      );
       if (invalidIds.length > 0) {
         throw new BadRequestException(
           `Services not found in prescription: ${invalidIds.join(', ')}`,
         );
       }
     } else {
-      selectedIds = allIds;
+      selectedPrescriptionServiceIds = allPrescriptionServiceIds;
     }
 
     // Get selected services with their details
     const selectedServices = prescription.services
-      .filter((s) => selectedIds.includes(s.serviceId))
+      .filter((s) => selectedPrescriptionServiceIds.includes(s.id))
       .map((s) => ({
+        prescriptionServiceId: s.id,
         serviceId: s.serviceId,
         serviceCode: s.service.serviceCode,
         name: s.service.name,
@@ -263,6 +290,7 @@ export class InvoicePaymentService {
     const preview = await this.createPaymentPreview(dto);
     const effectiveCashierId = await this.resolveCashierId(dto.cashierId);
     const prescription = preview.prescriptionDetails;
+    const selectedPrescriptionServiceIds = preview.selectedServices.map((s) => s.prescriptionServiceId);
     const selectedServiceIds = preview.selectedServices.map((s) => s.serviceId);
 
     // Auto routing removed: skip checking available work sessions
@@ -287,6 +315,7 @@ export class InvoicePaymentService {
             serviceId: service.serviceId,
             price: service.price,
             prescriptionId: prescription.id,
+            prescriptionServiceId: service.prescriptionServiceId,
           })),
         },
       },
@@ -468,47 +497,56 @@ export class InvoicePaymentService {
 
     const prescription = await this.getPrescriptionById(prescriptionId);
 
-    const selectedServiceIds = updatedInvoice.invoiceDetails.map(
-      (detail) => detail.serviceId,
-    );
+    const selectedPrescriptionServiceIds = updatedInvoice.invoiceDetails
+      .map((detail) => detail.prescriptionServiceId)
+      .filter((id): id is string => id !== null);
 
     const allPrescriptionServiceIds = prescription.services.map(
-      (service) => service.serviceId,
+      (service) => service.id,
     );
 
-    const unselectedServiceIds = allPrescriptionServiceIds.filter(
-      (id) => !selectedServiceIds.includes(id),
+    const unselectedPrescriptionServiceIds = allPrescriptionServiceIds.filter(
+      (id) => !selectedPrescriptionServiceIds.includes(id),
     );
 
     const pendingUnselectedIds: string[] = [];
-    for (const serviceId of unselectedServiceIds) {
-      const service = prescription.services.find((s) => s.serviceId === serviceId);
+    for (const prescriptionServiceId of unselectedPrescriptionServiceIds) {
+      const service = prescription.services.find((s) => s.id === prescriptionServiceId);
       if (service && service.status === PrescriptionStatus.PENDING) {
-        pendingUnselectedIds.push(serviceId);
+        pendingUnselectedIds.push(prescriptionServiceId);
       }
     }
 
     if (pendingUnselectedIds.length > 0) {
       await this.prisma.prescriptionService.updateMany({
         where: {
-          prescriptionId,
-          serviceId: { in: pendingUnselectedIds },
+          id: { in: pendingUnselectedIds },
         },
         data: { status: PrescriptionStatus.CANCELLED },
       });
     }
 
-    for (const serviceId of selectedServiceIds) {
-      await this.prescriptionService.markServicePaid(
-        prescription.id,
-        serviceId,
-      );
+    // Mark each selected PrescriptionService as paid
+    for (const prescriptionServiceId of selectedPrescriptionServiceIds) {
+      // Get the PrescriptionService to find its serviceId
+      const ps = prescription.services.find((s) => s.id === prescriptionServiceId);
+      if (ps) {
+        await this.prescriptionService.markServicePaid(
+          prescription.id,
+          ps.serviceId,
+        );
+      }
     }
 
     // Auto routing removed: no routing assignments
     const detailedRoutingAssignments: any[] = [];
 
     // Auto routing removed: skip publishing routing events
+
+    // Get selectedServiceIds from invoice details for backward compatibility
+    const selectedServiceIds = updatedInvoice.invoiceDetails.map(
+      (detail) => detail.serviceId,
+    );
 
     const result = {
       invoiceCode: updatedInvoice.invoiceCode,

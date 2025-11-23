@@ -230,8 +230,7 @@ export class PrescriptionServiceManagementService {
   }
 
   async updateServiceStatus(
-    prescriptionId: string,
-    serviceId: string,
+    prescriptionServiceId: string,
     status: PrescriptionStatus,
     userId: string,
     userRole: string,
@@ -239,20 +238,20 @@ export class PrescriptionServiceManagementService {
   ): Promise<UpdateServiceStatusResponse> {
     try {
       this.logger.log(
-        `${userRole} ${userId} updating service ${prescriptionId}-${serviceId} to ${status}`,
+        `${userRole} ${userId} updating prescription service ${prescriptionServiceId} to ${status}`,
       );
 
       // Tìm prescription service (không kiểm tra quyền, ai cũng có thể update)
       const prescriptionService =
         await this.prisma.prescriptionService.findUnique({
           where: {
-            prescriptionId_serviceId: {
-              prescriptionId,
-              serviceId,
-            },
+            id: prescriptionServiceId,
           },
           include: {
             service: true,
+            prescription: {
+              select: { id: true, doctorId: true },
+            },
           },
         });
 
@@ -272,10 +271,7 @@ export class PrescriptionServiceManagementService {
 
       const updatedService = await this.prisma.prescriptionService.update({
         where: {
-          prescriptionId_serviceId: {
-            prescriptionId,
-            serviceId,
-          },
+          id: prescriptionServiceId,
         },
         data: updateData,
         include: { service: true },
@@ -284,16 +280,7 @@ export class PrescriptionServiceManagementService {
       // Cập nhật queue trong Redis
       if (this.prescriptionService) {
         try {
-          const prescriptionData = await this.prisma.prescription.findUnique({
-            where: { id: prescriptionId },
-            select: { doctorId: true },
-          });
-
-          // technicianId nằm trong PrescriptionService, không phải Prescription
-          const prescriptionServiceData = await this.prisma.prescriptionService.findUnique({
-            where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-            select: { technicianId: true },
-          });
+          const prescriptionData = prescriptionService.prescription;
 
           if (prescriptionData?.doctorId) {
             await this.prescriptionService.updateQueueInRedis(
@@ -301,9 +288,9 @@ export class PrescriptionServiceManagementService {
               'DOCTOR',
             );
           }
-          if (prescriptionServiceData?.technicianId) {
+          if (prescriptionService.technicianId) {
             await this.prescriptionService.updateQueueInRedis(
-              prescriptionServiceData.technicianId,
+              prescriptionService.technicianId,
               'TECHNICIAN',
             );
           }
@@ -325,8 +312,7 @@ export class PrescriptionServiceManagementService {
   }
 
   async updateServiceResults(
-    prescriptionId: string,
-    serviceId: string,
+    prescriptionServiceId: string,
     results: string[],
     userId: string,
     userRole: string,
@@ -334,19 +320,21 @@ export class PrescriptionServiceManagementService {
   ): Promise<UpdateResultsResponse> {
     try {
       this.logger.log(
-        `${userRole} ${userId} updating results for service ${prescriptionId}-${serviceId}`,
+        `${userRole} ${userId} updating results for prescription service ${prescriptionServiceId}`,
       );
 
       // Tìm prescription service (không kiểm tra quyền, ai cũng có thể update)
       const prescriptionService =
         await this.prisma.prescriptionService.findUnique({
           where: {
-            prescriptionId_serviceId: {
-              prescriptionId,
-              serviceId,
+            id: prescriptionServiceId,
+          },
+          include: {
+            service: true,
+            prescription: {
+              select: { id: true, doctorId: true },
             },
           },
-          include: { service: true },
         });
 
       if (!prescriptionService) {
@@ -363,10 +351,7 @@ export class PrescriptionServiceManagementService {
       // Cập nhật kết quả và chuyển sang COMPLETED
       const updatedService = await this.prisma.prescriptionService.update({
         where: {
-          prescriptionId_serviceId: {
-            prescriptionId,
-            serviceId,
-          },
+          id: prescriptionServiceId,
         },
         data: {
           status: PrescriptionStatus.COMPLETED,
@@ -380,16 +365,7 @@ export class PrescriptionServiceManagementService {
       // Cập nhật queue trong Redis
       if (this.prescriptionService) {
         try {
-          const prescriptionData = await this.prisma.prescription.findUnique({
-            where: { id: prescriptionId },
-            select: { doctorId: true },
-          });
-
-          // technicianId nằm trong PrescriptionService, không phải Prescription
-          const prescriptionServiceData = await this.prisma.prescriptionService.findUnique({
-            where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-            select: { technicianId: true },
-          });
+          const prescriptionData = prescriptionService.prescription;
 
           if (prescriptionData?.doctorId) {
             await this.prescriptionService.updateQueueInRedis(
@@ -397,9 +373,9 @@ export class PrescriptionServiceManagementService {
               'DOCTOR',
             );
           }
-          if (prescriptionServiceData?.technicianId) {
+          if (prescriptionService.technicianId) {
             await this.prescriptionService.updateQueueInRedis(
-              prescriptionServiceData.technicianId,
+              prescriptionService.technicianId,
               'TECHNICIAN',
             );
           }
@@ -411,7 +387,7 @@ export class PrescriptionServiceManagementService {
       }
 
       this.logger.log(
-        `Service ${prescriptionService.serviceId} completed with results`,
+        `Prescription service ${prescriptionServiceId} completed with results`,
       );
 
       return {
