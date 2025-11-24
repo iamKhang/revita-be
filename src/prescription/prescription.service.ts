@@ -509,18 +509,27 @@ export class PrescriptionService {
   }
 
   async markServiceSkipped(
-    prescriptionId: string,
-    serviceId: string,
+    prescriptionServiceId: string,
     user: JwtUserPayload,
   ) {
     // Lấy thông tin service hiện tại để tăng skipCount
     const currentService = await this.prisma.prescriptionService.findUnique({
-      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
-      select: { skipCount: true },
+      where: { id: prescriptionServiceId },
+      select: {
+        skipCount: true,
+        prescriptionId: true,
+        prescription: {
+          select: { doctorId: true },
+        },
+      },
     });
 
+    if (!currentService) {
+      throw new NotFoundException('Prescription service not found');
+    }
+
     await this.prisma.prescriptionService.update({
-      where: { prescriptionId_serviceId: { prescriptionId, serviceId } },
+      where: { id: prescriptionServiceId },
       data: {
         status: PrescriptionStatus.SKIPPED,
         skipCount: (currentService?.skipCount || 0) + 1,
@@ -528,12 +537,8 @@ export class PrescriptionService {
     });
 
     // Cập nhật queue trong Redis
-    const prescriptionData = await this.prisma.prescription.findUnique({
-      where: { id: prescriptionId },
-      select: { doctorId: true },
-    });
-    if (prescriptionData?.doctorId) {
-      await this.updateQueueInRedis(prescriptionData.doctorId, 'DOCTOR');
+    if (currentService.prescription?.doctorId) {
+      await this.updateQueueInRedis(currentService.prescription.doctorId, 'DOCTOR');
     }
   }
 

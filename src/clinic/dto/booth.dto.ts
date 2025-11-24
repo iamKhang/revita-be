@@ -78,3 +78,10 @@ export class BoothServiceAssignmentDto {
   @IsNotEmpty()
   serviceId!: string;
 }
+
+export class SaveBoothServicesDto {
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  serviceIds?: string[];
+}

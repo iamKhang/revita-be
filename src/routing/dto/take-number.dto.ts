@@ -7,7 +7,7 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class TakeNumberDto {
   @IsString()
@@ -47,4 +47,13 @@ export class TakeNumberDto {
   @IsBoolean()
   @IsOptional()
   isDisabled?: boolean; // Người khuyết tật
+
+  @IsBoolean()
+  @IsOptional()
+  isVip?: boolean; // Khám VIP
+
+  // Hỗ trợ cả isVIP (chữ hoa) từ frontend
+  @IsBoolean()
+  @IsOptional()
+  isVIP?: boolean; // Khám VIP (alias)
 }

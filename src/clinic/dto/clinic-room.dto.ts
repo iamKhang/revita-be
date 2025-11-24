@@ -1,4 +1,47 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsArray } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUUID, IsArray, ValidateNested, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CreateBoothInRoomDto {
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  serviceIds?: string[];
+}
+
+export class UpdateBoothInRoomDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string; // ID của booth nếu đang cập nhật booth hiện có
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  serviceIds?: string[];
+}
 
 export class CreateClinicRoomDto {
   @IsString()
@@ -19,8 +62,9 @@ export class CreateClinicRoomDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  serviceIds?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => CreateBoothInRoomDto)
+  booths?: CreateBoothInRoomDto[];
 }
 
 export class UpdateClinicRoomDto {
@@ -42,8 +86,15 @@ export class UpdateClinicRoomDto {
 
   @IsOptional()
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpdateBoothInRoomDto)
+  booths?: UpdateBoothInRoomDto[];
+}
+
+export class SaveCommonServicesDto {
+  @IsArray()
   @IsString({ each: true })
-  serviceIds?: string[];
+  serviceIds!: string[];
 }
 
 export class ClinicRoomResponseDto {
@@ -71,6 +122,12 @@ export class ClinicRoomResponseDto {
     boothCode: string;
     name: string;
     isActive: boolean;
+    services?: Array<{
+      id: string;
+      serviceCode: string;
+      name: string;
+      price?: number;
+    }>;
   }>;
 }
 

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateBoothDto, UpdateBoothDto, BoothResponseDto } from '../dto/booth.dto';
+import { CreateBoothDto, UpdateBoothDto, BoothResponseDto, SaveBoothServicesDto } from '../dto/booth.dto';
 import { CodeGeneratorService } from '../../user-management/patient-profile/code-generator.service';
 
 @Injectable()
@@ -331,6 +331,193 @@ export class BoothService {
     });
 
     return this.findBoothById(boothId);
+  }
+
+  async getBoothServices(boothId: string): Promise<{
+    services: Array<{
+      id: string;
+      serviceCode: string;
+      name: string;
+      price?: number;
+    }>;
+  }> {
+    const booth = await this.prisma.booth.findUnique({
+      where: { id: boothId },
+      include: {
+        boothServices: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceCode: true,
+                name: true,
+                price: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!booth) {
+      throw new NotFoundException('Booth not found');
+    }
+
+    return {
+      services: (booth.boothServices?.map((bs) => ({
+        ...bs.service,
+        price: bs.service.price ?? undefined,
+      })) || []) as Array<{
+        id: string;
+        serviceCode: string;
+        name: string;
+        price?: number;
+      }>,
+    };
+  }
+
+  async saveBoothServices(boothId: string, dto: SaveBoothServicesDto): Promise<{
+    message: string;
+    booth: BoothResponseDto;
+  }> {
+    const booth = await this.prisma.booth.findUnique({
+      where: { id: boothId },
+      select: { id: true },
+    });
+
+    if (!booth) {
+      throw new NotFoundException('Booth not found');
+    }
+
+    // Normalize serviceIds - default to empty array if not provided
+    const serviceIds = dto.serviceIds || [];
+
+    // Validate services if provided
+    if (serviceIds.length > 0) {
+      const services = await this.prisma.service.findMany({
+        where: { id: { in: serviceIds } },
+      });
+
+      if (services.length !== serviceIds.length) {
+        throw new BadRequestException('One or more services not found');
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Remove all existing services
+      await tx.boothService.deleteMany({
+        where: { boothId },
+      });
+
+      // Add new services if provided
+      if (serviceIds.length > 0) {
+        await tx.boothService.createMany({
+          data: serviceIds.map((serviceId) => ({
+            boothId,
+            serviceId,
+          })),
+        });
+      }
+    });
+
+    const updatedBooth = await this.findBoothById(boothId);
+
+    return {
+      message: `Đã cập nhật ${serviceIds.length} dịch vụ cho buồng`,
+      booth: updatedBooth,
+    };
+  }
+
+  async getAvailableServices(boothId: string, query?: string, limit: number = 50): Promise<{
+    services: Array<{
+      id: string;
+      serviceCode: string;
+      name: string;
+      price?: number;
+      displayName: string; // "Tên dịch vụ - CODE"
+    }>;
+  }> {
+    const booth = await this.prisma.booth.findUnique({
+      where: { id: boothId },
+      include: {
+        boothServices: {
+          select: {
+            serviceId: true,
+          },
+        },
+      },
+    });
+
+    if (!booth) {
+      throw new NotFoundException('Booth not found');
+    }
+
+    // Lấy danh sách serviceId đã có trong buồng
+    const existingServiceIds = booth.boothServices.map((bs) => bs.serviceId);
+
+    // Tìm kiếm dịch vụ (exclude các dịch vụ đã có)
+    const where: any = {
+      isActive: true,
+      ...(existingServiceIds.length > 0 && {
+        id: {
+          notIn: existingServiceIds,
+        },
+      }),
+    };
+
+    // Nếu có query, thêm điều kiện tìm kiếm
+    if (query && query.trim().length > 0) {
+      const searchTerm = query.trim();
+      where.OR = [
+        {
+          name: {
+            contains: searchTerm,
+            mode: 'insensitive',
+          },
+        },
+        {
+          serviceCode: {
+            contains: searchTerm,
+            mode: 'insensitive',
+          },
+        },
+        {
+          description: {
+            contains: searchTerm,
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    const services = await this.prisma.service.findMany({
+      where,
+      select: {
+        id: true,
+        serviceCode: true,
+        name: true,
+        price: true,
+      },
+      take: limit,
+      orderBy: [
+        {
+          name: 'asc',
+        },
+        {
+          serviceCode: 'asc',
+        },
+      ],
+    });
+
+    return {
+      services: services.map((service) => ({
+        id: service.id,
+        serviceCode: service.serviceCode,
+        name: service.name,
+        price: service.price ?? undefined,
+        displayName: `${service.name} - ${service.serviceCode}`,
+      })),
+    };
   }
 
   async deleteBooth(id: string): Promise<{ message: string }> {

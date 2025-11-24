@@ -53,7 +53,7 @@ export class ReceptionistService {
    * Trước khi tạo mới, cập nhật các phiên ACTIVE thành CANCELLED
    */
   async openCounter(receptionistId: string, openCounterDto: OpenCounterDto): Promise<{ success: boolean; assignmentId: string }> {
-    const { counterId, notes } = openCounterDto;
+    const { counterId, notes, isVip } = openCounterDto;
 
     // Kiểm tra quầy có tồn tại và đang hoạt động không
     const counter = await this.prisma.counter.findUnique({
@@ -98,6 +98,7 @@ export class ReceptionistService {
           receptionistId: receptionistId,
           status: 'ACTIVE',
           notes: notes,
+          isVip: isVip,
           assignedAt: new Date()
         }
       });

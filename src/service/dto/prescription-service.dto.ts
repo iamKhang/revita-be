@@ -23,18 +23,11 @@ export class ScanPrescriptionDto {
 // DTO cho update service status
 export class UpdateServiceStatusDto {
   @ApiProperty({
-    description: 'ID của prescription',
-    example: 'uuid-prescription-id',
+    description: 'ID của PrescriptionService (ID của dịch vụ trong phiếu chỉ định)',
+    example: 'uuid-prescription-service-id',
   })
   @IsString()
-  prescriptionId: string;
-
-  @ApiProperty({
-    description: 'ID của service',
-    example: 'uuid-service-id',
-  })
-  @IsString()
-  serviceId: string;
+  prescriptionServiceId: string;
 
   @ApiProperty({
     description: 'Trạng thái mới của service',
@@ -57,18 +50,11 @@ export class UpdateServiceStatusDto {
 // DTO cho update service results
 export class UpdateServiceResultsDto {
   @ApiProperty({
-    description: 'ID của prescription',
-    example: 'uuid-prescription-id',
+    description: 'ID của PrescriptionService (ID của dịch vụ trong phiếu chỉ định)',
+    example: 'uuid-prescription-service-id',
   })
   @IsString()
-  prescriptionId: string;
-
-  @ApiProperty({
-    description: 'ID của service',
-    example: 'uuid-service-id',
-  })
-  @IsString()
-  serviceId: string;
+  prescriptionServiceId: string;
 
   @ApiProperty({
     description: 'Danh sách kết quả (thường là URLs từ Supabase)',
