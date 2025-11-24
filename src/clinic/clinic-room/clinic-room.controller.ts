@@ -15,6 +15,7 @@ import {
   CreateClinicRoomDto,
   UpdateClinicRoomDto,
   ClinicRoomServiceAssignmentDto,
+  SaveCommonServicesDto,
 } from '../dto/clinic-room.dto';
 
 @Controller('clinic-rooms')
@@ -70,6 +71,19 @@ export class ClinicRoomController {
       roomId,
       serviceId,
     );
+  }
+
+  @Get(':id/common-services')
+  async getCommonServices(@Param('id') id: string) {
+    return this.clinicRoomService.getCommonServices(id);
+  }
+
+  @Put(':id/common-services')
+  async saveCommonServices(
+    @Param('id') id: string,
+    @Body() dto: SaveCommonServicesDto,
+  ) {
+    return this.clinicRoomService.saveCommonServices(id, dto);
   }
 
   @Delete(':id')

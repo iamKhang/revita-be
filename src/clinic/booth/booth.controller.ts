@@ -15,6 +15,7 @@ import {
   CreateBoothDto,
   UpdateBoothDto,
   BoothServiceAssignmentDto,
+  SaveBoothServicesDto,
 } from '../dto/booth.dto';
 
 @Controller('booths')
@@ -52,6 +53,32 @@ export class BoothController {
     @Body() updateBoothDto: UpdateBoothDto,
   ) {
     return this.boothService.updateBooth(id, updateBoothDto);
+  }
+
+  @Get(':id/services')
+  async getBoothServices(@Param('id') id: string) {
+    return this.boothService.getBoothServices(id);
+  }
+
+  @Get(':id/available-services')
+  async getAvailableServices(
+    @Param('id') id: string,
+    @Query('query') query?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.boothService.getAvailableServices(
+      id,
+      query,
+      limit ? parseInt(limit, 10) : 50,
+    );
+  }
+
+  @Put(':id/services')
+  async saveBoothServices(
+    @Param('id') id: string,
+    @Body() dto: SaveBoothServicesDto,
+  ) {
+    return this.boothService.saveBoothServices(id, dto);
   }
 
   @Post(':id/services')
