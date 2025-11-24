@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateClinicRoomDto, UpdateClinicRoomDto, ClinicRoomResponseDto } from '../dto/clinic-room.dto';
+import { CreateClinicRoomDto, UpdateClinicRoomDto, ClinicRoomResponseDto, SaveCommonServicesDto } from '../dto/clinic-room.dto';
 import { CodeGeneratorService } from '../../user-management/patient-profile/code-generator.service';
 
 @Injectable()
@@ -31,14 +31,18 @@ export class ClinicRoomService {
     
     const roomCode = this.codeGen.generateClinicRoomCode(specialty.specialtyCode, existingRoomsCount);
 
-    // Validate services if provided
-    if (dto.serviceIds && dto.serviceIds.length > 0) {
-      const services = await this.prisma.service.findMany({
-        where: { id: { in: dto.serviceIds } },
-      });
+    // Validate booths and their services if provided
+    if (dto.booths && dto.booths.length > 0) {
+      for (const booth of dto.booths) {
+        if (booth.serviceIds && booth.serviceIds.length > 0) {
+          const services = await this.prisma.service.findMany({
+            where: { id: { in: booth.serviceIds } },
+          });
 
-      if (services.length !== dto.serviceIds.length) {
-        throw new BadRequestException('One or more services not found');
+          if (services.length !== booth.serviceIds.length) {
+            throw new BadRequestException(`One or more services not found for booth: ${booth.name}`);
+          }
+        }
       }
     }
 
@@ -54,14 +58,36 @@ export class ClinicRoomService {
         },
       });
 
-      // Add services to room if provided
-      if (dto.serviceIds && dto.serviceIds.length > 0) {
-        await tx.clinicRoomService.createMany({
-          data: dto.serviceIds.map((serviceId) => ({
-            clinicRoomId: room.id,
-            serviceId,
-          })),
+      // Create booths if provided
+      if (dto.booths && dto.booths.length > 0) {
+        const existingBoothsCount = await tx.booth.count({
+          where: { roomId: room.id },
         });
+
+        for (let i = 0; i < dto.booths.length; i++) {
+          const boothDto = dto.booths[i];
+          const boothCode = this.codeGen.generateBoothCode(roomCode, existingBoothsCount + i);
+          
+          const booth = await tx.booth.create({
+            data: {
+              boothCode: boothCode,
+              name: boothDto.name,
+              roomId: room.id,
+              description: boothDto.description,
+              isActive: boothDto.isActive ?? true,
+            },
+          });
+
+          // Add services to booth if provided
+          if (boothDto.serviceIds && boothDto.serviceIds.length > 0) {
+            await tx.boothService.createMany({
+              data: boothDto.serviceIds.map((serviceId) => ({
+                boothId: booth.id,
+                serviceId,
+              })),
+            });
+          }
+        }
       }
 
       return room;
@@ -118,6 +144,26 @@ export class ClinicRoomService {
               },
             },
           },
+          booth: {
+            select: {
+              id: true,
+              boothCode: true,
+              name: true,
+              isActive: true,
+              boothServices: {
+                include: {
+                  service: {
+                    select: {
+                      id: true,
+                      serviceCode: true,
+                      name: true,
+                      price: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
           _count: {
             select: {
                 booth: true,
@@ -167,6 +213,18 @@ export class ClinicRoomService {
             boothCode: true,
             name: true,
             isActive: true,
+            boothServices: {
+              include: {
+                service: {
+                  select: {
+                    id: true,
+                    serviceCode: true,
+                    name: true,
+                    price: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -200,14 +258,18 @@ export class ClinicRoomService {
       }
     }
 
-    // Validate services if provided
-    if (dto.serviceIds && dto.serviceIds.length > 0) {
-      const services = await this.prisma.service.findMany({
-        where: { id: { in: dto.serviceIds } },
-      });
+    // Validate booths and their services if provided
+    if (dto.booths && dto.booths.length > 0) {
+      for (const booth of dto.booths) {
+        if (booth.serviceIds && booth.serviceIds.length > 0) {
+          const services = await this.prisma.service.findMany({
+            where: { id: { in: booth.serviceIds } },
+          });
 
-      if (services.length !== dto.serviceIds.length) {
-        throw new BadRequestException('One or more services not found');
+          if (services.length !== booth.serviceIds.length) {
+            throw new BadRequestException(`One or more services not found for booth: ${booth.name || 'unnamed'}`);
+          }
+        }
       }
     }
 
@@ -223,21 +285,80 @@ export class ClinicRoomService {
         },
       });
 
-      // Update services if provided
-      if (dto.serviceIds !== undefined) {
-        // Remove existing services
-        await tx.clinicRoomService.deleteMany({
-          where: { clinicRoomId: id },
+      // Update booths if provided
+      if (dto.booths !== undefined) {
+        // Get existing booths
+        const existingBooths = await tx.booth.findMany({
+          where: { roomId: id },
         });
 
-        // Add new services
-        if (dto.serviceIds.length > 0) {
-          await tx.clinicRoomService.createMany({
-            data: dto.serviceIds.map((serviceId) => ({
-              clinicRoomId: id,
-              serviceId,
-            })),
-          });
+        const existingBoothsCount = existingBooths.length;
+
+        // Create/Update booths
+        for (let i = 0; i < dto.booths.length; i++) {
+          const boothDto = dto.booths[i];
+          
+          // If booth has an id, it's an update; otherwise, it's a new booth
+          const boothId = boothDto.id;
+          
+          if (boothId) {
+            // Update existing booth
+            const existingBooth = existingBooths.find(b => b.id === boothId);
+            if (existingBooth) {
+              await tx.booth.update({
+                where: { id: boothId },
+                data: {
+                  ...(boothDto.name && { name: boothDto.name }),
+                  ...(boothDto.description !== undefined && { description: boothDto.description }),
+                  ...(boothDto.isActive !== undefined && { isActive: boothDto.isActive }),
+                },
+              });
+
+              // Update booth services if provided
+              if (boothDto.serviceIds !== undefined) {
+                // Remove existing services
+                await tx.boothService.deleteMany({
+                  where: { boothId },
+                });
+
+                // Add new services
+                if (boothDto.serviceIds.length > 0) {
+                  await tx.boothService.createMany({
+                    data: boothDto.serviceIds.map((serviceId) => ({
+                      boothId,
+                      serviceId,
+                    })),
+                  });
+                }
+              }
+            }
+          } else {
+            // Create new booth
+            if (!boothDto.name) {
+              throw new BadRequestException('Booth name is required when creating new booth');
+            }
+            const boothCode = this.codeGen.generateBoothCode(room.roomCode, existingBoothsCount + i);
+            
+            const newBooth = await tx.booth.create({
+              data: {
+                boothCode: boothCode,
+                name: boothDto.name,
+                roomId: id,
+                description: boothDto.description,
+                isActive: boothDto.isActive ?? true,
+              },
+            });
+
+            // Add services to booth if provided
+            if (boothDto.serviceIds && boothDto.serviceIds.length > 0) {
+              await tx.boothService.createMany({
+                data: boothDto.serviceIds.map((serviceId) => ({
+                  boothId: newBooth.id,
+                  serviceId,
+                })),
+              });
+            }
+          }
         }
       }
 
@@ -330,6 +451,147 @@ export class ClinicRoomService {
     return this.findClinicRoomById(roomId);
   }
 
+  async getCommonServices(roomId: string): Promise<{
+    services: Array<{
+      id: string;
+      serviceCode: string;
+      name: string;
+      price?: number;
+    }>;
+  }> {
+    const clinicRoom = await this.prisma.clinicRoom.findUnique({
+      where: { id: roomId },
+      include: {
+        booth: {
+          include: {
+            boothServices: {
+              include: {
+                service: {
+                  select: {
+                    id: true,
+                    serviceCode: true,
+                    name: true,
+                    price: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!clinicRoom) {
+      throw new NotFoundException('Clinic room not found');
+    }
+
+    // Nếu không có buồng nào, trả về mảng rỗng
+    if (!clinicRoom.booth || clinicRoom.booth.length === 0) {
+      return { services: [] };
+    }
+
+    // Lấy tất cả dịch vụ của các buồng
+    const allBoothServices: Map<string, {
+      id: string;
+      serviceCode: string;
+      name: string;
+      price?: number;
+      count: number;
+    }> = new Map();
+
+    for (const booth of clinicRoom.booth) {
+      if (booth.boothServices && booth.boothServices.length > 0) {
+        for (const boothService of booth.boothServices) {
+          const serviceId = boothService.service.id;
+          if (allBoothServices.has(serviceId)) {
+            const existing = allBoothServices.get(serviceId)!;
+            existing.count++;
+          } else {
+            allBoothServices.set(serviceId, {
+              id: boothService.service.id,
+              serviceCode: boothService.service.serviceCode,
+              name: boothService.service.name,
+              price: boothService.service.price ?? undefined,
+              count: 1,
+            });
+          }
+        }
+      }
+    }
+
+    // Chỉ lấy các dịch vụ có trong TẤT CẢ các buồng (giao)
+    const totalBooths = clinicRoom.booth.length;
+    const commonServices = Array.from(allBoothServices.values())
+      .filter(service => service.count === totalBooths)
+      .map(({ count, ...service }) => service);
+
+    return { services: commonServices };
+  }
+
+  async saveCommonServices(roomId: string, dto: SaveCommonServicesDto): Promise<{
+    message: string;
+    updatedBooths: number;
+  }> {
+    const clinicRoom = await this.prisma.clinicRoom.findUnique({
+      where: { id: roomId },
+      include: {
+        booth: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    if (!clinicRoom) {
+      throw new NotFoundException('Clinic room not found');
+    }
+
+    // Validate services
+    if (dto.serviceIds && dto.serviceIds.length > 0) {
+      const services = await this.prisma.service.findMany({
+        where: { id: { in: dto.serviceIds } },
+      });
+
+      if (services.length !== dto.serviceIds.length) {
+        throw new BadRequestException('One or more services not found');
+      }
+    }
+
+    // Nếu không có buồng nào, không làm gì
+    if (!clinicRoom.booth || clinicRoom.booth.length === 0) {
+      throw new BadRequestException('Clinic room has no booths');
+    }
+
+    let updatedBoothsCount = 0;
+
+    await this.prisma.$transaction(async (tx) => {
+      // Cập nhật dịch vụ cho tất cả các buồng trong phòng
+      for (const booth of clinicRoom.booth) {
+        // Xóa tất cả dịch vụ hiện tại của buồng
+        await tx.boothService.deleteMany({
+          where: { boothId: booth.id },
+        });
+
+        // Thêm các dịch vụ chung vào buồng
+        if (dto.serviceIds && dto.serviceIds.length > 0) {
+          await tx.boothService.createMany({
+            data: dto.serviceIds.map((serviceId) => ({
+              boothId: booth.id,
+              serviceId,
+            })),
+          });
+          updatedBoothsCount++;
+        }
+      }
+    });
+
+    return {
+      message: `Đã cập nhật ${updatedBoothsCount} buồng với ${dto.serviceIds?.length || 0} dịch vụ chung`,
+      updatedBooths: updatedBoothsCount,
+    };
+  }
+
   async deleteClinicRoom(id: string): Promise<{ message: string }> {
     const existingRoom = await this.prisma.clinicRoom.findUnique({
       where: { id },
@@ -378,7 +640,13 @@ export class ClinicRoomService {
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
       services: room.services?.map((rs: any) => rs.service),
-      booths: room.booth,
+      booths: room.booth?.map((booth: any) => ({
+        id: booth.id,
+        boothCode: booth.boothCode,
+        name: booth.name,
+        isActive: booth.isActive,
+        services: booth.boothServices?.map((bs: any) => bs.service) || [],
+      })),
     };
   }
 }
