@@ -3,6 +3,8 @@ export class DoctorRatingResponseDto {
   doctorId: string;
   doctorName: string;
   doctorCode: string;
+  medicalRecordId: string;
+  medicalRecordCode: string;
   patientId: string;
   patientName: string;
   rating: number;

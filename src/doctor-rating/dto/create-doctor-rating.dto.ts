@@ -14,6 +14,10 @@ export class CreateDoctorRatingDto {
   @IsUUID()
   doctorId: string;
 
+  @IsNotEmpty()
+  @IsUUID()
+  medicalRecordId: string;
+
   @IsOptional()
   @IsUUID()
   patientId?: string; // Cho phép ADMIN chỉ định patient

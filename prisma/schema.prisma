@@ -536,6 +536,7 @@ model MedicalRecord {
   appointment             Appointment?             @relation(fields: [appointmentId], references: [id])
   prescriptions           Prescription[]
   medicationPrescriptions MedicationPrescription[]
+  doctorRatings           DoctorRating[]
 
   @@map("medical_records")
 }
@@ -792,6 +793,7 @@ model DoctorRating {
   id        String   @id @default(uuid())
   doctorId  String   @map("doctor_id")
   patientId String   @map("patient_id")
+  medicalRecordId String @map("medical_record_id")
   rating    Int      @map("rating") // 1-5 sao
   comment   String?  @map("comment") // Bình luận của bệnh nhân
   createdAt DateTime @default(now()) @map("created_at")
@@ -799,10 +801,12 @@ model DoctorRating {
 
   doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
 
-  @@unique([doctorId, patientId]) // Mỗi patient chỉ đánh giá 1 lần cho 1 doctor
+  @@unique([medicalRecordId, patientId]) // Mỗi patient chỉ đánh giá 1 lần cho 1 hồ sơ khám
   @@index([doctorId])
   @@index([patientId])
+  @@index([medicalRecordId])
   @@index([rating])
   @@map("doctor_ratings")
 }
