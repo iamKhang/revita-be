@@ -23,7 +23,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"doctorId\": \"doctor-uuid-here\",\n  \"rating\": 5,\n  \"comment\": \"Bác sĩ rất tận tâm và chuyên nghiệp!\"\n}"
+          "raw": "{\n  \"doctorId\": \"doctor-uuid-here\",\n  \"medicalRecordId\": \"medical-record-uuid-here\",\n  \"rating\": 5,\n  \"comment\": \"Bác sĩ rất tận tâm và chuyên nghiệp!\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/doctor-ratings",
@@ -170,7 +170,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"doctorId\": \"doctor-uuid-here\",\n  \"patientId\": \"patient-uuid-here\",\n  \"rating\": 4,\n  \"comment\": \"Admin tạo đánh giá thay mặt cho patient\"\n}"
+          "raw": "{\n  \"doctorId\": \"doctor-uuid-here\",\n  \"medicalRecordId\": \"medical-record-uuid-here\",\n  \"rating\": 4,\n  \"comment\": \"Admin tạo đánh giá dựa trên hồ sơ khám cụ thể\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/doctor-ratings",
@@ -268,6 +268,10 @@
     },
     {
       "key": "ratingId",
+      "value": ""
+    },
+    {
+      "key": "medicalRecordId",
       "value": ""
     }
   ]

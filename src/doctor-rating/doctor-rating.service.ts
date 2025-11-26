@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   Injectable,
   ForbiddenException,
@@ -70,16 +69,42 @@ export class DoctorRatingService {
       );
     }
 
+    const medicalRecord = await this.prisma.medicalRecord.findUnique({
+      where: { id: createDto.medicalRecordId },
+      include: { patientProfile: true },
+    });
+
+    if (!medicalRecord) {
+      throw new NotFoundException('Medical record not found');
+    }
+
+    if (medicalRecord.doctorId !== createDto.doctorId) {
+      throw new ForbiddenException(
+        'Medical record does not belong to the provided doctor',
+      );
+    }
+
+    const recordPatientId = medicalRecord.patientProfile.patientId;
+    if (!recordPatientId) {
+      throw new ForbiddenException(
+        'Medical record is not linked to a patient account',
+      );
+    }
+
     // Lấy patientId
     let patientId: string;
-    if (user.role === 'ADMIN' && createDto.patientId) {
-      // ADMIN chỉ định patientId
-      patientId = createDto.patientId;
+    if (user.role === 'ADMIN') {
+      patientId = recordPatientId;
     } else {
       // PATIENT sử dụng authId của mình
       const foundPatientId = await this.getPatientIdFromAuthId(user.id);
       if (!foundPatientId) {
         throw new ForbiddenException('Patient not found');
+      }
+      if (foundPatientId !== recordPatientId) {
+        throw new ForbiddenException(
+          'You can only rate medical records that belong to your account',
+        );
       }
       patientId = foundPatientId;
     }
@@ -93,17 +118,15 @@ export class DoctorRatingService {
       throw new NotFoundException('Doctor not found');
     }
 
-    // Kiểm tra đã đánh giá bác sĩ này chưa
-    const existingRating = await this.prisma.doctorRating.findUnique({
+    // Kiểm tra đã đánh giá hồ sơ này chưa
+    const existingRating = await this.prisma.doctorRating.findFirst({
       where: {
-        doctorId_patientId: {
-          doctorId: createDto.doctorId,
-          patientId: patientId,
-        },
+        medicalRecordId: createDto.medicalRecordId,
+        patientId,
       },
     });
     if (existingRating) {
-      throw new ConflictException('You have already rated this doctor');
+      throw new ConflictException('You have already rated this medical record');
     }
 
     // Tạo đánh giá mới
@@ -111,6 +134,7 @@ export class DoctorRatingService {
       data: {
         doctorId: createDto.doctorId,
         patientId,
+        medicalRecordId: createDto.medicalRecordId,
         rating: createDto.rating,
         comment: createDto.comment,
       },
@@ -121,6 +145,7 @@ export class DoctorRatingService {
         patient: {
           include: { auth: true },
         },
+        medicalRecord: true,
       },
     });
 
@@ -160,6 +185,7 @@ export class DoctorRatingService {
       include: {
         doctor: { include: { auth: true } },
         patient: { include: { auth: true } },
+        medicalRecord: true,
       },
     });
 
@@ -182,6 +208,7 @@ export class DoctorRatingService {
       include: {
         doctor: { include: { auth: true } },
         patient: { include: { auth: true } },
+        medicalRecord: true,
       },
     });
 
@@ -255,6 +282,7 @@ export class DoctorRatingService {
         include: {
           doctor: { include: { auth: true } },
           patient: { include: { auth: true } },
+          medicalRecord: true,
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -376,6 +404,7 @@ export class DoctorRatingService {
         include: {
           doctor: { include: { auth: true } },
           patient: { include: { auth: true } },
+          medicalRecord: true,
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -413,6 +442,7 @@ export class DoctorRatingService {
         include: {
           doctor: { include: { auth: true } },
           patient: { include: { auth: true } },
+          medicalRecord: true,
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -457,6 +487,8 @@ export class DoctorRatingService {
       doctorId: rating.doctorId,
       doctorName: rating.doctor.auth.name,
       doctorCode: rating.doctor.doctorCode,
+      medicalRecordId: rating.medicalRecordId,
+      medicalRecordCode: rating.medicalRecord?.medicalRecordCode || '',
       patientId: rating.patientId,
       patientName: rating.patient.auth?.name || 'Anonymous',
       rating: rating.rating,
