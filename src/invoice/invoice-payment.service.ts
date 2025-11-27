@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Injectable,
   NotFoundException,
@@ -20,7 +23,23 @@ import {
   PrescriptionStatus,
 } from '@prisma/client';
 import { PayOsService } from '../payos/payos.service';
-import { LoyaltyService } from './loyalty.service';
+import {
+  LoyaltyDiscountConstraints,
+  LoyaltyDiscountResult,
+  LoyaltyService,
+} from './loyalty.service';
+
+type ServicePromotionSnapshot = {
+  id: string;
+  name?: string | null;
+  description?: string | null;
+  allowLoyaltyDiscount: boolean;
+  maxDiscountPercent?: number | null;
+  maxDiscountAmount?: number | null;
+  isActive: boolean;
+  startDate?: Date | null;
+  endDate?: Date | null;
+};
 
 export type PrescriptionDetails = {
   id: string;
@@ -45,6 +64,7 @@ export type PrescriptionDetails = {
       name: string;
       price: number;
       description: string;
+      promotion?: ServicePromotionSnapshot | null;
     };
     status: PrescriptionStatus;
     order: number;
@@ -53,22 +73,30 @@ export type PrescriptionDetails = {
   status: PrescriptionStatus;
 };
 
+export type DiscountedServicePreview = {
+  prescriptionServiceId: string;
+  serviceId: string;
+  serviceCode: string;
+  name: string;
+  price: number;
+  originalPrice: number;
+  discountAmount: number;
+  promotionDiscountAmount: number;
+  loyaltyDiscountAmount: number;
+  discountPercent: number;
+  description: string;
+  discountReason?: string | null;
+  promotionId?: string | null;
+  promotionName?: string | null;
+};
+
 export type PaymentPreview = {
   prescriptionDetails: PrescriptionDetails;
-  selectedServices: Array<{
-    prescriptionServiceId: string;
-    serviceId: string;
-    serviceCode: string;
-    name: string;
-    price: number;
-    originalPrice: number;
-    discountAmount: number;
-    discountPercent: number;
-    description: string;
-  }>;
+  selectedServices: DiscountedServicePreview[];
   totalAmount: number;
   originalTotalAmount: number;
   totalDiscountAmount: number;
+  discountReasonSummary?: string | null;
   patientName: string;
   loyaltyInfo?: {
     totalPoints: number;
@@ -99,6 +127,9 @@ export type PaymentTransactionSummary = {
 export type PaymentResult = {
   invoiceCode: string;
   totalAmount: number;
+  originalTotalAmount?: number | null;
+  totalDiscountAmount?: number | null;
+  discountReason?: string | null;
   paymentStatus: string;
   prescriptionId: string;
   patientProfileId: string;
@@ -123,6 +154,9 @@ export type PaymentResult = {
     serviceCode: string;
     serviceName: string;
     price: number;
+    originalPrice?: number | null;
+    discountAmount?: number | null;
+    discountReason?: string | null;
   }>;
   patientInfo?: {
     name: string;
@@ -178,7 +212,13 @@ export class InvoicePaymentService {
           include: { auth: true },
         },
         services: {
-          include: { service: true },
+          include: {
+            service: {
+              include: {
+                promotion: true,
+              },
+            },
+          },
           orderBy: { order: 'asc' },
         },
       },
@@ -206,7 +246,13 @@ export class InvoicePaymentService {
           include: { auth: true },
         },
         services: {
-          include: { service: true },
+          include: {
+            service: {
+              include: {
+                promotion: true,
+              },
+            },
+          },
           orderBy: { order: 'asc' },
         },
       },
@@ -230,9 +276,7 @@ export class InvoicePaymentService {
     const allPrescriptionServiceIds = prescription.services.map((s) => s.id);
     const allServiceIds = prescription.services.map((s) => s.serviceId);
     const codeToPrescriptionServiceId = new Map(
-      prescription.services.map(
-        (s) => [s.service.serviceCode, s.id] as const,
-      ),
+      prescription.services.map((s) => [s.service.serviceCode, s.id] as const),
     );
     const serviceIdToPrescriptionServiceIds = new Map<string, string[]>();
     prescription.services.forEach((s) => {
@@ -249,10 +293,10 @@ export class InvoicePaymentService {
       const idsFromCodes = (dto.selectedServiceCodes || [])
         .map((code) => codeToPrescriptionServiceId.get(code))
         .filter(Boolean) as string[];
-      
+
       // Check if IDs are PrescriptionService IDs or Service IDs
       const prescriptionServiceIds: string[] = [];
-      
+
       [...idsFromIds, ...idsFromCodes].forEach((id) => {
         if (allPrescriptionServiceIds.includes(id)) {
           prescriptionServiceIds.push(id);
@@ -262,8 +306,10 @@ export class InvoicePaymentService {
           prescriptionServiceIds.push(...psIds);
         }
       });
-      
-      selectedPrescriptionServiceIds = Array.from(new Set(prescriptionServiceIds));
+
+      selectedPrescriptionServiceIds = Array.from(
+        new Set(prescriptionServiceIds),
+      );
 
       // Validate selection in prescription
       const invalidIds = selectedPrescriptionServiceIds.filter(
@@ -279,39 +325,76 @@ export class InvoicePaymentService {
     }
 
     // Lấy thông tin loyalty của bệnh nhân
-    const loyaltyInfo = await this.loyaltyService.getLoyaltyInfoFromPatientProfile(
-      prescription.patientProfile.id,
-    );
+    const loyaltyInfo =
+      await this.loyaltyService.getLoyaltyInfoFromPatientProfile(
+        prescription.patientProfile.id,
+      );
 
-    // Get selected services with their details và áp dụng giảm giá loyalty
-    const selectedServices = prescription.services
+    // Get selected services with their details và áp dụng giảm giá loyalty + promotion constraints
+    const selectedServices: DiscountedServicePreview[] = prescription.services
       .filter((s) => selectedPrescriptionServiceIds.includes(s.id))
       .map((s) => {
-        const originalPrice = s.service.price;
-        // Áp dụng giảm giá nếu có thông tin loyalty
-        const discountInfo = loyaltyInfo
-          ? this.loyaltyService.applyLoyaltyDiscount(
-              originalPrice,
+        const originalPrice = s.service.price ?? 0;
+        const {
+          promotion: activePromotion,
+          constraints,
+          promotionDiscountAmount,
+        } = this.getPromotionConstraints(s.service.promotion, originalPrice);
+
+        const priceAfterPromotion = Math.max(
+          0,
+          originalPrice - promotionDiscountAmount,
+        );
+
+        let loyaltyDiscount: LoyaltyDiscountResult | null = null;
+        let loyaltyBlocked = false;
+
+        if (loyaltyInfo) {
+          if (activePromotion?.allowLoyaltyDiscount === false) {
+            loyaltyBlocked = true;
+          } else {
+            loyaltyDiscount = this.loyaltyService.applyLoyaltyDiscount(
+              priceAfterPromotion,
               loyaltyInfo.totalPoints,
-            )
-          : {
-              originalPrice,
-              discountPercent: 0,
-              discountAmount: 0,
-              finalPrice: originalPrice,
-              tierInfo: this.loyaltyService.getLoyaltyTierInfo(0),
-            };
+              constraints,
+            );
+          }
+        }
+
+        const loyaltyDiscountAmount = loyaltyDiscount?.discountAmount ?? 0;
+        const finalPrice = Math.max(
+          0,
+          priceAfterPromotion - loyaltyDiscountAmount,
+        );
+        const totalDiscountAmount =
+          promotionDiscountAmount + loyaltyDiscountAmount;
+        const discountPercent =
+          originalPrice > 0
+            ? Math.round((totalDiscountAmount / originalPrice) * 100)
+            : 0;
+
+        const discountReason = this.buildDiscountReason({
+          promotion: activePromotion,
+          promotionDiscountAmount,
+          loyaltyDiscount,
+          loyaltyBlocked,
+        });
 
         return {
           prescriptionServiceId: s.id,
           serviceId: s.serviceId,
           serviceCode: s.service.serviceCode,
           name: s.service.name,
-          price: discountInfo.finalPrice, // Giá sau giảm
-          originalPrice: discountInfo.originalPrice, // Giá gốc
-          discountAmount: discountInfo.discountAmount, // Số tiền giảm
-          discountPercent: discountInfo.discountPercent, // Phần trăm giảm
+          price: finalPrice,
+          originalPrice,
+          discountAmount: totalDiscountAmount,
+          promotionDiscountAmount,
+          loyaltyDiscountAmount,
+          discountPercent,
           description: s.service.description,
+          discountReason,
+          promotionId: activePromotion?.id ?? null,
+          promotionName: activePromotion?.name ?? null,
         };
       });
 
@@ -325,12 +408,15 @@ export class InvoicePaymentService {
     );
     const totalDiscountAmount = originalTotalAmount - totalAmount;
 
+    const discountReasonSummary = this.buildDiscountSummary(selectedServices);
+
     return {
       prescriptionDetails: prescription,
       selectedServices,
       totalAmount,
       originalTotalAmount,
       totalDiscountAmount,
+      discountReasonSummary,
       patientName: prescription.patientProfile.name,
       loyaltyInfo: loyaltyInfo
         ? {
@@ -351,9 +437,7 @@ export class InvoicePaymentService {
     const preview = await this.createPaymentPreview(dto);
     const effectiveCashierId = await this.resolveCashierId(dto.cashierId);
     const prescription = preview.prescriptionDetails;
-    const selectedServiceIds = preview.selectedServices.map(
-      (s) => s.serviceId,
-    );
+    const selectedServiceIds = preview.selectedServices.map((s) => s.serviceId);
 
     // Auto routing removed: skip checking available work sessions
 
@@ -367,6 +451,9 @@ export class InvoicePaymentService {
       data: {
         invoiceCode,
         totalAmount: preview.totalAmount, // Giá sau giảm
+        originalTotalAmount: preview.originalTotalAmount,
+        totalDiscountAmount: preview.totalDiscountAmount,
+        discountReason: preview.discountReasonSummary,
         paymentMethod: dto.paymentMethod,
         paymentStatus: 'PENDING',
         isPaid: false,
@@ -376,6 +463,9 @@ export class InvoicePaymentService {
           create: preview.selectedServices.map((service) => ({
             serviceId: service.serviceId,
             price: service.price, // Giá sau giảm để thanh toán
+            originalPrice: service.originalPrice,
+            discountAmount: service.discountAmount,
+            discountReason: service.discountReason,
             prescriptionId: prescription.id,
             prescriptionServiceId: service.prescriptionServiceId,
           })),
@@ -477,9 +567,10 @@ export class InvoicePaymentService {
         invoiceId: invoice.id,
         amount: paymentLink.amount ?? invoice.totalAmount,
         currency: paymentLink.currency ?? 'VND',
-        status: status === PaymentTransactionStatus.SUCCEEDED
-          ? PaymentTransactionStatus.SUCCEEDED
-          : PaymentTransactionStatus.PENDING,
+        status:
+          status === PaymentTransactionStatus.SUCCEEDED
+            ? PaymentTransactionStatus.SUCCEEDED
+            : PaymentTransactionStatus.PENDING,
         providerTransactionId: paymentLink.transactionId,
         // Persist the exact orderCode we used or PayOS returned
         orderCode: paymentLink.orderCode ?? String(generatedOrderCode),
@@ -508,10 +599,17 @@ export class InvoicePaymentService {
 
   private async completeInvoicePayment(
     invoice: Invoice & {
+      originalTotalAmount?: number | null;
+      totalDiscountAmount?: number | null;
+      discountReason?: string | null;
       invoiceDetails: Array<{
         serviceId: string;
         price: number;
+        originalPrice?: number | null;
+        discountAmount?: number | null;
+        discountReason?: string | null;
         prescriptionId: string | null;
+        prescriptionServiceId: string | null;
         service: {
           serviceCode: string;
           name: string;
@@ -554,7 +652,9 @@ export class InvoicePaymentService {
 
     const prescriptionId = updatedInvoice.invoiceDetails[0]?.prescriptionId;
     if (!prescriptionId) {
-      throw new NotFoundException('Prescription ID not found in invoice details');
+      throw new NotFoundException(
+        'Prescription ID not found in invoice details',
+      );
     }
 
     const prescription = await this.getPrescriptionById(prescriptionId);
@@ -573,7 +673,9 @@ export class InvoicePaymentService {
 
     const pendingUnselectedIds: string[] = [];
     for (const prescriptionServiceId of unselectedPrescriptionServiceIds) {
-      const service = prescription.services.find((s) => s.id === prescriptionServiceId);
+      const service = prescription.services.find(
+        (s) => s.id === prescriptionServiceId,
+      );
       if (service && service.status === PrescriptionStatus.PENDING) {
         pendingUnselectedIds.push(prescriptionServiceId);
       }
@@ -591,7 +693,9 @@ export class InvoicePaymentService {
     // Mark each selected PrescriptionService as paid
     for (const prescriptionServiceId of selectedPrescriptionServiceIds) {
       // Get the PrescriptionService to find its serviceId
-      const ps = prescription.services.find((s) => s.id === prescriptionServiceId);
+      const ps = prescription.services.find(
+        (s) => s.id === prescriptionServiceId,
+      );
       if (ps) {
         await this.prescriptionService.markServicePaid(
           prescription.id,
@@ -613,6 +717,9 @@ export class InvoicePaymentService {
     const result = {
       invoiceCode: updatedInvoice.invoiceCode,
       totalAmount: updatedInvoice.totalAmount,
+      originalTotalAmount: updatedInvoice.originalTotalAmount ?? null,
+      totalDiscountAmount: updatedInvoice.totalDiscountAmount ?? null,
+      discountReason: updatedInvoice.discountReason ?? null,
       paymentStatus: 'PAID',
       prescriptionId: prescription.id,
       patientProfileId: updatedInvoice.patientProfileId,
@@ -625,6 +732,10 @@ export class InvoicePaymentService {
         serviceCode: detail.service.serviceCode,
         serviceName: detail.service.name,
         price: detail.price,
+        originalPrice: detail.originalPrice ?? detail.price,
+        discountAmount: detail.discountAmount ?? 0,
+        discountReason:
+          detail.discountReason ?? updatedInvoice.discountReason ?? null,
       })),
       patientInfo: {
         name: updatedInvoice.patientProfile.name,
@@ -646,13 +757,11 @@ export class InvoicePaymentService {
       });
 
       if (patientProfile?.patientId) {
-        // Tính điểm từ giá trị đã thanh toán (sau giảm giá)
-        // Nhưng để công bằng, nên tính điểm từ giá gốc
-        // Tuy nhiên vì không lưu giá gốc trong invoice, ta tính từ totalAmount
-        // Trong thực tế, nên lưu originalAmount vào invoice để tính điểm chính xác
+        const baseAmountForPoints =
+          updatedInvoice.originalTotalAmount ?? updatedInvoice.totalAmount;
         const pointsResult = await this.loyaltyService.addLoyaltyPoints(
           patientProfile.patientId,
-          updatedInvoice.totalAmount,
+          baseAmountForPoints,
         );
 
         this.logger.log(
@@ -829,7 +938,12 @@ export class InvoicePaymentService {
   async handlePayOsWebhook(
     signature: string | undefined,
     payload: any,
-  ): Promise<{ success: boolean; data?: any; status?: PaymentTransactionStatus; invoiceCode?: string }> {
+  ): Promise<{
+    success: boolean;
+    data?: any;
+    status?: PaymentTransactionStatus;
+    invoiceCode?: string;
+  }> {
     if (!this.payOsService.isEnabled()) {
       throw new BadRequestException('PayOS integration is not configured.');
     }
@@ -856,13 +970,19 @@ export class InvoicePaymentService {
           parsedPayload = null;
         }
         if (!parsedPayload) {
-          this.logger.warn('Webhook payload could not be parsed as JSON or form-encoded');
+          this.logger.warn(
+            'Webhook payload could not be parsed as JSON or form-encoded',
+          );
         }
       }
     }
 
     // If payload is object but nested data is stringified JSON, parse it
-    if (parsedPayload && typeof parsedPayload === 'object' && typeof parsedPayload.data === 'string') {
+    if (
+      parsedPayload &&
+      typeof parsedPayload === 'object' &&
+      typeof parsedPayload.data === 'string'
+    ) {
       try {
         parsedPayload.data = JSON.parse(parsedPayload.data);
         this.logger.debug('Parsed nested payload.data JSON string');
@@ -872,7 +992,11 @@ export class InvoicePaymentService {
     }
 
     let effectiveSignature = signature;
-    if (!effectiveSignature && parsedPayload && typeof parsedPayload.signature === 'string') {
+    if (
+      !effectiveSignature &&
+      parsedPayload &&
+      typeof parsedPayload.signature === 'string'
+    ) {
       effectiveSignature = parsedPayload.signature;
       this.logger.debug('Using signature field from payload body');
     }
@@ -894,7 +1018,10 @@ export class InvoicePaymentService {
           `Webhook missing signature. Raw payload=${JSON.stringify(printable)}`,
         );
       } catch (error) {
-        this.logger.warn('Webhook missing signature. Payload could not be stringified');
+        this.logger.warn(`Error stringifying payload: ${error}`);
+        this.logger.warn(
+          'Webhook missing signature. Payload could not be stringified',
+        );
       }
       return {
         success: true,
@@ -911,7 +1038,17 @@ export class InvoicePaymentService {
     }
 
     const rawPayload =
-      verified.raw ?? (parsedPayload ?? (typeof payload === 'string' ? (() => { try { return JSON.parse(payload); } catch { return undefined; } })() : payload));
+      verified.raw ??
+      parsedPayload ??
+      (typeof payload === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(payload) as unknown;
+            } catch {
+              return undefined;
+            }
+          })()
+        : payload);
 
     this.logger.debug(
       `Webhook verified. Keys=${Object.keys(rawPayload ?? {}).join(', ')}`,
@@ -993,7 +1130,12 @@ export class InvoicePaymentService {
       const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
       const candidates = await this.prisma.paymentTransaction.findMany({
         where: {
-          status: { in: [PaymentTransactionStatus.PENDING, PaymentTransactionStatus.PROCESSING] },
+          status: {
+            in: [
+              PaymentTransactionStatus.PENDING,
+              PaymentTransactionStatus.PROCESSING,
+            ],
+          },
           ...(amount ? { amount: amount } : {}),
           invoice: { isPaid: false, createdAt: { gte: thirtyMinutesAgo } },
         },
@@ -1036,20 +1178,25 @@ export class InvoicePaymentService {
       where: { id: transaction.id },
       data: {
         status,
-        providerTransactionId: transactionId ?? transaction.providerTransactionId,
+        providerTransactionId:
+          transactionId ?? transaction.providerTransactionId,
         orderCode: orderCode ? String(orderCode) : transaction.orderCode,
         paymentUrl:
           verified.paymentUrl ??
           rawPayload?.checkoutUrl ??
           rawPayload?.data?.paymentUrl ??
           transaction.paymentUrl,
-        qrCode: verified.qrCode ?? rawPayload?.data?.qrCode ?? transaction.qrCode,
+        qrCode:
+          verified.qrCode ?? rawPayload?.data?.qrCode ?? transaction.qrCode,
         amount:
           verified.amount ??
           rawPayload?.data?.amount ??
           rawPayload?.data?.totalAmount ??
           transaction.amount,
-        currency: verified.currency ?? rawPayload?.data?.currency ?? transaction.currency,
+        currency:
+          verified.currency ??
+          rawPayload?.data?.currency ??
+          transaction.currency,
         expiredAt:
           this.toDate(
             verified.expiredAt ??
@@ -1179,6 +1326,133 @@ export class InvoicePaymentService {
     };
   }
 
+  private getPromotionConstraints(
+    promotion: ServicePromotionSnapshot | null | undefined,
+    originalPrice: number,
+  ): {
+    promotion: ServicePromotionSnapshot | null;
+    constraints?: LoyaltyDiscountConstraints;
+    promotionDiscountAmount: number;
+  } {
+    if (!promotion || !this.isPromotionCurrentlyActive(promotion)) {
+      return {
+        promotion: null,
+        constraints: undefined,
+        promotionDiscountAmount: 0,
+      };
+    }
+
+    const constraints: LoyaltyDiscountConstraints = {
+      allowLoyaltyDiscount: promotion.allowLoyaltyDiscount,
+      maxDiscountPercent: promotion.maxDiscountPercent ?? undefined,
+      maxDiscountAmount: promotion.maxDiscountAmount ?? undefined,
+    };
+
+    const { amount } = this.calculatePromotionDiscount(
+      originalPrice,
+      promotion,
+    );
+
+    return { promotion, constraints, promotionDiscountAmount: amount };
+  }
+
+  private isPromotionCurrentlyActive(
+    promotion: ServicePromotionSnapshot,
+  ): boolean {
+    if (!promotion.isActive) {
+      return false;
+    }
+    const now = new Date();
+    if (promotion.startDate && promotion.startDate > now) {
+      return false;
+    }
+    if (promotion.endDate && promotion.endDate < now) {
+      return false;
+    }
+    return true;
+  }
+
+  private buildDiscountReason({
+    promotion,
+    promotionDiscountAmount,
+    loyaltyDiscount,
+    loyaltyBlocked,
+  }: {
+    promotion?: ServicePromotionSnapshot | null;
+    promotionDiscountAmount: number;
+    loyaltyDiscount: LoyaltyDiscountResult | null;
+    loyaltyBlocked: boolean;
+  }): string | null {
+    const parts: string[] = [];
+
+    if (promotion && promotionDiscountAmount > 0) {
+      parts.push(`PROMOTION:${promotion.name ?? promotion.id}`);
+    }
+
+    if (loyaltyDiscount && loyaltyDiscount.discountAmount > 0) {
+      const capLabels: string[] = [];
+      if (loyaltyDiscount.wasPercentCapped) {
+        capLabels.push('percent');
+      }
+      if (loyaltyDiscount.wasAmountCapped) {
+        capLabels.push('amount');
+      }
+      const loyaltyPart = capLabels.length
+        ? `LOYALTY_${loyaltyDiscount.tierInfo.tier}|CAP(${capLabels.join('+')})`
+        : `LOYALTY_${loyaltyDiscount.tierInfo.tier}`;
+      parts.push(loyaltyPart);
+    } else if (loyaltyBlocked) {
+      parts.push(
+        promotion?.name
+          ? `LOYALTY_BLOCKED_BY_PROMOTION:${promotion.name}`
+          : 'LOYALTY_BLOCKED_BY_PROMOTION',
+      );
+    }
+
+    return parts.length > 0 ? parts.join(' | ') : null;
+  }
+
+  private calculatePromotionDiscount(
+    originalPrice: number,
+    promotion: ServicePromotionSnapshot,
+  ): { amount: number } {
+    if (originalPrice <= 0) {
+      return { amount: 0 };
+    }
+
+    const percent = promotion.maxDiscountPercent ?? 0;
+    const amountFromPercent = percent > 0 ? (originalPrice * percent) / 100 : 0;
+
+    let amount = amountFromPercent;
+    if (
+      promotion.maxDiscountAmount !== null &&
+      promotion.maxDiscountAmount !== undefined
+    ) {
+      amount = Math.min(amount, promotion.maxDiscountAmount);
+    }
+
+    amount = Math.max(0, Math.min(amount, originalPrice));
+
+    return { amount: Math.round(amount) };
+  }
+
+  private buildDiscountSummary(
+    services: DiscountedServicePreview[],
+  ): string | null {
+    const reasons = services
+      .filter(
+        (service) =>
+          (service.discountAmount ?? 0) > 0 && service.discountReason,
+      )
+      .map((service) => service.discountReason as string);
+
+    if (reasons.length === 0) {
+      return null;
+    }
+
+    return Array.from(new Set(reasons)).join(' || ');
+  }
+
   private mapTransactionSummary(
     transaction?: PaymentTransaction | null,
   ): PaymentTransactionSummary | undefined {
@@ -1202,7 +1476,9 @@ export class InvoicePaymentService {
     if (!value) return null;
     if (value instanceof Date) return value;
     if (typeof value === 'number') {
-      return value > 0 && value < 10_000_000_000 ? new Date(value * 1000) : new Date(value);
+      return value > 0 && value < 10_000_000_000
+        ? new Date(value * 1000)
+        : new Date(value);
     }
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -1256,27 +1532,45 @@ export class InvoicePaymentService {
     try {
       const cashierId = invoice.cashierId;
       if (!cashierId) {
-        this.logger.warn(`[INVOICE PAYMENT] ⚠️ No cashierId found for invoice ${invoice.invoiceCode}, skipping notification`);
+        this.logger.warn(
+          `[INVOICE PAYMENT] ⚠️ No cashierId found for invoice ${invoice.invoiceCode}, skipping notification`,
+        );
         return;
       }
 
-      this.logger.debug(`[INVOICE PAYMENT] 🔍 Checking notification for invoice ${invoice.invoiceCode}`);
+      this.logger.debug(
+        `[INVOICE PAYMENT] 🔍 Checking notification for invoice ${invoice.invoiceCode}`,
+      );
       this.logger.debug(`[INVOICE PAYMENT] 💼 Invoice cashierId: ${cashierId}`);
 
       // Kiểm tra cashier có online không
       const isCashierOnline = this.webSocketService.isCashierOnline(cashierId);
       if (!isCashierOnline) {
         const allOnlineCashiers = this.webSocketService.getOnlineCashiers();
-        this.logger.warn(`[INVOICE PAYMENT] ❌ Cashier ${cashierId} is not online, skipping notification for invoice ${invoice.invoiceCode}`);
-        this.logger.warn(`[INVOICE PAYMENT] 📋 Currently online cashiers: ${allOnlineCashiers.length > 0 ? allOnlineCashiers.join(', ') : 'NONE'}`);
+        this.logger.warn(
+          `[INVOICE PAYMENT] ❌ Cashier ${cashierId} is not online, skipping notification for invoice ${invoice.invoiceCode}`,
+        );
+        this.logger.warn(
+          `[INVOICE PAYMENT] 📋 Currently online cashiers: ${allOnlineCashiers.length > 0 ? allOnlineCashiers.join(', ') : 'NONE'}`,
+        );
         return;
       }
 
-      this.logger.debug(`[INVOICE PAYMENT] ✅ Cashier ${cashierId} is online, sending notification...`);
-      await this.webSocketService.notifyCashierInvoicePaymentSuccess(cashierId, invoice);
-      this.logger.debug(`[INVOICE PAYMENT] ✅ Sent invoice payment success notification to cashier ${cashierId} for invoice ${invoice.invoiceCode}`);
+      this.logger.debug(
+        `[INVOICE PAYMENT] ✅ Cashier ${cashierId} is online, sending notification...`,
+      );
+      await this.webSocketService.notifyCashierInvoicePaymentSuccess(
+        cashierId,
+        invoice,
+      );
+      this.logger.debug(
+        `[INVOICE PAYMENT] ✅ Sent invoice payment success notification to cashier ${cashierId} for invoice ${invoice.invoiceCode}`,
+      );
     } catch (error) {
-      this.logger.error(`[INVOICE PAYMENT] ❌ Failed to send invoice payment success notification: ${error.message}`, error.stack);
+      this.logger.error(
+        `[INVOICE PAYMENT] ❌ Failed to send invoice payment success notification: ${error.message}`,
+        error.stack,
+      );
     }
   }
 
@@ -1382,7 +1676,10 @@ export class InvoicePaymentService {
         },
       };
     } catch (error) {
-      this.logger.error(`Failed to get invoice by ID ${invoiceId}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to get invoice by ID ${invoiceId}: ${error.message}`,
+        error.stack,
+      );
       if (error instanceof NotFoundException) {
         throw error;
       }

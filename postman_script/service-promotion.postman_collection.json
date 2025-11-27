@@ -1,0 +1,169 @@
+{
+  "info": {
+    "_postman_id": "f5b6ce3c-2cf8-4a7e-9d8b-4e0c0f65c021",
+    "name": "Service Promotion APIs",
+    "description": "Collection for managing service-level promotion programs (loyalty overrides, discount caps).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "List Service Promotions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/services/management/promotions?limit=20&offset=0",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "services",
+            "management",
+            "promotions"
+          ],
+          "query": [
+            {
+              "key": "limit",
+              "value": "20"
+            },
+            {
+              "key": "offset",
+              "value": "0"
+            },
+            {
+              "key": "isActive",
+              "value": "true",
+              "disabled": true
+            },
+            {
+              "key": "allowLoyaltyDiscount",
+              "value": "true",
+              "disabled": true
+            },
+            {
+              "key": "search",
+              "value": "",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "Danh sách chương trình khuyến mãi hiện có, hỗ trợ filter trạng thái."
+      },
+      "response": []
+    },
+    {
+      "name": "Get Promotion By Service",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/services/management/services/{{serviceId}}/promotion",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "services",
+            "management",
+            "services",
+            "{{serviceId}}",
+            "promotion"
+          ]
+        },
+        "description": "Lấy thông tin khuyến mãi áp dụng cho một dịch vụ cụ thể (trả về promotion hoặc null)."
+      },
+      "response": []
+    },
+    {
+      "name": "Create / Update Service Promotion",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Ưu đãi cuối tuần\",\n  \"description\": \"Giảm tối đa 500k mỗi lần sử dụng.\",\n  \"allowLoyaltyDiscount\": true,\n  \"maxDiscountPercent\": 20,\n  \"maxDiscountAmount\": 500000,\n  \"isActive\": true,\n  \"startDate\": \"2025-01-01T00:00:00.000Z\",\n  \"endDate\": \"2025-02-01T23:59:59.000Z\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/services/management/{{serviceId}}/promotion",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "services",
+            "management",
+            "{{serviceId}}",
+            "promotion"
+          ]
+        },
+        "description": "Tạo mới hoặc cập nhật chương trình khuyến mãi cho một dịch vụ. Nếu đã tồn tại sẽ được upsert."
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Service Promotion",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/services/management/{{serviceId}}/promotion",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "services",
+            "management",
+            "{{serviceId}}",
+            "promotion"
+          ]
+        },
+        "description": "Xoá chương trình khuyến mãi đang gán cho dịch vụ. Loyalty sẽ áp dụng lại theo cấu hình mặc định."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "serviceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
+

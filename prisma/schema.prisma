@@ -305,6 +305,7 @@ model Service {
   clinicRoomServices  ClinicRoomService[]
   prescriptions       PrescriptionService[]
   invoiceDetails      InvoiceDetail[]
+  promotion           ServicePromotion?
   workSessionServices WorkSessionService[]
   appointmentServices AppointmentService[]
   appointments        Appointment[]
@@ -314,6 +315,24 @@ model Service {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("services")
+}
+
+model ServicePromotion {
+  id                   String  @id @default(uuid())
+  serviceId            String  @unique @map("service_id")
+  service              Service @relation(fields: [serviceId], references: [id])
+  name                 String? @map("name")
+  description          String? @map("description")
+  allowLoyaltyDiscount Boolean @default(true) @map("allow_loyalty_discount")
+  maxDiscountPercent   Float?  @map("max_discount_percent")
+  maxDiscountAmount    Float?  @map("max_discount_amount")
+  isActive             Boolean @default(true) @map("is_active")
+  startDate            DateTime? @map("start_date")
+  endDate              DateTime? @map("end_date")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("service_promotions")
 }
 
 // Gói dịch vụ (combo)
@@ -427,11 +446,14 @@ model Invoice {
   id           String @id @default(uuid())
   invoiceCode  String @map("invoice_code")
   totalAmount  Float  @map("total_amount") // Tổng tiền phải thanh toán
+  originalTotalAmount Float? @map("original_total_amount") // Tổng giá gốc trước giảm
+  totalDiscountAmount Float? @map("total_discount_amount") // Tổng số tiền được giảm
   amountPaid   Float  @default(0) @map("amount_paid") // Số tiền bệnh nhân đã đưa
   changeAmount Float  @default(0) @map("change_amount") // Tiền thối lại cho bệnh nhân
 
   paymentMethod PaymentMethod @default(CASH) @map("payment_method") // Tiền mặt, thẻ, chuyển khoản...
   paymentStatus String        @map("payment_status") // Pending, Paid, Refunded...
+  discountReason String?      @map("discount_reason") // Lý do giảm giá tổng
   createdAt     DateTime      @default(now()) @map("created_at")
   isPaid        Boolean       @default(false) @map("is_paid")
 
@@ -491,6 +513,9 @@ model InvoiceDetail {
   serviceId             String
   service               Service              @relation(fields: [serviceId], references: [id])
   price                 Float                @map("price")
+  originalPrice         Float?               @map("original_price")
+  discountAmount        Float?               @map("discount_amount")
+  discountReason        String?              @map("discount_reason")
   prescriptionId        String?
   prescription          Prescription?        @relation(fields: [prescriptionId], references: [id])
   prescriptionServiceId String?              @map("prescription_service_id")

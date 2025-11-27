@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Controller,
   Get,
   Post,
   Put,
+  Delete,
   Query,
   Param,
   Body,
@@ -39,6 +41,8 @@ import {
   UpdatePackageDto,
   DoctorServiceQueryDto,
   ServiceLocationQueryDto,
+  UpsertServicePromotionDto,
+  ServicePromotionQueryDto,
 } from './dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -322,6 +326,123 @@ Hỗ trợ filter:
           success: false,
           message: 'Có lỗi xảy ra khi cập nhật dịch vụ',
           error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('management/services/:id/promotion')
+  async upsertServicePromotion(
+    @Param('id') id: string,
+    @Body() dto: UpsertServicePromotionDto,
+  ) {
+    try {
+      const service = await this.serviceService.upsertServicePromotion(id, dto);
+      return {
+        success: true,
+        message: 'Thiết lập khuyến mãi thành công',
+        data: service,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Upsert service promotion error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi thiết lập khuyến mãi',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Delete('management/services/:id/promotion')
+  async deleteServicePromotion(@Param('id') id: string) {
+    try {
+      await this.serviceService.deleteServicePromotion(id);
+      return {
+        success: true,
+        message: 'Xoá khuyến mãi dịch vụ thành công',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Delete service promotion error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi xoá khuyến mãi dịch vụ',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('management/services/:id/promotion')
+  async getServicePromotion(@Param('id') id: string) {
+    try {
+      const service = await this.serviceService.getServicePromotionDetail(id);
+      return {
+        success: true,
+        message: 'Lấy thông tin khuyến mãi dịch vụ thành công',
+        data: service,
+      };
+    } catch (error) {
+      const isError = error instanceof Error;
+      const message = isError ? error.message : String(error);
+      const stack = isError ? error.stack : undefined;
+      this.logger.error(
+        `Get service promotion detail error: ${message}`,
+        stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi lấy thông tin khuyến mãi dịch vụ',
+          error: message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('management/promotions')
+  async listServicePromotions(@Query() query: ServicePromotionQueryDto) {
+    try {
+      const data = await this.serviceService.listServicePromotions(query);
+      return {
+        success: true,
+        message: 'Lấy danh sách khuyến mãi dịch vụ thành công',
+        data,
+      };
+    } catch (error) {
+      const isError = error instanceof Error;
+      const message = isError ? error.message : String(error);
+      const stack = isError ? error.stack : undefined;
+      this.logger.error(`List service promotions error: ${message}`, stack);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi lấy danh sách khuyến mãi dịch vụ',
+          error: message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );

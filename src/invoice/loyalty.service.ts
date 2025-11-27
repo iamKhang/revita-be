@@ -16,12 +16,30 @@ export interface LoyaltyTierInfo {
   nextTierPoints?: number;
 }
 
+export interface LoyaltyDiscountConstraints {
+  allowLoyaltyDiscount?: boolean;
+  maxDiscountPercent?: number | null;
+  maxDiscountAmount?: number | null;
+}
+
+export interface LoyaltyDiscountResult {
+  originalPrice: number;
+  discountPercent: number;
+  discountAmount: number;
+  finalPrice: number;
+  tierInfo: LoyaltyTierInfo;
+  rawDiscountAmount: number;
+  wasPercentCapped: boolean;
+  wasAmountCapped: boolean;
+  appliedMaxDiscount?: number;
+}
+
 @Injectable()
 export class LoyaltyService {
   private readonly logger = new Logger(LoyaltyService.name);
 
-  // Cấu hình: 1 điểm = 30,000 VNĐ
-  private readonly POINTS_PER_30000_VND = 1;
+  // Cấu hình: 1 điểm = 50,000 VNĐ
+  private readonly POINTS_PER_50000_VND = 1;
 
   // Ngưỡng điểm cho từng hạng
   private readonly TIER_THRESHOLDS = {
@@ -38,6 +56,14 @@ export class LoyaltyService {
     [LoyaltyTier.PLATINUM]: 15,
   };
 
+  // Giới hạn giảm giá tối đa cho mỗi dịch vụ theo hạng (VNĐ)
+  private readonly MAX_DISCOUNT_PER_SERVICE = {
+    [LoyaltyTier.NONE]: 0,
+    [LoyaltyTier.SILVER]: 200_000, // tránh giảm quá sâu cho dịch vụ nhỏ
+    [LoyaltyTier.GOLD]: 500_000,
+    [LoyaltyTier.PLATINUM]: 1_000_000,
+  } as Record<LoyaltyTier, number>;
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -46,8 +72,8 @@ export class LoyaltyService {
    * @returns Số điểm được cộng
    */
   calculatePointsFromAmount(amount: number): number {
-    // Làm tròn xuống: 30,000 VNĐ = 1 điểm
-    return Math.floor(amount / 30000) * this.POINTS_PER_30000_VND;
+    // Làm tròn xuống: 50,000 VNĐ = 1 điểm
+    return Math.floor(amount / 50000) * this.POINTS_PER_50000_VND;
   }
 
   /**
@@ -113,24 +139,63 @@ export class LoyaltyService {
   applyLoyaltyDiscount(
     originalPrice: number,
     totalPoints: number,
-  ): {
-    originalPrice: number;
-    discountPercent: number;
-    discountAmount: number;
-    finalPrice: number;
-    tierInfo: LoyaltyTierInfo;
-  } {
+    constraints?: LoyaltyDiscountConstraints,
+  ): LoyaltyDiscountResult {
     const tierInfo = this.getLoyaltyTierInfo(totalPoints);
-    const discountPercent = tierInfo.discountPercent;
-    const discountAmount = (originalPrice * discountPercent) / 100;
-    const finalPrice = originalPrice - discountAmount;
+    const tierDiscountPercent = tierInfo.discountPercent;
+
+    let effectivePercent = tierDiscountPercent;
+    let wasPercentCapped = false;
+
+    if (constraints?.allowLoyaltyDiscount === false) {
+      effectivePercent = 0;
+      wasPercentCapped = true;
+    }
+
+    if (
+      constraints?.maxDiscountPercent !== undefined &&
+      constraints.maxDiscountPercent !== null &&
+      constraints.maxDiscountPercent < effectivePercent
+    ) {
+      effectivePercent = constraints.maxDiscountPercent;
+      wasPercentCapped = true;
+    }
+
+    const percentBasedAmount = (originalPrice * effectivePercent) / 100;
+    const tierMax = this.MAX_DISCOUNT_PER_SERVICE[tierInfo.tier];
+    let maxDiscountCap =
+      typeof tierMax === 'number'
+        ? tierMax
+        : Number.POSITIVE_INFINITY;
+
+    if (
+      constraints?.maxDiscountAmount !== undefined &&
+      constraints.maxDiscountAmount !== null
+    ) {
+      maxDiscountCap = Math.min(maxDiscountCap, constraints.maxDiscountAmount);
+    }
+
+    if (!Number.isFinite(maxDiscountCap)) {
+      maxDiscountCap = Number.POSITIVE_INFINITY;
+    }
+
+    const discountAmount = Math.min(percentBasedAmount, maxDiscountCap);
+    const wasAmountCapped = discountAmount < percentBasedAmount;
+    const finalPrice = Math.max(0, originalPrice - discountAmount);
 
     return {
       originalPrice,
-      discountPercent,
+      discountPercent: effectivePercent,
       discountAmount: Math.round(discountAmount),
       finalPrice: Math.round(finalPrice),
       tierInfo,
+      rawDiscountAmount: percentBasedAmount,
+      wasPercentCapped,
+      wasAmountCapped,
+      appliedMaxDiscount:
+        Number.isFinite(maxDiscountCap) && maxDiscountCap !== Number.POSITIVE_INFINITY
+          ? maxDiscountCap
+          : undefined,
     };
   }
 

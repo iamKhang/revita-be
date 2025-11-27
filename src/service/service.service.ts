@@ -14,6 +14,8 @@ import {
   PackageItemInputDto,
   DoctorServiceQueryDto,
   ServiceLocationQueryDto,
+  UpsertServicePromotionDto,
+  ServicePromotionQueryDto,
 } from './dto';
 
 type DoctorServiceQueryOptions = {
@@ -68,6 +70,21 @@ export class ServiceService {
             isActive: true,
           },
         },
+      },
+    },
+    promotion: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        allowLoyaltyDiscount: true,
+        maxDiscountPercent: true,
+        maxDiscountAmount: true,
+        isActive: true,
+        startDate: true,
+        endDate: true,
+        createdAt: true,
+        updatedAt: true,
       },
     },
   } satisfies Prisma.ServiceInclude;
@@ -160,6 +177,24 @@ export class ServiceService {
       boothIds,
       clinicRoomIds,
     };
+  }
+
+  private parseOptionalDateInput(
+    value?: string,
+    fieldName: string = 'date',
+  ): Date | null {
+    if (!value) {
+      return null;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException(
+        `Invalid ${fieldName}. Please use ISO 8601 format.`,
+      );
+    }
+
+    return parsed;
   }
 
   private readonly packageInclude = {
@@ -889,6 +924,183 @@ export class ServiceService {
     } catch (error) {
       this.handlePrismaError(error, 'service');
     }
+  }
+
+  async upsertServicePromotion(
+    serviceId: string,
+    dto: UpsertServicePromotionDto,
+  ) {
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { id: true },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    const startDate = this.parseOptionalDateInput(dto.startDate, 'startDate');
+    const endDate = this.parseOptionalDateInput(dto.endDate, 'endDate');
+
+    if (startDate && endDate && endDate < startDate) {
+      throw new BadRequestException(
+        'endDate must be greater than or equal to startDate',
+      );
+    }
+
+    const payload = {
+      name: dto.name,
+      description: dto.description ?? null,
+      allowLoyaltyDiscount:
+        dto.allowLoyaltyDiscount === undefined
+          ? true
+          : dto.allowLoyaltyDiscount,
+      maxDiscountPercent: dto.maxDiscountPercent ?? null,
+      maxDiscountAmount: dto.maxDiscountAmount ?? null,
+      isActive: dto.isActive ?? true,
+      startDate,
+      endDate,
+    };
+
+    await this.prisma.servicePromotion.upsert({
+      where: { serviceId },
+      update: payload,
+      create: {
+        serviceId,
+        ...payload,
+      },
+    });
+
+    return this.getServiceManagementById(serviceId);
+  }
+
+  async deleteServicePromotion(serviceId: string) {
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { id: true, promotion: { select: { id: true } } },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    if (!service.promotion) {
+      throw new NotFoundException('Service promotion not found');
+    }
+
+    await this.prisma.servicePromotion.delete({
+      where: { serviceId },
+    });
+
+    return {
+      success: true,
+      message: 'Service promotion deleted successfully',
+    };
+  }
+
+  async getServicePromotionDetail(serviceId: string) {
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      select: {
+        id: true,
+        serviceCode: true,
+        name: true,
+        price: true,
+        isActive: true,
+        promotion: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            allowLoyaltyDiscount: true,
+            maxDiscountPercent: true,
+            maxDiscountAmount: true,
+            isActive: true,
+            startDate: true,
+            endDate: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    return service;
+  }
+
+  async listServicePromotions(query: ServicePromotionQueryDto) {
+    const { take, skip } = this.normalizePagination(
+      query.limit,
+      query.offset,
+      100,
+    );
+
+    const where: Prisma.ServicePromotionWhereInput = {};
+    if (query.isActive !== undefined) {
+      where.isActive = query.isActive;
+    }
+    if (query.allowLoyaltyDiscount !== undefined) {
+      where.allowLoyaltyDiscount = query.allowLoyaltyDiscount;
+    }
+    if (query.serviceId) {
+      where.serviceId = query.serviceId;
+    }
+    if (query.search) {
+      where.OR = [
+        {
+          name: {
+            contains: query.search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          service: {
+            name: {
+              contains: query.search,
+              mode: 'insensitive',
+            },
+          },
+        },
+        {
+          service: {
+            serviceCode: {
+              contains: query.search,
+              mode: 'insensitive',
+            },
+          },
+        },
+      ];
+    }
+
+    const [total, promotions] = await this.prisma.$transaction([
+      this.prisma.servicePromotion.count({ where }),
+      this.prisma.servicePromotion.findMany({
+        where,
+        skip,
+        take,
+        orderBy: [{ createdAt: 'desc' }],
+        include: {
+          service: {
+            select: {
+              id: true,
+              serviceCode: true,
+              name: true,
+              price: true,
+              isActive: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      promotions,
+      pagination: this.buildPagination(total, take, skip),
+    };
   }
 
   async getPackageManagementList(query: ServiceManagementQueryDto) {

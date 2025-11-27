@@ -4250,6 +4250,120 @@ async function main() {
     }
   }
 
+  // 3.4b. Seed Service Promotions cho một số dịch vụ tiêu biểu
+  const addDays = (base: number): Date => {
+    const date = new Date();
+    date.setDate(date.getDate() + base);
+    return date;
+  };
+
+  type ServicePromotionSeed = {
+    serviceCode: string;
+    name: string;
+    description?: string;
+    allowLoyaltyDiscount?: boolean;
+    maxDiscountPercent?: number;
+    maxDiscountAmount?: number;
+    startInDays?: number;
+    endInDays?: number;
+  };
+
+  const servicePromotions: ServicePromotionSeed[] = [
+    {
+      serviceCode: 'CONSULT_STD',
+      name: 'Khai trương phòng khám',
+      description: 'Ưu đãi 10% cho khách hàng khám nội tổng quát lần đầu.',
+      maxDiscountPercent: 10,
+      maxDiscountAmount: 80_000,
+      startInDays: -7,
+      endInDays: 30,
+    },
+    {
+      serviceCode: 'LASIK_SURG',
+      name: 'Giảm giá mùa lễ hội',
+      description: 'Giảm tối đa 1.5 triệu cho phẫu thuật khúc xạ LASIK.',
+      maxDiscountPercent: 15,
+      maxDiscountAmount: 1_500_000,
+      startInDays: 0,
+      endInDays: 60,
+    },
+    {
+      serviceCode: 'TEETH_WHITEN',
+      name: 'Tháng chăm sóc nụ cười',
+      description: 'Tẩy trắng răng ưu đãi, không cộng dồn loyalty.',
+      allowLoyaltyDiscount: false,
+      maxDiscountPercent: 20,
+      maxDiscountAmount: 500_000,
+      startInDays: -3,
+      endInDays: 27,
+    },
+    {
+      serviceCode: 'CHEMO_SESSION',
+      name: 'Hỗ trợ bệnh nhân ung bướu',
+      description: 'Giảm trực tiếp 500k mỗi chu kỳ truyền hoá chất.',
+      maxDiscountPercent: 5,
+      maxDiscountAmount: 500_000,
+      startInDays: 0,
+      endInDays: 120,
+    },
+    {
+      serviceCode: 'GYNE_US',
+      name: 'Tầm soát phụ khoa định kỳ',
+      description: 'Giảm 15% siêu âm phụ khoa, tối đa 80k.',
+      maxDiscountPercent: 15,
+      maxDiscountAmount: 80_000,
+      startInDays: -14,
+      endInDays: 14,
+    },
+  ];
+
+  for (const promo of servicePromotions) {
+    const serviceId = serviceCodeToId[promo.serviceCode];
+    if (!serviceId) {
+      console.warn(
+        `⚠️  ServicePromotion seed: không tìm thấy serviceCode ${promo.serviceCode}, bỏ qua.`,
+      );
+      continue;
+    }
+
+    const startDate =
+      promo.startInDays !== undefined ? addDays(promo.startInDays) : null;
+    const endDate =
+      promo.endInDays !== undefined ? addDays(promo.endInDays) : null;
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    await prisma.servicePromotion.upsert({
+      where: { serviceId },
+      update: {
+        name: promo.name,
+        description: promo.description ?? null,
+        allowLoyaltyDiscount:
+          promo.allowLoyaltyDiscount === undefined
+            ? true
+            : promo.allowLoyaltyDiscount,
+        maxDiscountPercent: promo.maxDiscountPercent ?? null,
+        maxDiscountAmount: promo.maxDiscountAmount ?? null,
+        startDate,
+        endDate,
+        isActive: true,
+      },
+      create: {
+        serviceId,
+        name: promo.name,
+        description: promo.description ?? null,
+        allowLoyaltyDiscount:
+          promo.allowLoyaltyDiscount === undefined
+            ? true
+            : promo.allowLoyaltyDiscount,
+        maxDiscountPercent: promo.maxDiscountPercent ?? null,
+        maxDiscountAmount: promo.maxDiscountAmount ?? null,
+        startDate,
+        endDate,
+        isActive: true,
+      },
+    });
+  }
+
   // 3.4. Seed Counters
   type CounterJson = {
     counterCode: string;

@@ -1,5 +1,10 @@
 /* eslint-disable */
-import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TranslationService } from './translation.service';
 import { EncryptionService } from './encryption.service';
@@ -14,6 +19,17 @@ import { CodeGeneratorService } from '../user-management/patient-profile/code-ge
 @Injectable()
 export class MedicalRecordService {
   private codeGenerator = new CodeGeneratorService();
+  private readonly historyInclude = {
+    select: {
+      id: true,
+      changedBy: true,
+      changedAt: true,
+      changes: true,
+    },
+    orderBy: {
+      changedAt: 'desc' as const,
+    },
+  };
 
   constructor(
     private readonly prisma: PrismaService,
@@ -26,45 +42,108 @@ export class MedicalRecordService {
    * @param changes - Object changes từ MedicalRecordHistory
    * @returns changes với content đã được giải mã
    */
-  private decryptHistoryChanges(changes: any): any {
-    if (!changes || typeof changes !== 'object') {
-      return changes;
+  private decryptHistoryChanges(rawChanges: any): any {
+    if (rawChanges === null || rawChanges === undefined) {
+      return rawChanges;
     }
 
-    // Nếu có data trong changes (CREATE, DELETE)
-    if (changes.data && changes.data.content) {
+    let parsedChanges = rawChanges;
+
+    if (typeof rawChanges === 'string') {
       try {
-        changes.data.content = this.encryptionService.decrypt(
-          changes.data.content as any,
-        );
+        parsedChanges = this.encryptionService.decrypt(rawChanges);
       } catch (error) {
-        // Nếu không giải mã được, giữ nguyên (có thể là dữ liệu cũ chưa mã hóa)
-        console.warn('Không thể giải mã content trong history:', error);
+        console.warn('Không thể giải mã history changes:', error);
+        return rawChanges;
       }
     }
 
-    // Nếu có before và after trong changes (UPDATE)
-    if (changes.before && changes.before.content) {
-      try {
-        changes.before.content = this.encryptionService.decrypt(
-          changes.before.content as any,
-        );
-      } catch (error) {
-        console.warn('Không thể giải mã before content trong history:', error);
-      }
+    if (typeof parsedChanges !== 'object' || parsedChanges === null) {
+      return parsedChanges;
     }
 
-    if (changes.after && changes.after.content) {
-      try {
-        changes.after.content = this.encryptionService.decrypt(
-          changes.after.content as any,
-        );
-      } catch (error) {
-        console.warn('Không thể giải mã after content trong history:', error);
+    const clone =
+      Array.isArray(parsedChanges) || parsedChanges === null
+        ? parsedChanges
+        : { ...parsedChanges };
+
+    const decryptContent = (targetKey: 'data' | 'before' | 'after') => {
+      const target = clone?.[targetKey];
+      if (target && typeof target === 'object' && target.content) {
+        try {
+          clone[targetKey] = {
+            ...target,
+            content: this.encryptionService.decrypt(target.content as any),
+          };
+        } catch (error) {
+          console.warn(
+            `Không thể giải mã ${targetKey} content trong history:`,
+            error,
+          );
+        }
       }
+    };
+
+    decryptContent('data');
+    decryptContent('before');
+    decryptContent('after');
+
+    return clone;
+  }
+
+  private async populateHistoryMetadata(records: Array<{ histories?: any[] }>) {
+    if (!records || records.length === 0) {
+      return;
     }
 
-    return changes;
+    const allHistories = records.flatMap(
+      (record) => record.histories ?? ([] as any[]),
+    );
+
+    if (allHistories.length === 0) {
+      return;
+    }
+
+    const userIds = Array.from(
+      new Set(
+        allHistories
+          .map((history) => history.changedBy)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+
+    const users =
+      userIds.length > 0
+        ? await this.prisma.auth.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true },
+          })
+        : [];
+
+    const userMap = new Map(users.map((user) => [user.id, user.name]));
+
+    records.forEach((record) => {
+      if (!record.histories) {
+        return;
+      }
+      record.histories = record.histories.map((history) => {
+        const decryptedChanges = this.decryptHistoryChanges(history.changes);
+        const action =
+          decryptedChanges && typeof decryptedChanges === 'object'
+            ? (decryptedChanges as Record<string, any>).action ?? null
+            : null;
+        return {
+          ...history,
+          changes: decryptedChanges,
+          action,
+          changedByName: userMap.get(history.changedBy) ?? null,
+        };
+      });
+    });
+  }
+
+  private encryptHistoryChangesPayload(payload: any): string {
+    return this.encryptionService.encrypt(payload);
   }
 
   async create(dto: CreateMedicalRecordDto, user: JwtUserPayload) {
@@ -198,6 +277,7 @@ export class MedicalRecordService {
     }
 
     const created = await this.prisma.medicalRecord.create({ data });
+    const historySnapshot = { ...created };
     
     // Giải mã content trước khi trả về
     const decryptedContent = this.encryptionService.decrypt(created.content as any);
@@ -208,7 +288,10 @@ export class MedicalRecordService {
       data: {
         medicalRecordId: created.id,
         changedBy: user.id,
-        changes: { action: 'CREATE', data: created }, // created đã có content mã hóa
+        changes: this.encryptHistoryChangesPayload({
+          action: 'CREATE',
+          data: historySnapshot,
+        }),
       },
     });
     
@@ -404,12 +487,7 @@ export class MedicalRecordService {
     );
     const skip = (pageNum - 1) * limitNum;
     const include = {
-      histories: {
-        select: {
-          changedBy: true,
-          changedAt: true,
-        },
-      },
+      histories: this.historyInclude,
       patientProfile: true,
       doctor: {
         include: {
@@ -461,6 +539,7 @@ export class MedicalRecordService {
         ...record,
         content: this.encryptionService.decrypt(record.content as any),
       }));
+      await this.populateHistoryMetadata(decryptedData);
       
       return { data: decryptedData, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
     }
@@ -491,6 +570,7 @@ export class MedicalRecordService {
         ...record,
         content: this.encryptionService.decrypt(record.content as any),
       }));
+      await this.populateHistoryMetadata(decryptedData);
       
       return { data: decryptedData, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
     }
@@ -517,6 +597,7 @@ export class MedicalRecordService {
       ...record,
       content: this.encryptionService.decrypt(record.content as any),
     }));
+    await this.populateHistoryMetadata(decryptedData);
     
     return { data: decryptedData, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
   }
@@ -529,12 +610,7 @@ export class MedicalRecordService {
     );
     const skip = (pageNum - 1) * limitNum;
     const include = {
-      histories: {
-        select: {
-          changedBy: true,
-          changedAt: true,
-        },
-      },
+      histories: this.historyInclude,
       patientProfile: true,
       doctor: {
         include: {
@@ -596,6 +672,7 @@ export class MedicalRecordService {
         ...record,
         content: this.encryptionService.decrypt(record.content as any),
       }));
+      await this.populateHistoryMetadata(decryptedData);
       
       return { data: decryptedData, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
     }
@@ -617,6 +694,7 @@ export class MedicalRecordService {
       ...record,
       content: this.encryptionService.decrypt(record.content as any),
     }));
+    await this.populateHistoryMetadata(decryptedData);
     
     return { data: decryptedData, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
   }
@@ -626,12 +704,7 @@ export class MedicalRecordService {
     const record = await this.prisma.medicalRecord.findUnique({
       where: { id },
       include: {
-        histories: {
-          select: {
-            changedBy: true,
-            changedAt: true,
-          },
-        },
+        histories: this.historyInclude,
         patientProfile: true,
         doctor: {
           include: {
@@ -682,6 +755,7 @@ export class MedicalRecordService {
 
     // Giải mã content trước khi trả về
     record.content = this.encryptionService.decrypt(record.content as any);
+    await this.populateHistoryMetadata([record]);
 
     return record;
   }
@@ -691,12 +765,7 @@ export class MedicalRecordService {
     const record = await this.prisma.medicalRecord.findFirst({
       where: { medicalRecordCode: code },
       include: {
-        histories: {
-          select: {
-            changedBy: true,
-            changedAt: true,
-          },
-        },
+        histories: this.historyInclude,
         patientProfile: true,
         doctor: {
           include: {
@@ -746,6 +815,7 @@ export class MedicalRecordService {
 
     // Giải mã content trước khi trả về
     record.content = this.encryptionService.decrypt(record.content as any);
+    await this.populateHistoryMetadata([record]);
 
     return record;
   }
@@ -797,11 +867,11 @@ export class MedicalRecordService {
       data: {
         medicalRecordId: id,
         changedBy: user.id,
-        changes: { 
-          action: 'UPDATE', 
+        changes: this.encryptHistoryChangesPayload({
+          action: 'UPDATE',
           before: record, // record.content đã được mã hóa
-          after: { ...record, ...updateData, content: encryptedNewContent } 
-        },
+          after: { ...record, ...updateData, content: encryptedNewContent },
+        }),
       },
     });
     
@@ -840,7 +910,10 @@ export class MedicalRecordService {
         data: {
           medicalRecordId: id,
           changedBy: user.id,
-          changes: { action: 'DELETE', data: record }, // record.content đã được mã hóa
+          changes: this.encryptHistoryChangesPayload({
+            action: 'DELETE',
+            data: record,
+          }),
         },
       });
 
@@ -1200,3 +1273,4 @@ export class MedicalRecordService {
     return en;
   }
 }
+
