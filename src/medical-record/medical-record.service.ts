@@ -2,6 +2,7 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TranslationService } from './translation.service';
+import { EncryptionService } from './encryption.service';
 import axios from 'axios';
 import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
 import { UpdateMedicalRecordDto } from './dto/update-medical-record.dto';
@@ -17,7 +18,54 @@ export class MedicalRecordService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly translationService: TranslationService,
+    private readonly encryptionService: EncryptionService,
   ) {}
+
+  /**
+   * Giải mã content trong changes của history nếu có
+   * @param changes - Object changes từ MedicalRecordHistory
+   * @returns changes với content đã được giải mã
+   */
+  private decryptHistoryChanges(changes: any): any {
+    if (!changes || typeof changes !== 'object') {
+      return changes;
+    }
+
+    // Nếu có data trong changes (CREATE, DELETE)
+    if (changes.data && changes.data.content) {
+      try {
+        changes.data.content = this.encryptionService.decrypt(
+          changes.data.content as any,
+        );
+      } catch (error) {
+        // Nếu không giải mã được, giữ nguyên (có thể là dữ liệu cũ chưa mã hóa)
+        console.warn('Không thể giải mã content trong history:', error);
+      }
+    }
+
+    // Nếu có before và after trong changes (UPDATE)
+    if (changes.before && changes.before.content) {
+      try {
+        changes.before.content = this.encryptionService.decrypt(
+          changes.before.content as any,
+        );
+      } catch (error) {
+        console.warn('Không thể giải mã before content trong history:', error);
+      }
+    }
+
+    if (changes.after && changes.after.content) {
+      try {
+        changes.after.content = this.encryptionService.decrypt(
+          changes.after.content as any,
+        );
+      } catch (error) {
+        console.warn('Không thể giải mã after content trong history:', error);
+      }
+    }
+
+    return changes;
+  }
 
   async create(dto: CreateMedicalRecordDto, user: JwtUserPayload) {
     if (
@@ -132,10 +180,13 @@ export class MedicalRecordService {
       appointmentId = appointment.id;
     }
 
+    // Mã hóa content trước khi lưu
+    const encryptedContent = this.encryptionService.encrypt(dto.content);
+
     const data: any = {
       patientProfileId: dto.patientProfileId,
       templateId: dto.templateId,
-      content: dto.content,
+      content: encryptedContent as any, // Lưu dưới dạng JSON string đã mã hóa
       medicalRecordCode,
       status: MedicalRecordStatus.DRAFT,
       doctorId,
@@ -148,12 +199,16 @@ export class MedicalRecordService {
 
     const created = await this.prisma.medicalRecord.create({ data });
     
-    // Lưu lịch sử tạo mới
+    // Giải mã content trước khi trả về
+    const decryptedContent = this.encryptionService.decrypt(created.content as any);
+    created.content = decryptedContent;
+    
+    // Lưu lịch sử tạo mới (lưu dữ liệu đã mã hóa để nhất quán với DB)
     await this.prisma.medicalRecordHistory.create({
       data: {
         medicalRecordId: created.id,
         changedBy: user.id,
-        changes: { action: 'CREATE', data: created },
+        changes: { action: 'CREATE', data: created }, // created đã có content mã hóa
       },
     });
     
@@ -208,8 +263,10 @@ export class MedicalRecordService {
     if (['male', 'nam', 'm'].includes(rawGender)) gender = 'M';
     else if (['female', 'nữ', 'nu', 'f'].includes(rawGender)) gender = 'F';
 
+    // Giải mã content trước khi sử dụng
+    const decryptedContent = this.encryptionService.decrypt(record.content as any);
     // Notes từ content (rút gọn thành chuỗi)
-    const notes = JSON.stringify(record.content || {});
+    const notes = JSON.stringify(decryptedContent || {});
 
     const baseUrl = process.env.RECOMMENDER_BASE_URL;
     if (!baseUrl) {
@@ -294,8 +351,10 @@ export class MedicalRecordService {
     if (['male', 'nam', 'm'].includes(rawGender)) gender = 'M';
     else if (['female', 'nữ', 'nu', 'f'].includes(rawGender)) gender = 'F';
 
+    // Giải mã content trước khi sử dụng
+    const decryptedContent = this.encryptionService.decrypt(record.content as any);
     // Notes từ content (rút gọn thành chuỗi) và dịch VI -> EN cho recommender
-    const notesVi = JSON.stringify(record.content || {});
+    const notesVi = JSON.stringify(decryptedContent || {});
     const notes = await this.translationService.translateViToEn(notesVi);
 
     const baseUrl = process.env.RECOMMENDER_BASE_URL;
@@ -396,7 +455,14 @@ export class MedicalRecordService {
           take: limitNum,
         })
       ]);
-      return { data, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
+      
+      // Giải mã content cho tất cả records
+      const decryptedData = data.map(record => ({
+        ...record,
+        content: this.encryptionService.decrypt(record.content as any),
+      }));
+      
+      return { data: decryptedData, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
     }
 
     if (user.role === Role.DOCTOR) {
@@ -419,7 +485,14 @@ export class MedicalRecordService {
           take: limitNum,
         })
       ]);
-      return { data, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
+      
+      // Giải mã content cho tất cả records
+      const decryptedData = data.map(record => ({
+        ...record,
+        content: this.encryptionService.decrypt(record.content as any),
+      }));
+      
+      return { data: decryptedData, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
     }
 
     // Cho admin - có thể xem tất cả
@@ -438,7 +511,14 @@ export class MedicalRecordService {
         take: limitNum,
       })
     ]);
-    return { data, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
+    
+    // Giải mã content cho tất cả records
+    const decryptedData = data.map(record => ({
+      ...record,
+      content: this.encryptionService.decrypt(record.content as any),
+    }));
+    
+    return { data: decryptedData, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
   }
 
   async findByPatientProfile(patientProfileId: string, user: JwtUserPayload, page: string = '1', limit: string = '10') {
@@ -510,7 +590,14 @@ export class MedicalRecordService {
           take: limitNum,
         })
       ]);
-      return { data, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
+      
+      // Giải mã content cho tất cả records
+      const decryptedData = data.map(record => ({
+        ...record,
+        content: this.encryptionService.decrypt(record.content as any),
+      }));
+      
+      return { data: decryptedData, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
     }
 
     // Admin can view all records for any patient profile
@@ -524,7 +611,14 @@ export class MedicalRecordService {
         take: limitNum,
       })
     ]);
-    return { data, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
+    
+    // Giải mã content cho tất cả records
+    const decryptedData = data.map(record => ({
+      ...record,
+      content: this.encryptionService.decrypt(record.content as any),
+    }));
+    
+    return { data: decryptedData, meta: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } };
   }
 
 
@@ -585,6 +679,9 @@ export class MedicalRecordService {
         throw new ForbiddenException('Bạn chỉ xem được hồ sơ do mình tạo');
       }
     }
+
+    // Giải mã content trước khi trả về
+    record.content = this.encryptionService.decrypt(record.content as any);
 
     return record;
   }
@@ -647,6 +744,9 @@ export class MedicalRecordService {
       }
     }
 
+    // Giải mã content trước khi trả về
+    record.content = this.encryptionService.decrypt(record.content as any);
+
     return record;
   }
 
@@ -681,21 +781,39 @@ export class MedicalRecordService {
         throw new ForbiddenException('Chuyển trạng thái không hợp lệ');
       }
     }
-    // Lưu lịch sử trước khi update
+    // Mã hóa content nếu có cập nhật
+    const updateData: any = {
+      status: newStatus,
+    };
+    
+    let encryptedNewContent: any = record.content; // Giữ nguyên nếu không có cập nhật
+    if (dto.content) {
+      encryptedNewContent = this.encryptionService.encrypt(dto.content) as any;
+      updateData.content = encryptedNewContent;
+    }
+
+    // Lưu lịch sử trước khi update (lưu dữ liệu đã mã hóa để nhất quán với DB)
     await this.prisma.medicalRecordHistory.create({
       data: {
         medicalRecordId: id,
         changedBy: user.id,
-        changes: { action: 'UPDATE', before: record, after: { ...record, ...dto, status: newStatus } },
+        changes: { 
+          action: 'UPDATE', 
+          before: record, // record.content đã được mã hóa
+          after: { ...record, ...updateData, content: encryptedNewContent } 
+        },
       },
     });
-    return await this.prisma.medicalRecord.update({
+    
+    const updated = await this.prisma.medicalRecord.update({
       where: { id },
-      data: {
-        ...(dto.content ? { content: dto.content } : {}),
-        status: newStatus,
-      },
+      data: updateData,
     });
+    
+    // Giải mã content trước khi trả về
+    updated.content = this.encryptionService.decrypt(updated.content as any);
+    
+    return updated;
   }
 
   async remove(id: string, user: JwtUserPayload) {
@@ -717,12 +835,12 @@ export class MedicalRecordService {
     }
     // Xóa an toàn: tạo lịch sử, xóa histories phụ thuộc, sau đó xóa record trong transaction
     return await this.prisma.$transaction(async (tx) => {
-      // Lưu lịch sử xóa vào bảng history khác record hiện tại
+      // Lưu lịch sử xóa (record.content đã được mã hóa trong DB)
       await tx.medicalRecordHistory.create({
         data: {
           medicalRecordId: id,
           changedBy: user.id,
-          changes: { action: 'DELETE', data: record },
+          changes: { action: 'DELETE', data: record }, // record.content đã được mã hóa
         },
       });
 
@@ -869,8 +987,10 @@ export class MedicalRecordService {
     // Nội dung bệnh án
     if (medicalRecords.length > 0) {
       medicalRecords.forEach((record, index) => {
+        // Giải mã content trước khi sử dụng
+        const decryptedContent = this.encryptionService.decrypt(record.content as any);
         summaryParts.push(`Bệnh án ${index + 1}:`);
-        summaryParts.push(`- Nội dung: ${JSON.stringify(record.content, null, 2)}`);
+        summaryParts.push(`- Nội dung: ${JSON.stringify(decryptedContent, null, 2)}`);
         summaryParts.push('');
       });
     }
@@ -957,9 +1077,10 @@ export class MedicalRecordService {
     const summaryParts: string[] = [];
     // Thông tin bệnh nhân
     summaryParts.push(`Tên: ${record.patientProfile.name}`);
-    // Thông tin bệnh án
+    // Thông tin bệnh án - giải mã content trước khi sử dụng
+    const decryptedContent = this.encryptionService.decrypt(record.content as any);
     summaryParts.push(`Bệnh án:`);
-    summaryParts.push(`- Nội dung: ${JSON.stringify(record.content, null, 2)}`);
+    summaryParts.push(`- Nội dung: ${JSON.stringify(decryptedContent, null, 2)}`);
     summaryParts.push('');
     // Dịch vụ và kết quả nếu có
     if (prescriptions.length > 0) {
@@ -1044,9 +1165,10 @@ export class MedicalRecordService {
 
     // 4. Ghép summary (rút gọn tối đa)
     const summaryParts: string[] = [];
-    // Thông tin bệnh án
+    // Thông tin bệnh án - giải mã content trước khi sử dụng
+    const decryptedContent = this.encryptionService.decrypt(record.content as any);
     summaryParts.push(`Bệnh án:`);
-    summaryParts.push(`- Nội dung: ${JSON.stringify(record.content, null, 2)}`);
+    summaryParts.push(`- Nội dung: ${JSON.stringify(decryptedContent, null, 2)}`);
     summaryParts.push('');
     // Dịch vụ và kết quả nếu có
     if (prescriptions.length > 0) {
