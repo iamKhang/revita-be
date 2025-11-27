@@ -20,6 +20,7 @@ import {
   PrescriptionStatus,
 } from '@prisma/client';
 import { PayOsService } from '../payos/payos.service';
+import { LoyaltyService } from './loyalty.service';
 
 export type PrescriptionDetails = {
   id: string;
@@ -60,10 +61,25 @@ export type PaymentPreview = {
     serviceCode: string;
     name: string;
     price: number;
+    originalPrice: number;
+    discountAmount: number;
+    discountPercent: number;
     description: string;
   }>;
   totalAmount: number;
+  originalTotalAmount: number;
+  totalDiscountAmount: number;
   patientName: string;
+  loyaltyInfo?: {
+    totalPoints: number;
+    tierInfo: {
+      tier: string;
+      name: string;
+      discountPercent: number;
+      minPoints: number;
+      nextTierPoints?: number;
+    };
+  };
 };
 
 export type PaymentTransactionSummary = {
@@ -128,6 +144,7 @@ export class InvoicePaymentService {
     private readonly prisma: PrismaService,
     private readonly prescriptionService: PrescriptionService,
     private readonly routingService: RoutingService,
+    private readonly loyaltyService: LoyaltyService,
     private readonly redisStream: RedisStreamService,
     private readonly payOsService: PayOsService,
     private readonly webSocketService: WebSocketService,
@@ -261,28 +278,72 @@ export class InvoicePaymentService {
       selectedPrescriptionServiceIds = allPrescriptionServiceIds;
     }
 
-    // Get selected services with their details
+    // Lấy thông tin loyalty của bệnh nhân
+    const loyaltyInfo = await this.loyaltyService.getLoyaltyInfoFromPatientProfile(
+      prescription.patientProfile.id,
+    );
+
+    // Get selected services with their details và áp dụng giảm giá loyalty
     const selectedServices = prescription.services
       .filter((s) => selectedPrescriptionServiceIds.includes(s.id))
-      .map((s) => ({
-        prescriptionServiceId: s.id,
-        serviceId: s.serviceId,
-        serviceCode: s.service.serviceCode,
-        name: s.service.name,
-        price: s.service.price,
-        description: s.service.description,
-      }));
+      .map((s) => {
+        const originalPrice = s.service.price;
+        // Áp dụng giảm giá nếu có thông tin loyalty
+        const discountInfo = loyaltyInfo
+          ? this.loyaltyService.applyLoyaltyDiscount(
+              originalPrice,
+              loyaltyInfo.totalPoints,
+            )
+          : {
+              originalPrice,
+              discountPercent: 0,
+              discountAmount: 0,
+              finalPrice: originalPrice,
+              tierInfo: this.loyaltyService.getLoyaltyTierInfo(0),
+            };
 
+        return {
+          prescriptionServiceId: s.id,
+          serviceId: s.serviceId,
+          serviceCode: s.service.serviceCode,
+          name: s.service.name,
+          price: discountInfo.finalPrice, // Giá sau giảm
+          originalPrice: discountInfo.originalPrice, // Giá gốc
+          discountAmount: discountInfo.discountAmount, // Số tiền giảm
+          discountPercent: discountInfo.discountPercent, // Phần trăm giảm
+          description: s.service.description,
+        };
+      });
+
+    const originalTotalAmount = selectedServices.reduce(
+      (sum, service) => sum + service.originalPrice,
+      0,
+    );
     const totalAmount = selectedServices.reduce(
       (sum, service) => sum + service.price,
       0,
     );
+    const totalDiscountAmount = originalTotalAmount - totalAmount;
 
     return {
       prescriptionDetails: prescription,
       selectedServices,
       totalAmount,
+      originalTotalAmount,
+      totalDiscountAmount,
       patientName: prescription.patientProfile.name,
+      loyaltyInfo: loyaltyInfo
+        ? {
+            totalPoints: loyaltyInfo.totalPoints,
+            tierInfo: {
+              tier: loyaltyInfo.tierInfo.tier,
+              name: loyaltyInfo.tierInfo.name,
+              discountPercent: loyaltyInfo.tierInfo.discountPercent,
+              minPoints: loyaltyInfo.tierInfo.minPoints,
+              nextTierPoints: loyaltyInfo.tierInfo.nextTierPoints,
+            },
+          }
+        : undefined,
     };
   }
 
@@ -290,8 +351,9 @@ export class InvoicePaymentService {
     const preview = await this.createPaymentPreview(dto);
     const effectiveCashierId = await this.resolveCashierId(dto.cashierId);
     const prescription = preview.prescriptionDetails;
-    const selectedPrescriptionServiceIds = preview.selectedServices.map((s) => s.prescriptionServiceId);
-    const selectedServiceIds = preview.selectedServices.map((s) => s.serviceId);
+    const selectedServiceIds = preview.selectedServices.map(
+      (s) => s.serviceId,
+    );
 
     // Auto routing removed: skip checking available work sessions
 
@@ -304,7 +366,7 @@ export class InvoicePaymentService {
     const invoice = await this.prisma.invoice.create({
       data: {
         invoiceCode,
-        totalAmount: preview.totalAmount,
+        totalAmount: preview.totalAmount, // Giá sau giảm
         paymentMethod: dto.paymentMethod,
         paymentStatus: 'PENDING',
         isPaid: false,
@@ -313,7 +375,7 @@ export class InvoicePaymentService {
         invoiceDetails: {
           create: preview.selectedServices.map((service) => ({
             serviceId: service.serviceId,
-            price: service.price,
+            price: service.price, // Giá sau giảm để thanh toán
             prescriptionId: prescription.id,
             prescriptionServiceId: service.prescriptionServiceId,
           })),
@@ -575,6 +637,38 @@ export class InvoicePaymentService {
         doctorName: prescription.doctor?.auth.name,
       },
     };
+
+    // Cộng điểm loyalty cho bệnh nhân sau khi thanh toán thành công
+    try {
+      const patientProfile = await this.prisma.patientProfile.findUnique({
+        where: { id: updatedInvoice.patientProfileId },
+        select: { patientId: true },
+      });
+
+      if (patientProfile?.patientId) {
+        // Tính điểm từ giá trị đã thanh toán (sau giảm giá)
+        // Nhưng để công bằng, nên tính điểm từ giá gốc
+        // Tuy nhiên vì không lưu giá gốc trong invoice, ta tính từ totalAmount
+        // Trong thực tế, nên lưu originalAmount vào invoice để tính điểm chính xác
+        const pointsResult = await this.loyaltyService.addLoyaltyPoints(
+          patientProfile.patientId,
+          updatedInvoice.totalAmount,
+        );
+
+        this.logger.log(
+          `Loyalty points added: ${pointsResult.pointsAdded} points. Total: ${pointsResult.totalPoints}. Tier: ${pointsResult.previousTier} -> ${pointsResult.newTier}`,
+        );
+      } else {
+        this.logger.warn(
+          `Patient profile ${updatedInvoice.patientProfileId} is not linked to a patient account. Skipping loyalty points.`,
+        );
+      }
+    } catch (error) {
+      // Không throw error để không ảnh hưởng đến quá trình thanh toán
+      this.logger.error(
+        `Failed to add loyalty points: ${(error as Error).message}`,
+      );
+    }
 
     // Gửi socket notification về thanh toán thành công trước khi trả kết quả
     await this.notifyInvoicePaymentSuccess(updatedInvoice);
