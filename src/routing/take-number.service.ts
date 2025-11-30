@@ -102,25 +102,54 @@ export class TakeNumberService {
         throw new BadRequestException('Không tìm thấy thông tin bệnh nhân. Vui lòng cung cấp tên bệnh nhân.');
       }
 
-      const nowYear = new Date().getFullYear();
-      const birthYear = typeof request.birthYear === 'number'
-        ? Math.min(Math.max(request.birthYear, 1900), nowYear)
-        : undefined;
-      const fallbackBirthDate = birthYear
-        ? new Date(birthYear, 0, 1)
-        : new Date(1990, 0, 1);
+      // Ưu tiên sử dụng patientAge từ request nếu có
+      let patientAge: number;
+      let dateOfBirth: Date;
+
+      if (typeof request.patientAge === 'number' && request.patientAge >= 0 && request.patientAge <= 150) {
+        // Nếu có patientAge, tính ngược lại dateOfBirth
+        patientAge = request.patientAge;
+        const nowYear = new Date().getFullYear();
+        const birthYear = nowYear - patientAge;
+        dateOfBirth = new Date(birthYear, 0, 1);
+      } else {
+        // Nếu không có patientAge, dùng birthYear hoặc mặc định
+        const nowYear = new Date().getFullYear();
+        const birthYear = typeof request.birthYear === 'number'
+          ? Math.min(Math.max(request.birthYear, 1900), nowYear)
+          : undefined;
+        dateOfBirth = birthYear
+          ? new Date(birthYear, 0, 1)
+          : new Date(1990, 0, 1);
+        patientAge = this.calculateAge(dateOfBirth);
+      }
 
       patientInfo = {
         name: request.patientName,
-        age: this.calculateAge(fallbackBirthDate),
+        age: patientAge,
         gender: 'UNKNOWN',
-        dateOfBirth: fallbackBirthDate,
+        dateOfBirth: dateOfBirth,
       };
+    } else {
+      // Nếu có patientInfo từ database nhưng request có patientAge, ưu tiên dùng request.patientAge
+      if (typeof request.patientAge === 'number' && request.patientAge >= 0 && request.patientAge <= 150) {
+        patientInfo.age = request.patientAge;
+        // Cập nhật dateOfBirth để phù hợp với age mới
+        const nowYear = new Date().getFullYear();
+        const birthYear = nowYear - request.patientAge;
+        patientInfo.dateOfBirth = new Date(birthYear, 0, 1);
+      }
     }
 
-    // Xác định thông tin ưu tiên (mang thai/khuyết tật) dựa trên hồ sơ nếu có
+    // Xác định thông tin ưu tiên (mang thai/khuyết tật/người già) dựa trên hồ sơ nếu có
     let isPregnant = request.isPregnant ?? false;
     let isDisabled = request.isDisabled ?? false;
+    let isElderly = request.isElderly ?? false;
+
+    // Nếu không có isElderly từ request, tính từ age
+    if (!isElderly && typeof patientInfo.age === 'number' && patientInfo.age >= 75) {
+      isElderly = true;
+    }
 
     if (patientInfo && typeof patientInfo.isPregnant === 'boolean') {
       isPregnant = patientInfo.isPregnant;
@@ -134,6 +163,7 @@ export class TakeNumberService {
       ...patientInfo,
       isPregnant,
       isDisabled,
+      isElderly,
     };
 
     // Tính toán xem bệnh nhân có đến đúng giờ không
@@ -166,7 +196,7 @@ export class TakeNumberService {
       appointmentDetails,
       isOnTime,
       queuePriority,
-      { isDisabled, isPregnant },
+      { isDisabled, isPregnant, isElderly },
     );
     t = tlog('create ticket', t);
 
@@ -440,7 +470,7 @@ export class TakeNumberService {
     appointmentDetails: any,
     isOnTime: boolean,
     queuePriority: number,
-    priorityFlags: { isDisabled: boolean; isPregnant: boolean },
+    priorityFlags: { isDisabled: boolean; isPregnant: boolean; isElderly: boolean },
   ): Promise<QueueTicket> {
     const ticketId = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const sequence = await this.getNextSequence(counter.id);
@@ -478,6 +508,7 @@ export class TakeNumberService {
       metadata: {
         isPregnant: priorityFlags.isPregnant,
         isDisabled: priorityFlags.isDisabled,
+        isElderly: priorityFlags.isElderly,
         isChild: typeof patientInfo.age === 'number' ? patientInfo.age < 6 : false,
       },
     };
@@ -711,13 +742,18 @@ export class TakeNumberService {
     const metadata = ticket.metadata || {};
     const age = typeof ticket.patientAge === 'number' ? ticket.patientAge : undefined;
 
+    // Ưu tiên dùng isElderly từ metadata (từ request), nếu không có thì tính từ age
+    const isElderly = typeof metadata.isElderly === 'boolean'
+      ? metadata.isElderly
+      : (typeof age === 'number' ? age >= 75 : false);
+
     return {
       ...ticket,
       metadata,
       isOnTime: Boolean(ticket.isOnTime),
       isPregnant: Boolean(metadata.isPregnant),
       isDisabled: Boolean(metadata.isDisabled),
-      isElderly: typeof age === 'number' ? age >= 75 : false,
+      isElderly,
       isChild: typeof age === 'number' ? age < 6 : Boolean(metadata.isChild),
     };
   }

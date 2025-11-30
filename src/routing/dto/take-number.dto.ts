@@ -50,6 +50,10 @@ export class TakeNumberDto {
 
   @IsBoolean()
   @IsOptional()
+  isElderly?: boolean; // Người già (>= 75 tuổi)
+
+  @IsBoolean()
+  @IsOptional()
   isVip?: boolean; // Khám VIP
 
   // Hỗ trợ cả isVIP (chữ hoa) từ frontend
