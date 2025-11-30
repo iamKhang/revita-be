@@ -2021,7 +2021,7 @@ export class PrescriptionService {
   }
 
   /**
-   * Lấy các dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên thực hiện
+   * Lấy các dịch vụ PENDING và RESCHEDULED liên tiếp có cùng bác sĩ/kỹ thuật viên thực hiện
    */
   async getPendingServicesByPrescriptionCode(
     prescriptionCode: string,
@@ -2032,12 +2032,38 @@ export class PrescriptionService {
         where: { prescriptionCode },
         include: {
           services: {
-            where: { status: PrescriptionStatus.PENDING },
+            where: {
+              status: {
+                in: [PrescriptionStatus.PENDING, PrescriptionStatus.RESCHEDULED],
+              },
+            },
             include: {
               service: {
                 select: {
                   id: true,
                   name: true,
+                },
+              },
+              doctor: {
+                select: {
+                  id: true,
+                  doctorCode: true,
+                  auth: {
+                    select: {
+                      name: true,
+                    },
+                  },
+                },
+              },
+              technician: {
+                select: {
+                  id: true,
+                  technicianCode: true,
+                  auth: {
+                    select: {
+                      name: true,
+                    },
+                  },
                 },
               },
             },
@@ -2060,23 +2086,78 @@ export class PrescriptionService {
         };
       }
 
-      // Tìm nhóm dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên
-      const consecutivePendingServices = this.findConsecutivePendingServices(
+      // Tìm nhóm dịch vụ PENDING/RESCHEDULED liên tiếp có cùng bác sĩ/kỹ thuật viên
+      const consecutiveServices = this.findConsecutivePendingServices(
         prescription.services,
       );
 
-      const services: PendingServiceDto[] = consecutivePendingServices.map(
-        (ps) => ({
-          serviceId: ps.serviceId,
-          serviceName: ps.service.name,
+      // Kiểm tra work session cho các dịch vụ RESCHEDULED
+      const now = new Date();
+      const services: PendingServiceDto[] = await Promise.all(
+        consecutiveServices.map(async (ps) => {
+          const isRescheduled = ps.status === PrescriptionStatus.RESCHEDULED;
+          let isDoctorNotWorking = false;
+          let isTechnicianNotWorking = false;
+
+          // Nếu là RESCHEDULED và có doctorId hoặc technicianId, kiểm tra work session
+          if (isRescheduled) {
+            if (ps.doctorId) {
+              const activeWorkSession = await this.prisma.workSession.findFirst({
+                where: {
+                  doctorId: ps.doctorId,
+                  status: WorkSessionStatus.IN_PROGRESS,
+                  startTime: { lte: now },
+                  endTime: { gte: now },
+                },
+              });
+              isDoctorNotWorking = !activeWorkSession;
+            }
+
+            if (ps.technicianId) {
+              const activeWorkSession = await this.prisma.workSession.findFirst({
+                where: {
+                  technicianId: ps.technicianId,
+                  status: WorkSessionStatus.IN_PROGRESS,
+                  startTime: { lte: now },
+                  endTime: { gte: now },
+                },
+              });
+              isTechnicianNotWorking = !activeWorkSession;
+            }
+          }
+
+          return {
+            serviceId: ps.serviceId,
+            serviceName: ps.service.name,
+            status: isRescheduled ? 'RESCHEDULED' : 'PENDING',
+            doctorId: ps.doctorId,
+            technicianId: ps.technicianId,
+            doctorName: ps.doctor?.auth?.name || null,
+            technicianName: ps.technician?.auth?.name || null,
+            isDoctorNotWorking: isRescheduled && ps.doctorId ? isDoctorNotWorking : undefined,
+            isTechnicianNotWorking:
+              isRescheduled && ps.technicianId
+                ? isTechnicianNotWorking
+                : undefined,
+          };
         }),
       );
+
+      // Xác định status tổng thể
+      const hasPending = services.some((s) => s.status === 'PENDING');
+      const hasRescheduled = services.some((s) => s.status === 'RESCHEDULED');
+      const overallStatus: 'PENDING' | 'RESCHEDULED' | 'MIXED' =
+        hasPending && hasRescheduled
+          ? 'MIXED'
+          : hasRescheduled
+            ? 'RESCHEDULED'
+            : 'PENDING';
 
       return {
         prescriptionId: prescription.id,
         prescriptionCode,
         services,
-        status: 'PENDING',
+        status: overallStatus,
         totalCount: services.length,
       };
     } catch (error) {
@@ -2089,7 +2170,8 @@ export class PrescriptionService {
   }
 
   /**
-   * Tìm các dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên
+   * Tìm các dịch vụ PENDING hoặc RESCHEDULED liên tiếp có cùng bác sĩ/kỹ thuật viên
+   * Cho phép cả PENDING và RESCHEDULED trong cùng một nhóm nếu có cùng assignee
    */
   private findConsecutivePendingServices(services: any[]): any[] {
     if (services.length === 0) return [];
@@ -2102,6 +2184,15 @@ export class PrescriptionService {
     for (const service of services) {
       const serviceDoctorId = service.doctorId;
       const serviceTechnicianId = service.technicianId;
+      const serviceStatus = service.status;
+
+      // Chỉ xử lý PENDING và RESCHEDULED
+      if (
+        serviceStatus !== PrescriptionStatus.PENDING &&
+        serviceStatus !== PrescriptionStatus.RESCHEDULED
+      ) {
+        continue;
+      }
 
       // Kiểm tra xem có cùng bác sĩ/kỹ thuật viên với nhóm hiện tại không
       const isSameAssignee =
@@ -2113,7 +2204,7 @@ export class PrescriptionService {
           !currentTechnicianId);
 
       if (isSameAssignee) {
-        // Thêm vào nhóm hiện tại
+        // Thêm vào nhóm hiện tại (có thể là PENDING hoặc RESCHEDULED)
         currentGroup.push(service);
         currentDoctorId = serviceDoctorId;
         currentTechnicianId = serviceTechnicianId;

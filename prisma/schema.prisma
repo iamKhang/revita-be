@@ -709,17 +709,27 @@ model PrescriptionService {
 }
 
 enum PrescriptionStatus {
+  // Bác sĩ chỉ định dịch vụ cho bệnh nhân
   NOT_STARTED
+  // Dịch vụ đã thanh toán
   PENDING
+  // Đang chờ
   WAITING
+  // Chuẩn bị thực hiện dịch vụ
   PREPARING
+  // Đang thực hiện dịch vụ
   SERVING
+  // Chờ kết quả
   WAITING_RESULT
+  // Đã thực hiện xong các chỉ định cần thiết và quay lại chờ kết quả
   RETURNING
   COMPLETED
-  DELAYED
+  // Đã gọi bệnh nhân nhưng bệnh nhân không đến
   CANCELLED
+  // Đã gọi bệnh nhân nhưng bệnh nhân không đến
   SKIPPED
+  // Hẹn tiếp tục thực hiện dịch vụ
+  RESCHEDULED
 }
 
 model Booth {

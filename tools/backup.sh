@@ -42,15 +42,15 @@ echo ""
 
 # Thực hiện backup
 if PGPASSWORD="$SRC_PASS" pg_dump -h "$SRC_HOST" -p "$SRC_PORT" -U "$SRC_USER" -Fc "$SRC_DB" > "$FILEPATH"; then
-    SIZE=$(du -h "$FILEPATH" | cut -f1)
+SIZE=$(du -h "$FILEPATH" | cut -f1)
     echo "HOÀN TẤT! Kích thước: $SIZE"
-    
+
     # Ghi log
-    echo "$TIMESTAMP | $FILENAME | $SIZE | SUCCESS" >> "$LOG_FILE"
-    
+echo "$TIMESTAMP | $FILENAME | $SIZE | SUCCESS" >> "$LOG_FILE"
+
     echo ""
-    echo "Đã ghi log vào $LOG_FILE"
-    echo "Nội dung log hiện tại:"
+echo "Đã ghi log vào $LOG_FILE"
+echo "Nội dung log hiện tại:"
     tail -5 "$LOG_FILE" 2>/dev/null || echo "(File log trống)"
 else
     echo "ERROR: Backup thất bại!"

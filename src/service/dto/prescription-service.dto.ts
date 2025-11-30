@@ -5,6 +5,7 @@ import {
   IsArray,
   IsEnum,
   IsNumber,
+  IsBoolean,
   Min,
 } from 'class-validator';
 import { PrescriptionStatus } from '@prisma/client';
@@ -76,6 +77,16 @@ export class UpdateServiceResultsDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @ApiProperty({
+    description: 'Nếu true, dịch vụ sẽ được đánh dấu là RESCHEDULED (hẹn tiếp tục) thay vì COMPLETED. Mặc định: false',
+    example: false,
+    required: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  shouldReschedule?: boolean;
 }
 
 // Response DTO cho scan prescription

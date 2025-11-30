@@ -10,6 +10,7 @@ import {
   UseGuards,
   Request,
   Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { Roles } from 'src/rbac/roles.decorator';
 import { Public } from 'src/rbac/public.decorator';
@@ -142,7 +143,8 @@ export class PrescriptionController {
     return this.prescriptionService.startServices(dto, req.user);
   }
 
-  // Lấy các dịch vụ PENDING liên tiếp có cùng bác sĩ/kỹ thuật viên (không cần quyền)
+  // Lấy các dịch vụ PENDING và RESCHEDULED liên tiếp có cùng bác sĩ/kỹ thuật viên (không cần quyền)
+  // Với RESCHEDULED, kiểm tra xem bác sĩ/kỹ thuật viên có đang làm việc (work session IN_PROGRESS) không
   @Get('pending-services/:prescriptionCode')
   @Public()
   async getPendingServices(
@@ -199,6 +201,13 @@ export class PrescriptionController {
     @Body() updateDto: UpdateServiceStatusDto,
     @Request() req: { user: JwtUserPayload },
   ): Promise<UpdateServiceStatusResponseDto> {
+    // Validate prescriptionServiceId
+    if (!updateDto.prescriptionServiceId) {
+      throw new BadRequestException(
+        'prescriptionServiceId is required in request body',
+      );
+    }
+
     const userId = req.user.id;
     const userRole = req.user.role;
     return this.prescriptionServiceManagement.updateServiceStatus(
@@ -216,6 +225,13 @@ export class PrescriptionController {
     @Body() updateDto: UpdateServiceResultsDto,
     @Request() req: { user: JwtUserPayload },
   ): Promise<UpdateResultsResponseDto> {
+    // Validate prescriptionServiceId
+    if (!updateDto.prescriptionServiceId) {
+      throw new BadRequestException(
+        'prescriptionServiceId is required in request body',
+      );
+    }
+
     const userId = req.user.id;
     const userRole = req.user.role;
     return this.prescriptionServiceManagement.updateServiceResults(
@@ -224,6 +240,7 @@ export class PrescriptionController {
       userId,
       userRole,
       updateDto.note,
+      updateDto.shouldReschedule ?? false,
     );
   }
 

@@ -10,270 +10,85 @@ entity "PayOsService" as PayOS
 entity "RoutingService" as Routing
 entity "WebSocketService" as WS
 
-Cashier -> Patient: Yêu cầu phiếu chỉ định
-activate Patient
-Patient -> Cashier: Đưa phiếu chỉ định
-deactivate Patient
+'================= 1. QUÉT PHIẾU CHỈ ĐỊNH =================
 
 Cashier -> UI: Quét mã phiếu chỉ định
-activate UI
-
 UI -> Controller: POST /invoice-payments/scan\nprescriptionCode
-activate Controller
-
 Controller -> Service: scanPrescription(dto)
-activate Service
+Service -> Service: Tìm prescription + validate
+Service --> Controller: PrescriptionDetails\n(services, prices, patient)
+Controller --> UI: 200 OK\nthông tin phiếu chỉ định
+UI --> Cashier: Hiển thị danh sách dịch vụ\nvà giá
 
-Service -> Service: prisma.prescription.findFirst
+'================= 2. XEM TRƯỚC TỔNG TIỀN =================
 
-Service -> Service: Validate status not CANCELLED
-
-Service --> Controller: PrescriptionDetails\npatientProfile, services, prices
-deactivate Service
-
-Controller --> UI: 200 OK prescription details
-deactivate Controller
-
-UI --> Cashier: Hiển thị danh sách dịch vụ\nvà giá từng dịch vụ
-deactivate UI
-
-loop Chọn dịch vụ và xem tổng tiền
+loop Chọn dịch vụ & xem tổng tiền
     Cashier -> UI: Tích/bỏ tích dịch vụ
-    activate UI
-    
     UI -> Controller: POST /invoice-payments/preview\nprescriptionCode, selectedServiceIds
-    activate Controller
-    
     Controller -> Service: createPaymentPreview(dto)
-    activate Service
-    
-    Service -> Service: Lọc selectedServices
-    Service -> Service: Tính totalAmount
-    
-    Service --> Controller: PaymentPreview\nselectedServices, totalAmount
-    deactivate Service
-    
+  Service -> Service: Lọc selectedServices + tính totalAmount
+  Service --> Controller: PaymentPreview\n(selectedServices, totalAmount)
     Controller --> UI: 200 OK preview
-    deactivate Controller
-    
     UI --> Cashier: Hiển thị tổng tiền
-    deactivate UI
 end
 
-Cashier -> UI: Chọn TRANSFER và nhấn Tạo hóa đơn
-activate UI
+'================= 3. TẠO HÓA ĐƠN PAYOS =================
 
-UI -> Controller: POST /invoice-payments/create\nprescriptionCode, selectedServiceIds,\npaymentMethod TRANSFER,\nreturnUrl, cancelUrl
-activate Controller
-
-Controller -> Controller: Lấy cashierId từ JWT
-
+Cashier -> UI: Chọn TRANSFER và nhấn "Tạo hóa đơn"
+UI -> Controller: POST /invoice-payments/create\nprescriptionCode, selectedServiceIds,\npaymentMethod=TRANSFER, returnUrl, cancelUrl
 Controller -> Service: createPayment(dto)
-activate Service
 
-Service -> Service: Tạo preview để validate
-
+Service -> Service: Validate + tạo preview cuối cùng
 Service -> Routing: assignPatientToRooms
 
-alt Không có nhân sú
-    Service --> Controller: Error không có nhân sự
+alt Không có nhân sự phù hợp
+  Service --> Controller: Lỗi "không có nhân sự"
     Controller --> UI: 400 Bad Request
-    UI --> Cashier: Hiển thị lỗi\nchưa có nhân sự phục vụ
-    deactivate UI
-    deactivate Controller
-    deactivate Service
+  UI --> Cashier: Hiển thị lỗi chưa có nhân sự
 else Có nhân sự
-    Service -> Service: Generate invoiceCode
-
-    Service -> Service: prisma.$transaction
-    Service -> Service: prisma.invoice.create
-
-    Service -> Service: Generate numeric orderCode
-
-    Service -> PayOS: createPaymentLink\norderCode, amount, description,\nreturnUrl, cancelUrl,\nbuyer info, items, metadata
-    activate PayOS
-
-    PayOS -> PayOS: Tạo payment link\nvà QR code
-
-    PayOS --> Service: PaymentLinkResult\npaymentUrl, qrCode,\ntransactionId, status,\nexpiredAt
-    deactivate PayOS
-
-    Service -> Service: Map PayOS status
-
-    Service -> Service: prisma.paymentTransaction.create
-
-    Service --> Controller: PaymentResult\ninvoiceCode, totalAmount,\npaymentStatus PENDING,\ntransaction with paymentUrl and qrCode
-    deactivate Service
-
+  Service -> Service: Tạo invoice + orderCode
+  Service -> PayOS: createPaymentLink(orderCode, amount, ... )
+  PayOS --> Service: PaymentLinkResult\n(paymentUrl, qrCode, transactionId,...)
+  Service -> Service: Lưu paymentTransaction (PENDING)
+  Service --> Controller: PaymentResult\n(invoiceCode, totalAmount, paymentUrl, qrCode)
     Controller --> UI: 200 OK payment created
-    deactivate Controller
+  UI --> Cashier: Hiển thị QR code & hướng dẫn
+end
 
-    UI --> Cashier: Hiển thị mã QR code\nvà hướng dẫn
-    deactivate UI
+'================= 4. BỆNH NHÂN THANH TOÁN =================
 
-    Cashier -> Patient: Hướng dẫn quét QR\nđể thanh toán
-    activate Patient
+Cashier -> Patient: Hướng dẫn quét QR để thanh toán
+Patient -> PayOS: Thanh toán qua app ngân hàng/ví
+PayOS -> PayOS: Xử lý thanh toán với ngân hàng
 
-    Patient -> Patient: Mở app ngân hàng\nhoặc ví điện tử
+'================= 5. WEBHOOK TỪ PAYOS =================
 
-    Patient -> Patient: Quét mã QR
+PayOS -> Controller: POST /invoice-payments/payos/webhook\n(signature, payload)
+Controller -> Service: handlePayOsWebhook(payload)
 
-    Patient -> PayOS: Thanh toán qua\napp ngân hàng/ví
-    activate PayOS
-
-    PayOS -> PayOS: Xử lý thanh toán\nvới ngân hàng
-
-    Patient -> Patient: Nhập PIN\nhoặc xác thực sinh trắc
-
-    Patient -> Patient: Xác nhận thanh toán
-    deactivate Patient
-
-    PayOS -> PayOS: Nhận xác nhận\ntừ ngân hàng
-
-    PayOS -> Controller: POST /invoice-payments/payos/webhook\nwith signature and payload
-    activate Controller
-
-    Controller -> Service: handlePayOsWebhook
-    activate Service
-
-    Service -> Service: Parse payload JSON
-
-    Service -> Service: Extract signature\nfrom header or payload
-
-    alt Không có signature
-        Service --> Controller: Return success\nwithout processing
-        Controller --> PayOS: 200 OK
-        deactivate Controller
-        deactivate PayOS
-        deactivate Service
-    else Có signature
-        Service -> PayOS: verifyWebhook\nsignature, payload
-
-        PayOS --> Service: Verified result\nor false
-        deactivate PayOS
-
-        alt Signature không hợp lệ
-            Service --> Controller: Error Invalid signature
-            Controller --> PayOS: 400 Bad Request
-            activate PayOS
-            deactivate Controller
-            deactivate PayOS
-            deactivate Service
+alt Thiếu hoặc sai signature
+  Service --> Controller: Bỏ qua / hoặc trả lỗi
+  Controller --> PayOS: 200 OK / 400 Bad Request
         else Signature hợp lệ
-            Service -> Service: Extract transactionId\nand orderCode from payload
+  Service -> Service: Tìm paymentTransaction\nbằng transactionId / orderCode
+  Service -> Service: Map status từ payload\n(SUCCEEDED / FAILED / CANCELLED / PENDING)
+  Service -> Service: Cập nhật paymentTransaction
 
-            Service -> Service: prisma.paymentTransaction.findFirst
-
-            alt Transaction không tìm thấy
-                Service -> Service: prisma.paymentTransaction.findMany
-
-                alt Tìm thấy 1 candidate
-                    Service -> Service: Use fallback transaction
-                else Không tìm thấy
-                    Service --> Controller: Return success\nwithout invoice update
-                    Controller --> PayOS: 200 OK
-                    activate PayOS
-                    deactivate Controller
-                    deactivate PayOS
-                    deactivate Service
-                end
-            end
-
-            Service -> Service: Map status\nfrom payload
-
-            Service -> Service: prisma.paymentTransaction.update
-
-            alt Status is SUCCEEDED
-                Service -> Service: Check if invoice\nalready isPaid
-
-                alt Invoice đã isPaid
-                    Service -> Service: // done
-
-                    Service ->> WS: notifyInvoicePaymentSuccess
-                    activate WS
-                    WS ->> UI: WebSocket notification\nthanh toán thành công
-                    WS -> WS: Broadcast to clinic rooms
-                    deactivate WS
-
-                    Service --> Controller: Return success\nwith invoiceCode
-                    deactivate Service
-
-                    Controller --> PayOS: 200 OK
-                    activate PayOS
-                    deactivate Controller
-                    deactivate PayOS
-
-                    activate UI
-                    UI --> Cashier: Hiển thị notification\nthanh toán thành công
-                    deactivate UI
-                else Invoice chưa isPaid
-                    Service -> Service: prisma.invoice.update
-                    Service -> Service: prisma.prescription.update
-
-                    Service -> Routing: assignPatientToRooms
-
-                    Service ->> WS: notifyInvoicePaymentSuccess\nand routing created
-                    activate WS
-                    WS ->> UI: WebSocket notification\nthanh toán thành công
-                    WS -> WS: Broadcast to clinic rooms\nvới routing info
-                    deactivate WS
-
-                    Service --> Controller: Return success\nwith invoiceCode and data
-                    deactivate Service
-
-                    Controller --> PayOS: 200 OK
-                    activate PayOS
-                    deactivate Controller
-                    deactivate PayOS
-
-                    activate UI
-                    UI --> Cashier: Hiển thị notification\nthanh toán thành công
-                    deactivate UI
-
-                    Cashier -> UI: In hóa đơn
-                    activate UI
-                    UI -> UI: Generate invoice PDF
-                    UI --> Cashier: Hóa đơn in ra
-                    deactivate UI
-
-                    Cashier -> Patient: Trao hóa đơn
-                    activate Patient
-
-                    Cashier -> Patient: Hướng dẫn đến phòng khám\ntheo routing assignment
-                    deactivate Patient
-                end
-            else Status is CANCELLED or FAILED
-                Service -> Service: // done
-
-                Service --> Controller: Return success\nwith status
-                deactivate Service
-
-                Controller --> PayOS: 200 OK
-                activate PayOS
-                deactivate Controller
-                deactivate PayOS
-
+  alt Status = SUCCEEDED
+    Service -> Service: Cập nhật invoice.isPaid\nvà prescription.status
+    Service -> Routing: assignPatientToRooms (nếu chưa tạo)
+    Service ->> WS: notifyInvoicePaymentSuccess\n(kèm routing nếu có)
+    WS ->> UI: WebSocket "thanh toán thành công"
+    UI --> Cashier: Hiển thị kết quả\nvà cho phép in hóa đơn
+  else Status = FAILED hoặc CANCELLED
                 Service ->> WS: Notify payment failed
-                activate WS
-                WS ->> UI: WebSocket notification\nthanh toán thất bại
-                deactivate WS
-
-                activate UI
-                UI --> Cashier: Hiển thị thanh toán\nthất bại hoặc hủy
-                deactivate UI
+    WS ->> UI: WebSocket "thanh toán thất bại/hủy"
+    UI --> Cashier: Hiển thị kết quả\nthanh toán thất bại/hủy
             else Status khác (PENDING/PROCESSING)
-                Service -> Service: // done
-
-                Service --> Controller: Return success
-                deactivate Service
+    Service -> Service: Chỉ cập nhật trạng thái\ntransaction, không đổi invoice
+  end
 
                 Controller --> PayOS: 200 OK
-                activate PayOS
-                deactivate Controller
-                deactivate PayOS
-            end
-        end
-    end
 end
 
 @enduml

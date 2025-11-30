@@ -29,6 +29,7 @@ export interface QueueTicket {
   metadata: {
     isPregnant?: boolean;
     isDisabled?: boolean;
+    isElderly?: boolean;
     isChild?: boolean;
   };
 }
@@ -138,6 +139,7 @@ export class RedisStreamService {
       queuePriority: ticket.queuePriority.toString(),
       isPregnant: ticket.metadata.isPregnant?.toString() || 'false',
       isDisabled: ticket.metadata.isDisabled?.toString() || 'false',
+      isElderly: ticket.metadata.isElderly?.toString() || 'false',
       isChild: ticket.metadata.isChild?.toString() || 'false',
     };
 

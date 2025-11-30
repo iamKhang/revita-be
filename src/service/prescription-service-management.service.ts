@@ -10,7 +10,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PrescriptionStatus } from '@prisma/client';
+import { PrescriptionStatus } from '.prisma/client';
 
 export interface ScanPrescriptionResponse {
   prescription: any;
@@ -237,6 +237,13 @@ export class PrescriptionServiceManagementService {
     note?: string,
   ): Promise<UpdateServiceStatusResponse> {
     try {
+      // Validate prescriptionServiceId
+      if (!prescriptionServiceId || prescriptionServiceId === 'undefined') {
+        throw new BadRequestException(
+          'prescriptionServiceId is required and cannot be undefined',
+        );
+      }
+
       this.logger.log(
         `${userRole} ${userId} updating prescription service ${prescriptionServiceId} to ${status}`,
       );
@@ -317,10 +324,22 @@ export class PrescriptionServiceManagementService {
     userId: string,
     userRole: string,
     note?: string,
+    shouldReschedule?: boolean,
   ): Promise<UpdateResultsResponse> {
     try {
+      // Validate prescriptionServiceId
+      if (!prescriptionServiceId || prescriptionServiceId === 'undefined') {
+        throw new BadRequestException(
+          'prescriptionServiceId is required and cannot be undefined',
+        );
+      }
+
+      const finalStatus: PrescriptionStatus = shouldReschedule
+        ? PrescriptionStatus.RESCHEDULED
+        : PrescriptionStatus.COMPLETED;
+
       this.logger.log(
-        `${userRole} ${userId} updating results for prescription service ${prescriptionServiceId}`,
+        `${userRole} ${userId} updating results for prescription service ${prescriptionServiceId} with status ${finalStatus}`,
       );
 
       // Tìm prescription service (không kiểm tra quyền, ai cũng có thể update)
@@ -348,17 +367,23 @@ export class PrescriptionServiceManagementService {
         );
       }
 
-      // Cập nhật kết quả và chuyển sang COMPLETED
+      // Cập nhật kết quả và chuyển sang COMPLETED hoặc RESCHEDULED
+      const updateData: any = {
+        status: finalStatus,
+        results,
+        note,
+      };
+
+      // Chỉ set completedAt nếu status là COMPLETED
+      if (!shouldReschedule) {
+        updateData.completedAt = new Date();
+      }
+
       const updatedService = await this.prisma.prescriptionService.update({
         where: {
           id: prescriptionServiceId,
         },
-        data: {
-          status: PrescriptionStatus.COMPLETED,
-          results,
-          note,
-          completedAt: new Date(),
-        },
+        data: updateData,
         include: { service: true },
       });
 
@@ -387,7 +412,7 @@ export class PrescriptionServiceManagementService {
       }
 
       this.logger.log(
-        `Prescription service ${prescriptionServiceId} completed with results`,
+        `Prescription service ${prescriptionServiceId} updated with results, status: ${finalStatus}`,
       );
 
       return {

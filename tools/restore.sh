@@ -49,7 +49,7 @@ read -p "Nhập đúng tên file backup muốn restore (ví dụ: revitatb_backu
 if [[ "$FILENAME" == */* ]]; then
     FILEPATH="$FILENAME"
 else
-    FILEPATH="$BACKUP_DIR/$FILENAME"
+FILEPATH="$BACKUP_DIR/$FILENAME"
 fi
 
 if [[ ! -f "$FILEPATH" ]]; then

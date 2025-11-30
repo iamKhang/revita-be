@@ -35,9 +35,9 @@ export class ClinicRoomService {
     if (dto.booths && dto.booths.length > 0) {
       for (const booth of dto.booths) {
         if (booth.serviceIds && booth.serviceIds.length > 0) {
-          const services = await this.prisma.service.findMany({
+      const services = await this.prisma.service.findMany({
             where: { id: { in: booth.serviceIds } },
-          });
+      });
 
           if (services.length !== booth.serviceIds.length) {
             throw new BadRequestException(`One or more services not found for booth: ${booth.name}`);
@@ -83,9 +83,9 @@ export class ClinicRoomService {
             await tx.boothService.createMany({
               data: boothDto.serviceIds.map((serviceId) => ({
                 boothId: booth.id,
-                serviceId,
-              })),
-            });
+            serviceId,
+          })),
+        });
           }
         }
       }
@@ -262,9 +262,9 @@ export class ClinicRoomService {
     if (dto.booths && dto.booths.length > 0) {
       for (const booth of dto.booths) {
         if (booth.serviceIds && booth.serviceIds.length > 0) {
-          const services = await this.prisma.service.findMany({
+      const services = await this.prisma.service.findMany({
             where: { id: { in: booth.serviceIds } },
-          });
+      });
 
           if (services.length !== booth.serviceIds.length) {
             throw new BadRequestException(`One or more services not found for booth: ${booth.name || 'unnamed'}`);
@@ -316,19 +316,19 @@ export class ClinicRoomService {
 
               // Update booth services if provided
               if (boothDto.serviceIds !== undefined) {
-                // Remove existing services
+        // Remove existing services
                 await tx.boothService.deleteMany({
                   where: { boothId },
-                });
+        });
 
-                // Add new services
+        // Add new services
                 if (boothDto.serviceIds.length > 0) {
                   await tx.boothService.createMany({
                     data: boothDto.serviceIds.map((serviceId) => ({
                       boothId,
-                      serviceId,
-                    })),
-                  });
+              serviceId,
+            })),
+          });
                 }
               }
             }
