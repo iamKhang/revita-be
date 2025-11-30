@@ -1,7 +1,8 @@
 export interface PendingServiceDto {
+  prescriptionServiceId: string; // ID của PrescriptionService
   serviceId: string;
   serviceName: string;
-  status: 'PENDING' | 'RESCHEDULED';
+  status: 'PENDING' | 'RESCHEDULED' | 'WAITING_RESULT';
   doctorId?: string | null;
   technicianId?: string | null;
   doctorName?: string | null;
@@ -14,6 +15,6 @@ export interface PendingServicesResponseDto {
   prescriptionId: string;
   prescriptionCode: string;
   services: PendingServiceDto[];
-  status: 'PENDING' | 'RESCHEDULED' | 'MIXED'; // MIXED nếu có cả PENDING và RESCHEDULED
+  status: 'PENDING' | 'RESCHEDULED' | 'WAITING_RESULT' | 'MIXED'; // MIXED nếu có nhiều trạng thái khác nhau
   totalCount: number;
 }

@@ -27,6 +27,7 @@ import {
   StartServicesResponseDto,
 } from './dto/start-services.dto';
 import { PendingServicesResponseDto } from './dto/pending-services.dto';
+import { AssignServicesDto } from './dto/assign-services.dto';
 import { PrescriptionServiceManagementService } from '../service/prescription-service-management.service';
 import {
   UpdateServiceStatusDto,
@@ -157,9 +158,10 @@ export class PrescriptionController {
 
   @Post('assign-next-service')
   @Public()
-  async assignNextService(@Body() body: { prescriptionCode: string }) {
-    return this.prescriptionService.assignNextPendingService(
-      body.prescriptionCode,
+  async assignNextService(@Body() dto: AssignServicesDto) {
+    return this.prescriptionService.assignServices(
+      dto.prescriptionCode,
+      dto.prescriptionServiceIds,
     );
   }
 

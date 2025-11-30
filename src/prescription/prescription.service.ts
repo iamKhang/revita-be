@@ -1246,6 +1246,219 @@ export class PrescriptionService {
   }
 
   /**
+   * Gán nhiều dịch vụ cho work session
+   * Hỗ trợ các trạng thái: PENDING, RESCHEDULED, WAITING_RESULT
+   */
+  async assignServices(
+    prescriptionCode: string,
+    prescriptionServiceIds: string[],
+  ) {
+    const now = new Date();
+    
+    // Tìm prescription
+    const prescription = await this.prisma.prescription.findFirst({
+      where: { prescriptionCode },
+      include: {
+        services: {
+          where: {
+            id: { in: prescriptionServiceIds },
+          },
+          include: { service: true },
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found');
+    }
+
+    if (prescription.services.length === 0) {
+      throw new BadRequestException('No services found with provided IDs');
+    }
+
+    if (prescription.services.length !== prescriptionServiceIds.length) {
+      const foundIds = prescription.services.map((s) => s.id);
+      const missingIds = prescriptionServiceIds.filter(
+        (id) => !foundIds.includes(id),
+      );
+      throw new BadRequestException(
+        `Some services not found: ${missingIds.join(', ')}`,
+      );
+    }
+
+    // Validate status: chỉ cho phép PENDING, RESCHEDULED, hoặc WAITING_RESULT
+    const invalidServices = prescription.services.filter(
+      (s) =>
+        s.status !== PrescriptionStatus.PENDING &&
+        s.status !== PrescriptionStatus.RESCHEDULED &&
+        s.status !== PrescriptionStatus.WAITING_RESULT,
+    );
+
+    if (invalidServices.length > 0) {
+      throw new BadRequestException(
+        `Services must be PENDING, RESCHEDULED, or WAITING_RESULT. Invalid services: ${invalidServices.map((s) => `${s.id} (${s.status})`).join(', ')}`,
+      );
+    }
+
+    // Phân loại services theo status
+    const waitingResultServices = prescription.services.filter(
+      (s) => s.status === PrescriptionStatus.WAITING_RESULT,
+    );
+    const otherServices = prescription.services.filter(
+      (s) =>
+        s.status === PrescriptionStatus.PENDING ||
+        s.status === PrescriptionStatus.RESCHEDULED,
+    );
+
+    const results: any[] = [];
+
+    // Xử lý WAITING_RESULT services: cập nhật thành RETURNING
+    for (const service of waitingResultServices) {
+      const updated = await this.prisma.prescriptionService.update({
+        where: { id: service.id },
+        data: {
+          status: PrescriptionStatus.RETURNING,
+        },
+        include: { service: true },
+      });
+
+      results.push({
+        prescriptionServiceId: updated.id,
+        serviceId: updated.serviceId,
+        serviceName: updated.service.name,
+        oldStatus: PrescriptionStatus.WAITING_RESULT,
+        newStatus: PrescriptionStatus.RETURNING,
+        doctorId: updated.doctorId,
+        technicianId: updated.technicianId,
+        workSessionId: updated.workSessionId,
+      });
+    }
+
+    // Xử lý PENDING/RESCHEDULED services: tìm work session và cập nhật thành WAITING (theo trình tự: PENDING → WAITING → SERVING)
+    if (otherServices.length > 0) {
+      const serviceIds = new Set(otherServices.map((s) => s.serviceId));
+
+      // Tìm work sessions phù hợp
+      const sessions = await this.prisma.workSession.findMany({
+        where: {
+          OR: [
+            {
+              status: WorkSessionStatus.IN_PROGRESS,
+              endTime: { gte: now },
+              services: {
+                some: {
+                  serviceId: { in: Array.from(serviceIds) },
+                },
+              },
+            },
+            {
+              status: WorkSessionStatus.APPROVED,
+              startTime: { lte: now },
+              endTime: { gte: now },
+              services: {
+                some: {
+                  serviceId: { in: Array.from(serviceIds) },
+                },
+              },
+            },
+          ],
+        },
+        include: {
+          services: {
+            include: {
+              service: {
+                select: {
+                  id: true,
+                  serviceCode: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          doctor: {
+            include: {
+              auth: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+          technician: {
+            include: {
+              auth: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (sessions.length === 0) {
+        throw new BadRequestException(
+          `No active work sessions found for services: ${Array.from(serviceIds).join(', ')}`,
+        );
+      }
+
+      // Gán từng service cho work session phù hợp
+      for (const service of otherServices) {
+        // Tìm session có service này
+        const suitableSession = sessions.find((session) =>
+          session.services.some((ws) => ws.serviceId === service.serviceId),
+        );
+
+        if (!suitableSession) {
+          throw new BadRequestException(
+            `No suitable work session found for service: ${service.serviceId}`,
+          );
+        }
+
+        // Xác định status mới: WAITING cho PENDING/RESCHEDULED (theo đúng trình tự: PENDING → WAITING → SERVING)
+        const newStatus = PrescriptionStatus.WAITING;
+
+        const updated = await this.prisma.prescriptionService.update({
+          where: { id: service.id },
+          data: {
+            status: newStatus,
+            doctorId: suitableSession.doctorId ?? null,
+            technicianId: suitableSession.technicianId ?? null,
+            workSessionId: suitableSession.id,
+            // Không set startedAt ở đây vì chưa bắt đầu phục vụ (chỉ mới WAITING)
+          },
+          include: { service: true },
+        });
+
+        results.push({
+          prescriptionServiceId: updated.id,
+          serviceId: updated.serviceId,
+          serviceName: updated.service.name,
+          oldStatus: service.status,
+          newStatus: newStatus,
+          doctorId: updated.doctorId,
+          technicianId: updated.technicianId,
+          workSessionId: updated.workSessionId,
+          chosenSession: {
+            id: suitableSession.id,
+            doctorId: suitableSession.doctorId,
+            technicianId: suitableSession.technicianId,
+            startTime: suitableSession.startTime,
+            endTime: suitableSession.endTime,
+          },
+        });
+      }
+    }
+
+    return {
+      success: true,
+      assignedServices: results,
+      totalAssigned: results.length,
+    };
+  }
+
+  /**
    * Tính tuổi từ ngày sinh
    */
   private calculateAge(dateOfBirth: Date): number {
@@ -2034,7 +2247,11 @@ export class PrescriptionService {
           services: {
             where: {
               status: {
-                in: [PrescriptionStatus.PENDING, PrescriptionStatus.RESCHEDULED],
+                in: [
+                  PrescriptionStatus.PENDING,
+                  PrescriptionStatus.RESCHEDULED,
+                  PrescriptionStatus.WAITING_RESULT,
+                ],
               },
             },
             include: {
@@ -2126,10 +2343,19 @@ export class PrescriptionService {
             }
           }
 
+          const isWaitingResult = ps.status === PrescriptionStatus.WAITING_RESULT;
+          const statusString =
+            isWaitingResult
+              ? 'WAITING_RESULT'
+              : isRescheduled
+                ? 'RESCHEDULED'
+                : 'PENDING';
+
           return {
+            prescriptionServiceId: ps.id,
             serviceId: ps.serviceId,
             serviceName: ps.service.name,
-            status: isRescheduled ? 'RESCHEDULED' : 'PENDING',
+            status: statusString,
             doctorId: ps.doctorId,
             technicianId: ps.technicianId,
             doctorName: ps.doctor?.auth?.name || null,
@@ -2146,12 +2372,17 @@ export class PrescriptionService {
       // Xác định status tổng thể
       const hasPending = services.some((s) => s.status === 'PENDING');
       const hasRescheduled = services.some((s) => s.status === 'RESCHEDULED');
-      const overallStatus: 'PENDING' | 'RESCHEDULED' | 'MIXED' =
-        hasPending && hasRescheduled
+      const hasWaitingResult = services.some((s) => s.status === 'WAITING_RESULT');
+      
+      const statusCount = [hasPending, hasRescheduled, hasWaitingResult].filter(Boolean).length;
+      const overallStatus: 'PENDING' | 'RESCHEDULED' | 'WAITING_RESULT' | 'MIXED' =
+        statusCount > 1
           ? 'MIXED'
-          : hasRescheduled
-            ? 'RESCHEDULED'
-            : 'PENDING';
+          : hasWaitingResult
+            ? 'WAITING_RESULT'
+            : hasRescheduled
+              ? 'RESCHEDULED'
+              : 'PENDING';
 
       return {
         prescriptionId: prescription.id,
@@ -2170,8 +2401,8 @@ export class PrescriptionService {
   }
 
   /**
-   * Tìm các dịch vụ PENDING hoặc RESCHEDULED liên tiếp có cùng bác sĩ/kỹ thuật viên
-   * Cho phép cả PENDING và RESCHEDULED trong cùng một nhóm nếu có cùng assignee
+   * Tìm các dịch vụ PENDING, RESCHEDULED hoặc WAITING_RESULT liên tiếp có cùng bác sĩ/kỹ thuật viên
+   * Cho phép các trạng thái này trong cùng một nhóm nếu có cùng assignee
    */
   private findConsecutivePendingServices(services: any[]): any[] {
     if (services.length === 0) return [];
@@ -2186,10 +2417,11 @@ export class PrescriptionService {
       const serviceTechnicianId = service.technicianId;
       const serviceStatus = service.status;
 
-      // Chỉ xử lý PENDING và RESCHEDULED
+      // Chỉ xử lý PENDING, RESCHEDULED và WAITING_RESULT
       if (
         serviceStatus !== PrescriptionStatus.PENDING &&
-        serviceStatus !== PrescriptionStatus.RESCHEDULED
+        serviceStatus !== PrescriptionStatus.RESCHEDULED &&
+        serviceStatus !== PrescriptionStatus.WAITING_RESULT
       ) {
         continue;
       }
