@@ -46,6 +46,7 @@ export class PrescriptionService {
       note,
       services,
       medicalRecordId,
+      belongsToServiceId,
     } = dto as any;
 
     // Extract doctorId from JWT token if not provided in DTO
@@ -153,6 +154,19 @@ export class PrescriptionService {
       }
     }
 
+    // Optional: validate belongsToServiceId exists and belongs to a valid PrescriptionService
+    if (belongsToServiceId) {
+      const prescriptionService = await this.prisma.prescriptionService.findUnique({
+        where: { id: belongsToServiceId },
+        select: { id: true, prescriptionId: true },
+      });
+      if (!prescriptionService) {
+        throw new NotFoundException('PrescriptionService not found');
+      }
+      // Optional: validate that the PrescriptionService belongs to the same patientProfile
+      // (có thể bỏ qua validation này nếu muốn cho phép link cross-patient)
+    }
+
     // Generate prescription code if not provided
     let finalPrescriptionCode = prescriptionCode;
     if (!finalPrescriptionCode) {
@@ -181,6 +195,7 @@ export class PrescriptionService {
         doctorId: doctorId ?? null,
         medicalRecordId: medicalRecordId ?? null,
         note: note ?? null,
+        belongsToServiceId: belongsToServiceId ?? null,
         services: {
           create: services.map((s, index) => ({
             serviceId: s.serviceId ?? codeToId.get(s.serviceCode as string)!,
@@ -200,6 +215,16 @@ export class PrescriptionService {
         },
         patientProfile: true,
         doctor: true,
+        belongsToService: {
+          include: {
+            service: true,
+            prescription: {
+              include: {
+                patientProfile: true,
+              },
+            },
+          },
+        },
       },
     });
 

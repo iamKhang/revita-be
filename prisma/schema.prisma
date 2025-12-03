@@ -589,7 +589,8 @@ model Prescription {
   prescriptionCode String                @map("prescription_code")
   doctorId         String?
   doctor           Doctor?               @relation(fields: [doctorId], references: [id])
-  services         PrescriptionService[]
+  // Một phiếu chỉ định có nhiều dịch vụ
+  services         PrescriptionService[] @relation("PrescriptionServices")
   patientProfileId String
   patientProfile   PatientProfile        @relation(fields: [patientProfileId], references: [id])
   note             String?
@@ -597,6 +598,10 @@ model Prescription {
   invoiceDetails   InvoiceDetail[]
   medicalRecordId  String?
   medicalRecord    MedicalRecord?        @relation(fields: [medicalRecordId], references: [id])
+
+  // Chỉ định để làm rõ dịch vụ (một Prescription chỉ thuộc về một PrescriptionService)
+  belongsToServiceId String? @map("belongs_to_service_id")
+  belongsToService PrescriptionService? @relation("IssuedPrescriptions", fields: [belongsToServiceId], references: [id])
 
   @@map("prescriptions")
 }
@@ -674,7 +679,7 @@ model PrescriptionService {
   id             String             @id @default(uuid())
   prescriptionId String
   serviceId      String
-  prescription   Prescription       @relation(fields: [prescriptionId], references: [id])
+  prescription   Prescription       @relation("PrescriptionServices", fields: [prescriptionId], references: [id]) 
   service        Service            @relation(fields: [serviceId], references: [id])
   doctorId       String?
   doctor         Doctor?            @relation(fields: [doctorId], references: [id])
@@ -690,6 +695,11 @@ model PrescriptionService {
   note           String?
   startedAt      DateTime?          @map("started_at")
   completedAt    DateTime?          @map("completed_at")
+  // Danh sách các phiếu chỉ định để phục vụ cho dịch vụ này (lưu dưới dạng array IDs, không dùng relation vì Prisma không hỗ trợ array foreign keys)
+  issuedPrescriptionIds String[]            @default([]) @map("issued_prescription_ids")
+  
+  // Danh sách các phiếu chỉ định được phát hành để làm rõ dịch vụ này (one-to-many: một PrescriptionService có nhiều Prescription)
+  issuedPrescriptions Prescription[] @relation("IssuedPrescriptions")
 
   // Lưu trữ thông tin buồng và phòng thực hiện dịch vụ
   boothId      String?     @map("booth_id")

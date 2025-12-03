@@ -1,0 +1,12 @@
+Condition,Valid Partition,Invalid Partition,Valid Boundary,Invalid Boundary
+patientProfileCode,"Tồn tại trong hệ thống","Không tồn tại trong hệ thống","Mã hợp lệ (PP-XXXXXX)","Mã không hợp lệ hoặc không tồn tại"
+appointmentCode,"Tồn tại trong hệ thống","Không tồn tại trong hệ thống","Mã hợp lệ (AP-XXXXXX)","Mã không hợp lệ hoặc không tồn tại"
+patientName,"Là chuỗi không rỗng (bắt buộc nếu không có patientProfileCode/appointmentCode)","Rỗng hoặc null (khi không có mã)","1 ký tự","Rỗng"
+patientAge,"Số nguyên trong khoảng [0, 150]","< 0 hoặc > 150 hoặc không phải số","0, 150","-1, 151"
+patientPhone,"Là chuỗi (tùy chọn)","Không phải chuỗi","1 ký tự","-"
+birthYear,"Số nguyên trong khoảng [1900, currentYear]","< 1900 hoặc > currentYear hoặc không phải số","1900, currentYear","1899, currentYear + 1"
+isPregnant,"true hoặc false (boolean)","Không phải boolean","true, false","null, 'true', 'false' (string)"
+isDisabled,"true hoặc false (boolean)","Không phải boolean","true, false","null, 'true', 'false' (string)"
+isElderly,"true hoặc false (boolean)","Không phải boolean","true, false","null, 'true', 'false' (string)"
+isVip/isVIP,"true hoặc false (boolean)","Không phải boolean","true, false","null, 'true', 'false' (string)"
+

@@ -1,0 +1,33 @@
+TC ID,Test Case Type,patientProfileCode,appointmentCode,patientName,patientAge,patientPhone,birthYear,isPregnant,isDisabled,isElderly,isVip,isVIP,Expected Result,Actual Result,Pass/Fail
+TC001,Valid Partition,PP-000001,-,-,-,-,-,-,-,-,-,-,-,"200 OK, tạo ticket thành công, thông tin bệnh nhân lấy theo hồ sơ",-,- 
+TC003,Valid Partition,-,AP-000001,-,-,-,-,-,-,-,-,-,-,"200 OK, tạo ticket thành công, thông tin bệnh nhân lấy theo lịch khám",-,- 
+TC005,Valid Partition,-,-,"Nguyễn Văn A",30,"0901234567",-,-,-,-,-,-,-,"200 OK, tạo ticket thành công, tuổi = 30, isElderly = false, isChild = false",-,- 
+TC011,Valid Partition,-,-,"Chị C",-,"0901234567",1990,-,-,-,-,-,-,"200 OK, tạo ticket, age tính từ birthYear, 0 <= age <= 150",-,- 
+TC014,Valid Partition,-,-,"Chị D",28,"0901234567",-,true,-,-,-,-,-,"200 OK, ticket.metadata.isPregnant = true, isDisabled = false, isElderly = false",-,- 
+TC015,Valid Partition,-,-,"Anh E",40,"0901234567",-,-,true,-,-,-,-,"200 OK, ticket.metadata.isDisabled = true, priority cao hơn bệnh nhân thường",-,- 
+TC016,Valid Partition,-,-,"Ông F",70,"0901234567",-,-,-,true,-,-,-,"200 OK, isElderly = true dù age < 75, ưu tiên như người già",-,- 
+TC018,Valid Partition,-,-,"Anh VIP",35,"0901234567",-,-,-,-,true,-,-,"200 OK, chọn counter VIP, ticket gửi tới queue VIP",-,- 
+TC019,Valid Partition,-,-,"Anh VIP2",35,"0901234568",-,-,-,-,-,true,-,"200 OK, chọn counter VIP, ticket gửi tới queue VIP",-,- 
+TC021,Valid Partition,-,-,"Bà H",80,"0901234567",-,true,true,true,-,-,-,"200 OK, priority cao, metadata đầy đủ các cờ",-,- 
+TC022,Valid Partition,-,-,"Anh Thường",30,"0901234567",-,-,-,-,-,-,-,"200 OK, priority nhóm thường (60000000 + sequence)",-,- 
+TC023,Valid Partition,-,-,"Anh BYear",-,"0901234999",1985,-,-,-,-,-,-,"200 OK, age tính từ birthYear, metadata.isElderly theo age",-,- 
+TC002,Invalid Partition,PP-999999,-,-,-,-,-,-,-,-,-,-,-,"404 Not Found, thông báo không tìm thấy hồ sơ bệnh nhân",-,- 
+TC004,Invalid Partition,-,AP-999999,-,-,-,-,-,-,-,-,-,-,"404 Not Found, thông báo không tìm thấy lịch khám",-,- 
+TC006,Invalid Partition,-,-,,30,"0901234567",-,-,-,-,-,-,-,"400 Bad Request, Không tìm thấy thông tin bệnh nhân. Vui lòng cung cấp tên bệnh nhân.",-,- 
+TC012,Invalid Partition,-,-,"Chị C",-,"0901234567",1899,-,-,-,-,-,-,"400 Bad Request, birthYear must not be less than 1900",-,- 
+TC020,Invalid Partition,-,-,,-,-,-,-,-,-,-,-,-,"400 Bad Request, Không tìm thấy thông tin bệnh nhân. Vui lòng cung cấp tên bệnh nhân.",-,- 
+TC024,Invalid Partition,invalidProfile,invalidAppt,,999,"abc",-1,"notBool","notBool","notBool","notBool","notBool","400 Bad Request, [patientAge must be a number conforming to the specified constraints, patientAge must not be less than 0, birthYear must be an integer number, birthYear must not be less than 1900, isPregnant must be a boolean value, isDisabled must be a boolean value, isElderly must be a boolean value, isVip must be a boolean value]",-,- 
+TC029,Invalid Partition,-,-,"Nguyễn Văn A",30,"0901234567",-,"notBool",-,-,-,-,-,"400 Bad Request, isPregnant must be a boolean value",-,- 
+TC030,Invalid Partition,-,-,"Nguyễn Văn A",30,"0901234567",-,-,"notBool",-,-,-,-,"400 Bad Request, isDisabled must be a boolean value",-,- 
+TC031,Invalid Partition,-,-,"Nguyễn Văn A",30,"0901234567",-,-,-,"notBool",-,-,-,"400 Bad Request, isElderly must be a boolean value",-,- 
+TC032,Invalid Partition,-,-,"Nguyễn Văn A",30,"0901234567",-,-,-,-,"notBool",-,-,"400 Bad Request, isVip must be a boolean value",-,- 
+TC007,Valid Boundary,-,-,"Bé A",0,"0901234567",-,-,-,-,-,-,-,"200 OK, tạo ticket thành công, age = 0, isChild = true",-,- 
+TC009,Valid Boundary,-,-,"Ông B",150,"0901234567",-,-,-,-,-,-,-,"200 OK, tạo ticket thành công, age = 150, isElderly = true",-,- 
+TC017,Valid Boundary,-,-,"Ông G",75,"0901234567",-,-,-,-,-,-,-,"200 OK, isElderly = true do age >= 75",-,- 
+TC008,Invalid Boundary,-,-,"Bé A",-1,"0901234567",-,-,-,-,-,-,-,"400 Bad Request, patientAge must not be less than 0",-,- 
+TC010,Invalid Boundary,-,-,"Ông B",151,"0901234567",-,-,-,-,-,-,-,"400 Bad Request, patientAge must not be greater than 150",-,- 
+TC013,Invalid Boundary,-,-,"Chị C",-,"0901234567",3000,-,-,-,-,-,-,"400 Bad Request, birthYear must not be greater than [currentYear]",-,- 
+TC025,Invalid Boundary,-,-,"Nguyễn Văn A",-1,"0901234567",-,-,-,-,-,-,-,"400 Bad Request, patientAge must not be less than 0",-,- 
+TC026,Invalid Boundary,-,-,"Nguyễn Văn A",151,"0901234567",-,-,-,-,-,-,-,"400 Bad Request, patientAge must not be greater than 150",-,- 
+TC027,Invalid Boundary,-,-,"Nguyễn Văn A",-,"0901234567",1899,-,-,-,-,-,-,"400 Bad Request, birthYear must not be less than 1900",-,- 
+TC028,Invalid Boundary,-,-,"Nguyễn Văn A",-,"0901234567",3000,-,-,-,-,-,-,"400 Bad Request, birthYear must not be greater than [currentYear]",-,- 

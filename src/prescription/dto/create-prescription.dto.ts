@@ -59,6 +59,11 @@ export class CreatePrescriptionDto {
   @IsString()
   note?: string;
 
+  // Link prescription to an existing PrescriptionService (để làm rõ dịch vụ)
+  @IsOptional()
+  @IsString()
+  belongsToServiceId?: string;
+
   // medications removed from this DTO; moved to medication-prescription module
 
   @IsArray()
