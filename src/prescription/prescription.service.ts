@@ -619,7 +619,21 @@ export class PrescriptionService {
       where: { medicalRecordId },
       include: {
         services: {
-          include: { service: true },
+          include: { 
+            service: true,
+            // Include issued prescriptions (phiếu con) với đầy đủ thông tin
+            issuedPrescriptions: {
+              include: {
+                services: {
+                  include: { service: true },
+                  orderBy: { order: 'asc' },
+                },
+                patientProfile: true,
+                doctor: true,
+              },
+              orderBy: { id: 'desc' },
+            },
+          },
           orderBy: { order: 'asc' },
         },
         patientProfile: true,
