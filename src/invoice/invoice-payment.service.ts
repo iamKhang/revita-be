@@ -783,7 +783,7 @@ export class InvoicePaymentService {
     // Chỉ emit socket event cho TRANSFER payments (webhook từ PayOS)
     // CASH payments đã được xử lý trực tiếp trong frontend và không cần socket notification
     if (updatedInvoice.paymentMethod === PaymentMethod.TRANSFER) {
-      await this.notifyInvoicePaymentSuccess(updatedInvoice);
+    await this.notifyInvoicePaymentSuccess(updatedInvoice);
     }
 
     return result;
