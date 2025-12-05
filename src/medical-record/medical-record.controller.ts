@@ -30,6 +30,7 @@ import {
   RemoveAttachmentsDto,
 } from './dto/create-medical-record.dto';
 import { UpdateMedicalRecordDto } from './dto/update-medical-record.dto';
+import { LinkPrescriptionDto } from './dto/link-prescription.dto';
 import { PatientMedicalSummaryResponseDto } from './dto/patient-medical-summary.dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -596,6 +597,52 @@ export class MedicalRecordController {
       }
       throw new HttpException(
         'Lỗi khi xóa files',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Patch(':id/link-prescription')
+  @Roles(Role.DOCTOR, Role.ADMIN)
+  @ApiOperation({
+    summary: 'Liên kết một phiếu chỉ định với bệnh án',
+    description:
+      'Liên kết một phiếu chỉ định (prescription) với bệnh án hiện tại bằng mã code của phiếu chỉ định',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Phiếu chỉ định đã được liên kết thành công',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy phiếu chỉ định hoặc bệnh án',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Phiếu chỉ định đã được liên kết với bệnh án khác hoặc không thuộc cùng bệnh nhân',
+  })
+  async linkPrescription(
+    @Param('id') id: string,
+    @Body() linkPrescriptionDto: LinkPrescriptionDto,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    try {
+      const prescription = await this.medicalRecordService.linkPrescription(
+        id,
+        linkPrescriptionDto.prescriptionCode,
+        req.user,
+      );
+
+      return {
+        message: 'Phiếu chỉ định đã được liên kết thành công',
+        prescription,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Lỗi khi liên kết phiếu chỉ định',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

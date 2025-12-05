@@ -1272,5 +1272,64 @@ export class MedicalRecordService {
     console.log(en);
     return en;
   }
+
+  /**
+   * Liên kết một phiếu chỉ định với bệnh án
+   * @param medicalRecordId - ID của bệnh án
+   * @param prescriptionCode - Mã code của phiếu chỉ định
+   * @param user - Thông tin người dùng hiện tại
+   * @returns Prescription đã được liên kết
+   */
+  async linkPrescription(
+    medicalRecordId: string,
+    prescriptionCode: string,
+    user: JwtUserPayload,
+  ) {
+    // 1. Kiểm tra bệnh án tồn tại và có quyền truy cập
+    const medicalRecord = await this.findOne(medicalRecordId, user);
+
+    // 2. Tìm phiếu chỉ định theo code
+    const prescription = await this.prisma.prescription.findFirst({
+      where: { prescriptionCode },
+      include: {
+        patientProfile: true,
+      },
+    });
+
+    if (!prescription) {
+      throw new NotFoundException(
+        `Không tìm thấy phiếu chỉ định với mã: ${prescriptionCode}`,
+      );
+    }
+
+    // 3. Kiểm tra phiếu chỉ định đã được liên kết với bệnh án khác chưa
+    if (prescription.medicalRecordId && prescription.medicalRecordId !== medicalRecordId) {
+      throw new BadRequestException(
+        `Phiếu chỉ định này đã được liên kết với bệnh án khác (ID: ${prescription.medicalRecordId})`,
+      );
+    }
+
+    // 4. Kiểm tra patientProfileId có khớp không
+    if (prescription.patientProfileId !== medicalRecord.patientProfileId) {
+      throw new BadRequestException(
+        'Phiếu chỉ định không thuộc về cùng bệnh nhân với bệnh án này',
+      );
+    }
+
+    // 5. Cập nhật liên kết
+    const updatedPrescription = await this.prisma.prescription.update({
+      where: { id: prescription.id },
+      data: {
+        medicalRecordId: medicalRecordId,
+      },
+      include: {
+        services: { include: { service: true }, orderBy: { order: 'asc' } },
+        patientProfile: true,
+        doctor: true,
+      },
+    });
+
+    return updatedPrescription;
+  }
 }
 
