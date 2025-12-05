@@ -2573,7 +2573,8 @@ export class PrescriptionService {
           if (
             service.status === 'WAITING' ||
             service.status === 'SKIPPED' ||
-            service.status === 'PREPARING'
+            service.status === 'PREPARING' ||
+            service.status === 'RETURNING'
           ) {
             await tx.prescriptionService.update({
               where: {
@@ -2596,7 +2597,11 @@ export class PrescriptionService {
           preparingPatient.patientProfileId !== nextPatient.patientProfileId
         ) {
           for (const service of preparingPatient.services) {
-            if (service.status === 'WAITING' || service.status === 'SKIPPED') {
+            if (
+              service.status === 'WAITING' || 
+              service.status === 'SKIPPED' ||
+              service.status === 'RETURNING'
+            ) {
               await tx.prescriptionService.update({
                 where: {
                   prescriptionId_serviceId: {
