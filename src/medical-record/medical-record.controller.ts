@@ -263,16 +263,19 @@ export class MedicalRecordController {
   }
 
   @Get('templates')
+  @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST, Role.PATIENT)
   async getTemplates() {
     return await this.medicalRecordService.getTemplates();
   }
 
   @Get('templates/:templateId')
+  @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST, Role.PATIENT)
   async getTemplateById(@Param('templateId') templateId: string) {
     return await this.medicalRecordService.getTemplateById(templateId);
   }
 
   @Get(':id/template')
+  @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST, Role.PATIENT)
   async getTemplateByMedicalRecord(@Param('id') id: string) {
     return await this.medicalRecordService.getTemplateByMedicalRecord(id);
   }

@@ -1,0 +1,148 @@
+{
+  "info": {
+    "name": "Template Management",
+    "description": "API collection cho quản lý Template (mẫu bệnh án)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Template",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"templateCode\": \"NOI_KHOA_V2\",\n  \"name\": \"Nội khoa (Phiên bản 2)\",\n  \"fields\": {\n    \"fields\": [\n      {\n        \"name\": \"chief_complaint\",\n        \"label\": \"Triệu chứng chính\",\n        \"type\": \"string\",\n        \"required\": true\n      },\n      {\n        \"name\": \"hpi\",\n        \"label\": \"Diễn tiến bệnh\",\n        \"type\": \"text\"\n      },\n      {\n        \"name\": \"diagnosis\",\n        \"label\": \"Chẩn đoán\",\n        \"type\": \"string\",\n        \"required\": true\n      },\n      {\n        \"name\": \"treatment_plan\",\n        \"label\": \"Kế hoạch điều trị\",\n        \"type\": \"text\",\n        \"required\": true\n      }\n    ]\n  },\n  \"specialtyId\": \"{{specialtyId}}\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/templates",
+          "host": ["{{baseUrl}}"],
+          "path": ["templates"]
+        },
+        "description": "Tạo template mới. Chỉ ADMIN mới có quyền."
+      },
+      "response": []
+    },
+    {
+      "name": "Update Template",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Nội khoa (Cập nhật)\",\n  \"isActive\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/templates/{{templateId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["templates", "{{templateId}}"]
+        },
+        "description": "Cập nhật template. Chỉ ADMIN mới có quyền. Tất cả fields đều optional."
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Template",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/templates/{{templateId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["templates", "{{templateId}}"]
+        },
+        "description": "Xóa template. Chỉ ADMIN mới có quyền. Không thể xóa template đang được sử dụng trong bệnh án."
+      },
+      "response": []
+    },
+    {
+      "name": "Get All Templates",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/medical-records/templates",
+          "host": ["{{baseUrl}}"],
+          "path": ["medical-records", "templates"]
+        },
+        "description": "Lấy danh sách tất cả templates. Tất cả authenticated users đều có quyền."
+      },
+      "response": []
+    },
+    {
+      "name": "Get Template By ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/medical-records/templates/{{templateId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["medical-records", "templates", "{{templateId}}"]
+        },
+        "description": "Lấy thông tin chi tiết template theo ID. Tất cả authenticated users đều có quyền."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "templateId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "specialtyId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
+
