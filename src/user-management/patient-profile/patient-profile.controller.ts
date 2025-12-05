@@ -20,6 +20,7 @@ import { Roles } from '../../rbac/roles.decorator';
 import { Role } from '../../rbac/roles.enum';
 import { JwtUserPayload } from '../../medical-record/dto/jwt-user-payload.dto';
 import { UpdatePatientProfileDto } from '../dto/update-patient-profile.dto';
+import { Public } from 'src/rbac/public.decorator';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('patient-profiles')
@@ -62,12 +63,13 @@ export class PatientProfileController {
 
   // Tìm kiếm PatientProfile theo mã code chính xác
   @Get('code/:code')
-  @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST, Role.CASHIER)
+  // @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST, Role.CASHIER)
+  @Public()
   async findByCode(
     @Param('code') code: string,
-    @Request() req: { user: JwtUserPayload },
+    @Request() req: { user?: JwtUserPayload | null },
   ): Promise<unknown> {
-    return await this.patientProfileService.findByCode(code, req.user);
+    return await this.patientProfileService.findByCode(code, req.user || null);
   }
 
   // Tìm kiếm nâng cao với nhiều tiêu chí

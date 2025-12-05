@@ -625,7 +625,7 @@ export class PrescriptionService {
             issuedPrescriptions: {
               include: {
                 services: {
-                  include: { service: true },
+          include: { service: true },
                   orderBy: { order: 'asc' },
                 },
                 patientProfile: true,

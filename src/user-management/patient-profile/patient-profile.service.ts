@@ -532,11 +532,14 @@ export class PatientProfileService {
   }
 
   // Tìm kiếm PatientProfile theo mã code chính xác
-  async findByCode(code: string, user: JwtUserPayload) {
-    // Chỉ staff mới có thể tìm kiếm
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-    if (user.role === Role.PATIENT) {
-      throw new ForbiddenException('Bệnh nhân không có quyền tìm kiếm hồ sơ');
+  async findByCode(code: string, user: JwtUserPayload | null | undefined) {
+    // Nếu có user, kiểm tra quyền (chỉ staff mới có thể tìm kiếm)
+    // Nếu không có user (public endpoint), cho phép truy cập
+    if (user) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+      if (user.role === Role.PATIENT) {
+        throw new ForbiddenException('Bệnh nhân không có quyền tìm kiếm hồ sơ');
+      }
     }
 
     const patientProfile = await this.prisma.patientProfile.findFirst({
