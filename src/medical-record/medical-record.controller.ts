@@ -317,6 +317,7 @@ export class MedicalRecordController {
   }
 
   @Patch(':id')
+  @Roles(Role.DOCTOR, Role.ADMIN, Role.RECEPTIONIST)
   @UseInterceptors(FilesInterceptor('files'))
   @ApiOperation({
     summary: 'Cập nhật hồ sơ bệnh án với khả năng upload file đính kèm',
@@ -622,7 +623,8 @@ export class MedicalRecordController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Phiếu chỉ định đã được liên kết với bệnh án khác hoặc không thuộc cùng bệnh nhân',
+    description:
+      'Phiếu chỉ định đã được liên kết với bệnh án khác hoặc không thuộc cùng bệnh nhân',
   })
   async linkPrescription(
     @Param('id') id: string,
