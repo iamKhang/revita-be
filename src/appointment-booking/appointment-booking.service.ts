@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import {
   SpecialtiesResponseDto,
@@ -898,7 +902,7 @@ export class AppointmentBookingService {
     });
 
     // Check for time conflicts manually
-    const hasConflict = conflictingAppointments.some((apt) => {
+    const conflictingAppointment = conflictingAppointments.find((apt) => {
       const aptStart = this.parseAppointmentTime(
         apt.date.toISOString().split('T')[0],
         apt.startTime,
@@ -910,8 +914,16 @@ export class AppointmentBookingService {
       return !(requestedEnd <= aptStart || requestedStart >= aptEnd);
     });
 
-    if (hasConflict) {
-      throw new Error('Time slot is not available');
+    if (conflictingAppointment) {
+      throw new BadRequestException({
+        message: 'Khung giờ đã có lịch hẹn khác',
+        conflict: {
+          appointmentId: conflictingAppointment.id,
+          date: conflictingAppointment.date.toISOString().split('T')[0],
+          startTime: conflictingAppointment.startTime,
+          endTime: conflictingAppointment.endTime,
+        },
+      });
     }
 
     // Generate appointment code
