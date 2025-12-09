@@ -31,7 +31,7 @@ export class StatisticsController {
    * Lấy KPI nhanh: lượt đặt khám, % xác nhận/hoàn tất/hủy, bệnh nhân mới/quay lại, điểm đánh giá TB bác sĩ
    */
   @Get('kpi')
-  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR)
+  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR, Role.TECHNICIAN)
   async getQuickKpi(
     @Query() query: QueryPeriodDto,
     @CurrentUser() user: CurrentUserData,
@@ -57,7 +57,7 @@ export class StatisticsController {
    * Thống kê lịch làm việc: WorkSession theo bác sĩ/kỹ thuật viên, tỉ lệ phiên COMPLETED/CANCELED
    */
   @Get('work-sessions')
-  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR)
+  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR, Role.TECHNICIAN)
   async getWorkSessionStats(
     @Query() query: QueryPeriodDto,
     @CurrentUser() user: CurrentUserData,
@@ -70,7 +70,7 @@ export class StatisticsController {
    * Thống kê khối lượng khám: ca/bác sĩ/ngày-tuần-tháng; thời lượng bình quân/ca
    */
   @Get('examination-volume')
-  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR)
+  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR, Role.TECHNICIAN)
   async getExaminationVolumeStats(
     @Query() query: QueryPeriodDto,
     @CurrentUser() user: CurrentUserData,
@@ -128,7 +128,7 @@ export class StatisticsController {
    * Thống kê lịch hẹn theo thời gian: cung cấp dữ liệu cho biểu đồ xu hướng lịch hẹn
    */
   @Get('appointments/by-time')
-  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR)
+  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR, Role.TECHNICIAN)
   async getAppointmentsByTime(
     @Query() query: TimeBasedQueryDto,
     @CurrentUser() user: CurrentUserData,
@@ -141,7 +141,7 @@ export class StatisticsController {
    * Thống kê khám bệnh theo thời gian: cung cấp dữ liệu cho biểu đồ xu hướng khám bệnh
    */
   @Get('examinations/by-time')
-  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR)
+  @Roles(Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR, Role.TECHNICIAN)
   async getExaminationsByTime(
     @Query() query: TimeBasedQueryDto,
     @CurrentUser() user: CurrentUserData,
