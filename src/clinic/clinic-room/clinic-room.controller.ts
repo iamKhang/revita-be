@@ -45,6 +45,11 @@ export class ClinicRoomController {
     return this.clinicRoomService.findClinicRoomById(id);
   }
 
+  @Get(':id/prescription-services')
+  async getPrescriptionServicesByClinicRoom(@Param('id') id: string) {
+    return this.clinicRoomService.getPrescriptionServicesByClinicRoom(id);
+  }
+
   @Put(':id')
   async updateClinicRoom(
     @Param('id') id: string,

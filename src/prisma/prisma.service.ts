@@ -232,54 +232,68 @@ export class PrismaService
                   const { WebSocketService } = await import('../websocket/websocket.service');
                   const ws = this.moduleRef.get(WebSocketService, { strict: false });
                   
-                  if (ws && updated.boothId && updated.booth) {
-                    const clinicRoomId = updated.booth.roomId;
-                    const clinicRoom = updated.booth.room;
-
-                    // Khi chuyển sang SERVING (từ bất kỳ trạng thái nào)
-                    if (newStatus === PrescriptionStatus.SERVING && oldStatus !== PrescriptionStatus.SERVING) {
-                      const servingEvent = {
-                        type: 'PRESCRIPTION_SERVICE_SERVING',
-                        data: {
-                          prescriptionServiceId: updated.id,
-                          patientProfileId: updated.prescription.patientProfileId,
-                          patientName: updated.prescription.patientProfile.name,
-                          prescriptionCode: updated.prescription.prescriptionCode,
-                          boothId: updated.boothId,
-                          boothCode: updated.booth.boothCode,
-                          boothName: updated.booth.name,
-                          clinicRoomId: clinicRoomId,
-                          clinicRoomCode: clinicRoom.roomCode,
-                          clinicRoomName: clinicRoom.roomName,
-                          doctorId: updated.doctorId ?? null,
-                          doctorName: updated.doctor?.auth?.name ?? null,
-                          technicianId: updated.technicianId ?? null,
-                          technicianName: updated.technician?.auth?.name ?? null,
-                        },
-                        timestamp: new Date().toISOString(),
-                      };
-
-                      await ws.sendToClinicRoom(clinicRoomId, 'prescription_service_serving', servingEvent);
-                      this.logger.log(
-                        `[PrescriptionService UPDATE] Sent SERVING event to clinic room ${clinicRoomId} for PrescriptionService ${updated.id}`,
-                      );
+                  if (ws) {
+                    let clinicRoomId: string | null = null;
+                    
+                    // Try to get clinicRoomId from booth or directly from PrescriptionService
+                    if (updated.boothId && updated.booth) {
+                      clinicRoomId = updated.booth.roomId;
+                    } else if (updated.clinicRoomId) {
+                      clinicRoomId = updated.clinicRoomId;
                     }
 
-                    // Khi chuyển từ SERVING sang trạng thái khác
-                    if (oldStatus === PrescriptionStatus.SERVING && newStatus !== PrescriptionStatus.SERVING) {
-                      const removeEvent = {
-                        type: 'PRESCRIPTION_SERVICE_REMOVED',
-                        data: {
-                          prescriptionServiceId: updated.id,
-                          patientProfileId: updated.prescription.patientProfileId,
-                          prescriptionCode: updated.prescription.prescriptionCode,
-                        },
-                        timestamp: new Date().toISOString(),
-                      };
+                    // If we have clinicRoomId, emit events
+                    if (clinicRoomId) {
+                      // Khi chuyển sang SERVING (từ bất kỳ trạng thái nào)
+                      if (newStatus === PrescriptionStatus.SERVING && oldStatus !== PrescriptionStatus.SERVING) {
+                        const servingEvent = {
+                          type: 'PRESCRIPTION_SERVICE_SERVING',
+                          data: {
+                            prescriptionServiceId: updated.id,
+                            patientProfileId: updated.prescription.patientProfileId,
+                            patientName: updated.prescription.patientProfile.name,
+                            prescriptionCode: updated.prescription.prescriptionCode,
+                            boothId: updated.boothId ?? null,
+                            boothCode: updated.booth?.boothCode ?? null,
+                            boothName: updated.booth?.name ?? null,
+                            clinicRoomId: clinicRoomId,
+                            clinicRoomCode: updated.booth?.room?.roomCode ?? null,
+                            clinicRoomName: updated.booth?.room?.roomName ?? null,
+                            doctorId: updated.doctorId ?? null,
+                            doctorName: updated.doctor?.auth?.name ?? null,
+                            technicianId: updated.technicianId ?? null,
+                            technicianName: updated.technician?.auth?.name ?? null,
+                          },
+                          timestamp: new Date().toISOString(),
+                        };
 
-                      await ws.sendToClinicRoom(clinicRoomId, 'prescription_service_removed', removeEvent);
-                      this.logger.log(
-                        `[PrescriptionService UPDATE] Sent REMOVED event to clinic room ${clinicRoomId} for PrescriptionService ${updated.id}`,
+                        await ws.sendToClinicRoom(clinicRoomId, 'prescription_service_serving', servingEvent);
+                        this.logger.log(
+                          `[PrescriptionService UPDATE] Sent SERVING event to clinic room ${clinicRoomId} for PrescriptionService ${updated.id}`,
+                        );
+                      }
+
+                      // Khi chuyển từ SERVING sang trạng thái khác
+                      if (oldStatus === PrescriptionStatus.SERVING && newStatus !== PrescriptionStatus.SERVING) {
+                        const removeEvent = {
+                          type: 'PRESCRIPTION_SERVICE_REMOVED',
+                          data: {
+                            prescriptionServiceId: updated.id,
+                            patientProfileId: updated.prescription.patientProfileId,
+                            prescriptionCode: updated.prescription.prescriptionCode,
+                          },
+                          timestamp: new Date().toISOString(),
+                        };
+
+                        await ws.sendToClinicRoom(clinicRoomId, 'prescription_service_removed', removeEvent);
+                        this.logger.log(
+                          `[PrescriptionService UPDATE] Sent REMOVED event to clinic room ${clinicRoomId} for PrescriptionService ${updated.id}`,
+                        );
+                      }
+                    } else {
+                      // Log when we can't find clinicRoomId
+                      this.logger.warn(
+                        `[PrescriptionService UPDATE] Cannot emit socket events: No clinicRoomId or boothId for PrescriptionService ${updated.id}`,
                       );
                     }
                   }

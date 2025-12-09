@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateClinicRoomDto, UpdateClinicRoomDto, ClinicRoomResponseDto, SaveCommonServicesDto } from '../dto/clinic-room.dto';
 import { CodeGeneratorService } from '../../user-management/patient-profile/code-generator.service';
+import { PrescriptionStatus } from '@prisma/client';
 
 @Injectable()
 export class ClinicRoomService {
@@ -626,6 +627,155 @@ export class ClinicRoomService {
     });
 
     return { message: 'Clinic room deleted successfully' };
+  }
+
+  async getPrescriptionServicesByClinicRoom(clinicRoomId: string) {
+    // Verify clinic room exists
+    const clinicRoom = await this.prisma.clinicRoom.findUnique({
+      where: { id: clinicRoomId },
+    });
+
+    if (!clinicRoom) {
+      throw new NotFoundException('Clinic room not found');
+    }
+
+    // Get all booths in this clinic room
+    const booths = await this.prisma.booth.findMany({
+      where: { roomId: clinicRoomId },
+      select: { id: true },
+    });
+
+    const boothIds = booths.map((b) => b.id);
+
+    // Get work sessions in this clinic room (via boothId)
+    const workSessions = boothIds.length > 0
+      ? await this.prisma.workSession.findMany({
+          where: {
+            boothId: { in: boothIds },
+            status: { in: ['IN_PROGRESS', 'APPROVED'] }, // Only active work sessions
+          },
+          select: { id: true },
+        })
+      : [];
+
+    const workSessionIds = workSessions.map((ws) => ws.id);
+
+    // Build where clause: filter by clinicRoomId OR boothId OR workSessionId in this clinic room
+    const whereClause: any = {
+      status: {
+        in: [
+          PrescriptionStatus.SERVING,
+          PrescriptionStatus.PREPARING,
+          PrescriptionStatus.RETURNING,
+          PrescriptionStatus.WAITING,
+        ],
+      },
+    };
+
+    // Add OR condition for clinicRoomId, boothId, or workSessionId
+    const orConditions: any[] = [];
+    
+    if (clinicRoomId) {
+      orConditions.push({ clinicRoomId: clinicRoomId });
+    }
+    
+    if (boothIds.length > 0) {
+      orConditions.push({ boothId: { in: boothIds } });
+    }
+    
+    if (workSessionIds.length > 0) {
+      orConditions.push({ workSessionId: { in: workSessionIds } });
+    }
+
+    if (orConditions.length > 0) {
+      whereClause.OR = orConditions;
+    }
+
+    // Debug logging
+    console.log(`[ClinicRoomService] Querying prescription services for clinic room ${clinicRoomId}`);
+    console.log(`[ClinicRoomService] Booth IDs: ${JSON.stringify(boothIds)}`);
+    console.log(`[ClinicRoomService] Work Session IDs: ${JSON.stringify(workSessionIds)}`);
+    console.log(`[ClinicRoomService] Where clause: ${JSON.stringify(whereClause, null, 2)}`);
+
+    // Get prescription services with status PENDING, PREPARING, WAITING, or WAITING_RESULT
+    const prescriptionServices = await this.prisma.prescriptionService.findMany({
+      where: whereClause,
+      include: {
+        prescription: {
+          include: {
+            patientProfile: {
+              select: {
+                id: true,
+                name: true,
+                profileCode: true,
+              },
+            },
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            serviceCode: true,
+          },
+        },
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        technician: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        booth: {
+          select: {
+            id: true,
+            boothCode: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: [
+        { status: 'asc' }, // PENDING first, then PREPARING
+        { order: 'asc' }, // Then by order field
+      ],
+    });
+
+    // Debug logging
+    console.log(`[ClinicRoomService] Found ${prescriptionServices.length} prescription services`);
+    prescriptionServices.forEach((ps: any, index: number) => {
+      console.log(`[ClinicRoomService] Service ${index + 1}: ${ps.id}, Status: ${ps.status}, ClinicRoomId: ${ps.clinicRoomId}, BoothId: ${ps.boothId}`);
+    });
+
+    return prescriptionServices.map((ps: any) => ({
+      id: ps.id,
+      prescriptionId: ps.prescriptionId,
+      prescriptionCode: ps.prescription.prescriptionCode,
+      serviceId: ps.serviceId,
+      serviceName: ps.service.name,
+      status: ps.status,
+      patientProfileId: ps.prescription.patientProfileId,
+      patientName: ps.prescription.patientProfile.name,
+      doctorId: ps.doctorId ?? undefined,
+      doctorName: ps.doctor?.auth?.name ?? undefined,
+      technicianId: ps.technicianId ?? undefined,
+      technicianName: ps.technician?.auth?.name ?? undefined,
+      boothId: ps.boothId ?? undefined,
+      boothCode: ps.booth?.boothCode ?? undefined,
+      boothName: ps.booth?.name ?? undefined,
+    }));
   }
 
   private mapToResponseDto(room: any): ClinicRoomResponseDto {

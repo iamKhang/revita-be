@@ -10,6 +10,17 @@ export class PatientAppointmentDto {
   appointmentId: string;
   appointmentCode: string;
   patientProfileCode: string;
+  patientProfile?: {
+    id: string;
+    profileCode: string;
+    name: string;
+    age?: number;
+    gender?: string;
+    dateOfBirth?: string;
+    phone?: string;
+    isPregnant?: boolean;
+    isDisabled?: boolean;
+  };
   doctorId: string;
   doctorName: string;
   specialtyId: string;

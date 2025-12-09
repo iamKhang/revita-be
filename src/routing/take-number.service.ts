@@ -78,13 +78,8 @@ export class TakeNumberService {
     let appointmentDetails: any = null;
 
     // Tìm thông tin bệnh nhân từ mã hồ sơ hoặc mã lịch khám
-    if (request.patientProfileCode) {
-      patientInfo = await this.withTimeout(
-        this.getPatientByProfileCode(request.patientProfileCode),
-        500,
-        () => null,
-      );
-    } else if (request.appointmentCode) {
+    // QUAN TRỌNG: Nếu có appointmentCode, luôn ưu tiên lấy từ appointment để có appointmentDetails
+    if (request.appointmentCode) {
       const result = await this.withTimeout(
         this.getPatientByAppointmentCode(request.appointmentCode),
         500,
@@ -93,6 +88,12 @@ export class TakeNumberService {
       patientInfo = result.patientInfo;
       hasAppointment = true;
       appointmentDetails = result.appointmentDetails;
+    } else if (request.patientProfileCode) {
+      patientInfo = await this.withTimeout(
+        this.getPatientByProfileCode(request.patientProfileCode),
+        500,
+        () => null,
+      );
     }
     t = tlog('patient lookup', t);
 
@@ -488,6 +489,21 @@ export class TakeNumberService {
       TicketStatus.WAITING, // status ban đầu
     );
 
+    // Tạo metadata với thông tin appointment nếu có
+    const metadata: Record<string, any> = {
+      isPregnant: priorityFlags.isPregnant,
+      isDisabled: priorityFlags.isDisabled,
+      isElderly: priorityFlags.isElderly,
+      isChild: typeof patientInfo.age === 'number' ? patientInfo.age < 6 : false,
+    };
+    
+    // Thêm thông tin appointment vào metadata để frontend có thể nhận diện
+    if (appointmentDetails) {
+      metadata.hasAppointment = true;
+      metadata.appointmentCode = appointmentDetails.appointmentCode;
+      metadata.appointmentDetails = appointmentDetails;
+    }
+
     return {
       ticketId,
       patientProfileCode: patientInfo.profileCode,
@@ -505,12 +521,7 @@ export class TakeNumberService {
       status: TicketStatus.WAITING,
       callCount: 0,
       queuePriority: finalQueuePriority,
-      metadata: {
-        isPregnant: priorityFlags.isPregnant,
-        isDisabled: priorityFlags.isDisabled,
-        isElderly: priorityFlags.isElderly,
-        isChild: typeof patientInfo.age === 'number' ? patientInfo.age < 6 : false,
-      },
+      metadata,
     };
   }
 

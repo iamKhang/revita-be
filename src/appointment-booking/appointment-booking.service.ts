@@ -1491,10 +1491,35 @@ export class AppointmentBookingService {
       });
     }
 
+    // Tính toán age từ dateOfBirth nếu có
+    let age: number | undefined;
+    if (appointment.patientProfile.dateOfBirth) {
+      const birthDate = new Date(appointment.patientProfile.dateOfBirth);
+      const today = new Date();
+      age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+    }
+
     return {
       appointmentId: appointment.id,
       appointmentCode: appointment.appointmentCode,
       patientProfileCode: appointment.patientProfile.profileCode,
+      patientProfile: {
+        id: appointment.patientProfile.id,
+        profileCode: appointment.patientProfile.profileCode,
+        name: appointment.patientProfile.name,
+        age: age,
+        gender: appointment.patientProfile.gender,
+        dateOfBirth: appointment.patientProfile.dateOfBirth
+          ? appointment.patientProfile.dateOfBirth.toISOString().split('T')[0]
+          : undefined,
+        phone: appointment.patientProfile.phone || undefined,
+        isPregnant: appointment.patientProfile.isPregnant ?? undefined,
+        isDisabled: appointment.patientProfile.isDisabled ?? undefined,
+      },
       doctorId: appointment.doctorId,
       doctorName: appointment.doctor.auth.name,
       specialtyId: appointment.specialtyId,

@@ -1415,6 +1415,17 @@ export class PrescriptionService {
               },
             },
           },
+          booth: {
+            include: {
+              room: {
+                select: {
+                  id: true,
+                  roomCode: true,
+                  roomName: true,
+                },
+              },
+            },
+          },
           doctor: {
             include: {
               auth: {
@@ -1458,6 +1469,9 @@ export class PrescriptionService {
         // Xác định status mới: WAITING cho PENDING/RESCHEDULED (theo đúng trình tự: PENDING → WAITING → SERVING)
         const newStatus = PrescriptionStatus.WAITING;
 
+        // Lấy boothId từ work session
+        const boothId = suitableSession.boothId ?? null;
+
         const updated = await this.prisma.prescriptionService.update({
           where: { id: service.id },
           data: {
@@ -1465,6 +1479,7 @@ export class PrescriptionService {
             doctorId: suitableSession.doctorId ?? null,
             technicianId: suitableSession.technicianId ?? null,
             workSessionId: suitableSession.id,
+            boothId: boothId,
             // Không set startedAt ở đây vì chưa bắt đầu phục vụ (chỉ mới WAITING)
           },
           include: { service: true },
@@ -1482,9 +1497,17 @@ export class PrescriptionService {
           chosenSession: {
             id: suitableSession.id,
             doctorId: suitableSession.doctorId,
+            doctorName: suitableSession.doctor?.auth?.name ?? null,
             technicianId: suitableSession.technicianId,
+            technicianName: suitableSession.technician?.auth?.name ?? null,
             startTime: suitableSession.startTime,
             endTime: suitableSession.endTime,
+            boothId: suitableSession.boothId,
+            boothCode: suitableSession.booth?.boothCode ?? null,
+            boothName: suitableSession.booth?.name ?? null,
+            clinicRoomId: suitableSession.booth?.room?.id ?? null,
+            clinicRoomCode: suitableSession.booth?.room?.roomCode ?? null,
+            clinicRoomName: suitableSession.booth?.room?.roomName ?? null,
           },
         });
       }
