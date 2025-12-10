@@ -337,7 +337,7 @@ export class ServiceService {
     const { take, skip } = this.normalizePagination(
       query.limit,
       query.offset,
-      100,
+      10000, // Tăng maxLimit để cho phép lấy nhiều hơn khi cần
     );
 
     const where: Prisma.ServiceWhereInput = {};
@@ -354,6 +354,49 @@ export class ServiceService {
       where.requiresDoctor = query.requiresDoctor;
     }
 
+    // Thêm logic search với hỗ trợ tiếng Việt
+    if (query.search && query.search.trim().length > 0) {
+      const searchTerm = query.search.trim();
+      const normalizedSearchTerm = this.normalizeVietnameseText(searchTerm);
+      
+      // Tạo điều kiện search riêng và kết hợp với các filter khác bằng AND
+      const searchConditions: Prisma.ServiceWhereInput = {
+        OR: [
+          {
+            name: {
+              contains: searchTerm,
+              mode: 'insensitive',
+            },
+          },
+          {
+            name: {
+              contains: normalizedSearchTerm,
+              mode: 'insensitive',
+            },
+          },
+          {
+            serviceCode: {
+              contains: searchTerm,
+              mode: 'insensitive',
+            },
+          },
+          {
+            description: {
+              contains: searchTerm,
+              mode: 'insensitive',
+            },
+          },
+        ],
+      };
+
+      // Kết hợp search với các filter khác bằng AND
+      const existingAnd = Array.isArray(where.AND) ? where.AND : (where.AND ? [where.AND] : []);
+      where.AND = [
+        ...existingAnd,
+        searchConditions,
+      ];
+    }
+
     const [total, services] = await this.prisma.$transaction([
       this.prisma.service.count({ where }),
       this.prisma.service.findMany({
@@ -367,7 +410,7 @@ export class ServiceService {
 
     return {
       services,
-      pagination: this.buildPagination(total, take, skip),
+      pagination: this.buildPagination(total, take ?? total, skip),
     };
   }
 
@@ -1279,18 +1322,60 @@ export class ServiceService {
     offset?: number,
     maxLimit: number = 100,
   ) {
-    const take = Math.min(Math.max(limit ?? 20, 1), maxLimit);
+    // Nếu không truyền limit thì lấy tất cả (take = undefined)
+    const take = limit !== undefined ? Math.min(Math.max(limit, 1), maxLimit) : undefined;
     const skip = Math.max(offset ?? 0, 0);
     return { take, skip };
   }
 
-  private buildPagination(total: number, limit: number, offset: number) {
+  private buildPagination(total: number, limit: number | undefined, offset: number) {
+    const effectiveLimit = limit ?? total;
     return {
       total,
-      limit,
+      limit: effectiveLimit,
       offset,
-      hasMore: offset + limit < total,
+      hasMore: limit !== undefined ? offset + limit < total : false,
     };
+  }
+
+  /**
+   * Normalize Vietnamese text by removing accents for better search
+   * Ví dụ: "Khám tổng quát" -> "Kham tong quat"
+   */
+  private normalizeVietnameseText(text: string): string {
+    const vietnameseMap: Record<string, string> = {
+      'à': 'a', 'á': 'a', 'ạ': 'a', 'ả': 'a', 'ã': 'a',
+      'â': 'a', 'ầ': 'a', 'ấ': 'a', 'ậ': 'a', 'ẩ': 'a', 'ẫ': 'a',
+      'ă': 'a', 'ằ': 'a', 'ắ': 'a', 'ặ': 'a', 'ẳ': 'a', 'ẵ': 'a',
+      'è': 'e', 'é': 'e', 'ẹ': 'e', 'ẻ': 'e', 'ẽ': 'e',
+      'ê': 'e', 'ề': 'e', 'ế': 'e', 'ệ': 'e', 'ể': 'e', 'ễ': 'e',
+      'ì': 'i', 'í': 'i', 'ị': 'i', 'ỉ': 'i', 'ĩ': 'i',
+      'ò': 'o', 'ó': 'o', 'ọ': 'o', 'ỏ': 'o', 'õ': 'o',
+      'ô': 'o', 'ồ': 'o', 'ố': 'o', 'ộ': 'o', 'ổ': 'o', 'ỗ': 'o',
+      'ơ': 'o', 'ờ': 'o', 'ớ': 'o', 'ợ': 'o', 'ở': 'o', 'ỡ': 'o',
+      'ù': 'u', 'ú': 'u', 'ụ': 'u', 'ủ': 'u', 'ũ': 'u',
+      'ư': 'u', 'ừ': 'u', 'ứ': 'u', 'ự': 'u', 'ử': 'u', 'ữ': 'u',
+      'ỳ': 'y', 'ý': 'y', 'ỵ': 'y', 'ỷ': 'y', 'ỹ': 'y',
+      'đ': 'd',
+      'À': 'A', 'Á': 'A', 'Ạ': 'A', 'Ả': 'A', 'Ã': 'A',
+      'Â': 'A', 'Ầ': 'A', 'Ấ': 'A', 'Ậ': 'A', 'Ẩ': 'A', 'Ẫ': 'A',
+      'Ă': 'A', 'Ằ': 'A', 'Ắ': 'A', 'Ặ': 'A', 'Ẳ': 'A', 'Ẵ': 'A',
+      'È': 'E', 'É': 'E', 'Ẹ': 'E', 'Ẻ': 'E', 'Ẽ': 'E',
+      'Ê': 'E', 'Ề': 'E', 'Ế': 'E', 'Ệ': 'E', 'Ể': 'E', 'Ễ': 'E',
+      'Ì': 'I', 'Í': 'I', 'Ị': 'I', 'Ỉ': 'I', 'Ĩ': 'I',
+      'Ò': 'O', 'Ó': 'O', 'Ọ': 'O', 'Ỏ': 'O', 'Õ': 'O',
+      'Ô': 'O', 'Ồ': 'O', 'Ố': 'O', 'Ộ': 'O', 'Ổ': 'O', 'Ỗ': 'O',
+      'Ơ': 'O', 'Ờ': 'O', 'Ớ': 'O', 'Ợ': 'O', 'Ở': 'O', 'Ỡ': 'O',
+      'Ù': 'U', 'Ú': 'U', 'Ụ': 'U', 'Ủ': 'U', 'Ũ': 'U',
+      'Ư': 'U', 'Ừ': 'U', 'Ứ': 'U', 'Ự': 'U', 'Ử': 'U', 'Ữ': 'U',
+      'Ỳ': 'Y', 'Ý': 'Y', 'Ỵ': 'Y', 'Ỷ': 'Y', 'Ỹ': 'Y',
+      'Đ': 'D',
+    };
+
+    return text
+      .split('')
+      .map((char) => vietnameseMap[char] || char)
+      .join('');
   }
 
   private async ensureCategoryExists(categoryId?: string) {
