@@ -612,6 +612,7 @@ export class WorkSessionService {
   async updateWorkSession(
     id: string,
     updateWorkSessionDto: UpdateWorkSessionDto,
+    actorRole?: Role,
   ) {
     const existingSession = await this.prisma.workSession.findUnique({
       where: { id },
@@ -619,6 +620,53 @@ export class WorkSessionService {
 
     if (!existingSession) {
       throw new NotFoundException(`Work session with ID ${id} not found`);
+    }
+
+    if (
+      existingSession.status === WorkSessionStatus.COMPLETED &&
+      updateWorkSessionDto.status &&
+      updateWorkSessionDto.status !== existingSession.status
+    ) {
+      throw new BadRequestException(
+        'Cannot update status of a completed work session',
+      );
+    }
+
+    const isCancelRequest =
+      updateWorkSessionDto.status === WorkSessionStatus.CANCELED;
+
+    if (isCancelRequest) {
+      if (existingSession.status === WorkSessionStatus.COMPLETED) {
+        throw new BadRequestException('Cannot cancel a completed work session');
+      }
+
+      if (
+        actorRole === Role.DOCTOR &&
+        existingSession.status !== WorkSessionStatus.PENDING
+      ) {
+        throw new BadRequestException(
+          'Doctors can only cancel work sessions in PENDING status',
+        );
+      }
+
+      const activeAppointments = await this.prisma.appointment.findMany({
+        where: {
+          workSessionId: id,
+          status: {
+            not: 'CANCELLED',
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+      if (activeAppointments.length > 0) {
+        throw new BadRequestException(
+          'Cannot cancel work session because appointments are not all cancelled',
+        );
+      }
     }
 
     // Nếu cập nhật thời gian, cần validate lại
@@ -790,9 +838,21 @@ export class WorkSessionService {
     }
 
     // Sau đó xóa WorkSession
-    return this.prisma.workSession.delete({
-      where: { id },
-    });
+    try {
+      return await this.prisma.workSession.delete({
+        where: { id },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new BadRequestException(
+          'Cannot delete work session because there are existing appointments linked to it. Please cancel or remove related appointments first.',
+        );
+      }
+      throw error;
+    }
   }
 
   /**

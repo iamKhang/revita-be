@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import {
@@ -20,6 +21,8 @@ import {
   PatientAppointmentDto,
   PatientAppointmentServiceDto,
 } from './dto';
+import { Role } from '../rbac/roles.enum';
+import { EmailService } from '../email/email.service';
 
 interface AppointmentServiceData {
   serviceId: string;
@@ -37,6 +40,9 @@ interface AppointmentData {
 @Injectable()
 export class AppointmentBookingService {
   private prisma = new PrismaClient();
+  private readonly logger = new Logger(AppointmentBookingService.name);
+
+  constructor(private readonly emailService: EmailService) {}
 
   /**
    * Lấy danh sách tất cả chuyên khoa
@@ -1530,6 +1536,266 @@ export class AppointmentBookingService {
       status: appointment.status,
       services: services,
       createdAt: appointment.date.toISOString(), // Sử dụng date làm createdAt nếu không có field createdAt
+    };
+  }
+
+  /**
+   * Hủy lịch hẹn
+   */
+  async cancelAppointment(
+    appointmentId: string,
+    actorRole: Role,
+    actorAuthId: string,
+  ) {
+    if (!appointmentId) {
+      throw new BadRequestException('Appointment ID is required');
+    }
+
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: {
+        doctor: {
+          include: {
+            auth: true,
+          },
+        },
+        patientProfile: {
+          include: {
+            patient: {
+              include: {
+                auth: true,
+              },
+            },
+          },
+        },
+        specialty: true,
+      },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    if (actorRole === Role.DOCTOR) {
+      if (!appointment.doctor || appointment.doctor.authId !== actorAuthId) {
+        throw new BadRequestException(
+          'You can only cancel appointments assigned to you',
+        );
+      }
+    }
+
+    if (appointment.status === 'CANCELLED') {
+      return {
+        appointmentId: appointment.id,
+        status: appointment.status,
+        message: 'Appointment is already cancelled',
+      };
+    }
+
+    const updated = await this.prisma.appointment.update({
+      where: { id: appointmentId },
+      data: {
+        status: 'CANCELLED',
+      },
+      select: {
+        id: true,
+        status: true,
+        appointmentCode: true,
+      },
+    });
+
+    const patientEmail = appointment.patientProfile?.patient?.auth?.email || null;
+    const cancellationReason =
+      actorRole === Role.DOCTOR
+        ? 'Bác sĩ đã yêu cầu hủy lịch.'
+        : actorRole === Role.ADMIN
+          ? 'Phòng khám đã điều chỉnh lịch hẹn.'
+          : 'Lịch hẹn đã được hủy theo yêu cầu.';
+
+    if (patientEmail) {
+      const dateStr = appointment.date.toISOString().split('T')[0];
+      void this.emailService
+        .sendAppointmentCancellationEmail({
+          to: patientEmail,
+          patientName: appointment.patientProfile?.name,
+          appointmentCode: appointment.appointmentCode,
+          date: dateStr,
+          startTime: appointment.startTime,
+          endTime: appointment.endTime,
+          doctorName: appointment.doctor?.auth?.name,
+          reason: cancellationReason,
+        })
+        .then((ok) => {
+          if (!ok) {
+            this.logger.warn(
+              `Failed to send cancellation email for appointment ${appointmentId} to ${patientEmail}`,
+            );
+          }
+        })
+        .catch((err) => {
+          this.logger.error(
+            `Error sending cancellation email for appointment ${appointmentId}`,
+            err,
+          );
+        });
+    } else {
+      this.logger.warn(
+        `No patient email/phone found for appointment ${appointmentId}, skipping email notification`,
+      );
+    }
+
+    return {
+      appointmentId: updated.id,
+      appointmentCode: updated.appointmentCode,
+      status: updated.status,
+      message: 'Appointment cancelled successfully',
+    };
+  }
+
+  /**
+   * Lấy tất cả lịch hẹn (ADMIN) với filter
+   */
+  async getAllAppointments(
+    doctorId?: string,
+    date?: string,
+  ): Promise<{
+    totalAppointments: number;
+    appointments: PatientAppointmentDto[];
+  }> {
+    const where: any = {};
+
+    if (doctorId) {
+      where.doctorId = doctorId;
+    }
+
+    if (date) {
+      const targetDate = new Date(date);
+      const startOfDay = new Date(targetDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(targetDate);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      where.date = {
+        gte: startOfDay,
+        lte: endOfDay,
+      };
+    }
+
+    const appointments = await this.prisma.appointment.findMany({
+      where,
+      include: {
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            serviceCode: true,
+            price: true,
+            durationMinutes: true,
+          },
+        },
+        appointmentServices: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                name: true,
+                serviceCode: true,
+                price: true,
+                durationMinutes: true,
+              },
+            },
+          },
+        },
+        patientProfile: true,
+      },
+      orderBy: {
+        date: 'desc',
+      },
+    });
+
+    const transformedAppointments: PatientAppointmentDto[] = appointments.map(
+      (apt) => {
+        const services: PatientAppointmentServiceDto[] =
+          apt.appointmentServices.map((as) => ({
+            serviceId: as.service.id,
+            serviceName: as.service.name,
+            serviceCode: as.service.serviceCode,
+            price: as.service.price,
+            timePerPatient: as.service.durationMinutes ?? 15,
+          }));
+
+        if (services.length === 0 && apt.service) {
+          services.push({
+            serviceId: apt.service.id,
+            serviceName: apt.service.name,
+            serviceCode: apt.service.serviceCode,
+            price: apt.service.price,
+            timePerPatient: apt.service.durationMinutes ?? 15,
+          });
+        }
+
+        let age: number | undefined;
+        if (apt.patientProfile.dateOfBirth) {
+          const birthDate = new Date(apt.patientProfile.dateOfBirth);
+          const today = new Date();
+          age = today.getFullYear() - birthDate.getFullYear();
+          const monthDiff = today.getMonth() - birthDate.getMonth();
+          if (
+            monthDiff < 0 ||
+            (monthDiff === 0 && today.getDate() < birthDate.getDate())
+          ) {
+            age--;
+          }
+        }
+
+        return {
+          appointmentId: apt.id,
+          appointmentCode: apt.appointmentCode,
+          patientProfileCode: apt.patientProfile.profileCode,
+          patientProfile: {
+            id: apt.patientProfile.id,
+            profileCode: apt.patientProfile.profileCode,
+            name: apt.patientProfile.name,
+            age: age,
+            gender: apt.patientProfile.gender,
+            dateOfBirth: apt.patientProfile.dateOfBirth
+              ? apt.patientProfile.dateOfBirth.toISOString().split('T')[0]
+              : undefined,
+            phone: apt.patientProfile.phone || undefined,
+            isPregnant: apt.patientProfile.isPregnant ?? undefined,
+            isDisabled: apt.patientProfile.isDisabled ?? undefined,
+          },
+          doctorId: apt.doctorId,
+          doctorName: apt.doctor.auth.name,
+          specialtyId: apt.specialtyId,
+          specialtyName: apt.specialty.name,
+          date: apt.date.toISOString().split('T')[0],
+          startTime: apt.startTime,
+          endTime: apt.endTime,
+          status: apt.status,
+          services: services,
+          createdAt: apt.date.toISOString(),
+        };
+      },
+    );
+
+    return {
+      totalAppointments: transformedAppointments.length,
+      appointments: transformedAppointments,
     };
   }
 

@@ -25,8 +25,12 @@ export class EmailService {
   async sendOtp(email: string, otp: string, name?: string): Promise<boolean> {
     try {
       if (this.isDryRun()) {
-        // eslint-disable-next-line no-console
-        console.log('[EMAIL_DRY_RUN] sendOtp', { to: email, subject: 'Mã xác thực OTP - Revita Healthcare', otp, name });
+        console.log('[EMAIL_DRY_RUN] sendOtp', {
+          to: email,
+          subject: 'Mã xác thực OTP - Revita Healthcare',
+          otp,
+          name,
+        });
         return true;
       }
       const { data, error } = await this.resend.emails.send({
@@ -65,8 +69,11 @@ export class EmailService {
   async sendWelcomeEmail(email: string, name: string): Promise<boolean> {
     try {
       if (this.isDryRun()) {
-        // eslint-disable-next-line no-console
-        console.log('[EMAIL_DRY_RUN] sendWelcomeEmail', { to: email, subject: 'Chào mừng bạn đến với Revita Healthcare!', name });
+        console.log('[EMAIL_DRY_RUN] sendWelcomeEmail', {
+          to: email,
+          subject: 'Chào mừng bạn đến với Revita Healthcare!',
+          name,
+        });
         return true;
       }
       const { data, error } = await this.resend.emails.send({
@@ -89,6 +96,245 @@ export class EmailService {
       this.logger.error('Error sending welcome email:', error);
       return false;
     }
+  }
+
+  /**
+   * Gửi email thông báo hủy lịch hẹn
+   */
+  async sendAppointmentCancellationEmail(params: {
+    to: string;
+    patientName?: string;
+    appointmentCode?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    doctorName?: string;
+    reason?: string;
+  }): Promise<boolean> {
+    const {
+      to,
+      patientName,
+      appointmentCode,
+      date,
+      startTime,
+      endTime,
+      doctorName,
+      reason,
+    } = params;
+    const subject = 'Thông báo hủy lịch hẹn - Revita Healthcare';
+    const html = this.generateAppointmentCancellationTemplate({
+      patientName,
+      appointmentCode,
+      date,
+      startTime,
+      endTime,
+      doctorName,
+      reason,
+    });
+
+    try {
+      if (this.isDryRun()) {
+        console.log('[EMAIL_DRY_RUN] sendAppointmentCancellationEmail', {
+          to,
+          subject,
+          appointmentCode,
+          date,
+          startTime,
+          endTime,
+          doctorName,
+        });
+        return true;
+      }
+
+      const { data, error } = await this.resend.emails.send({
+        from: 'Revita Healthcare <noreply@revita.io.vn>',
+        to: [to],
+        subject,
+        html,
+      });
+
+      if (error) {
+        this.logger.error(
+          'Failed to send appointment cancellation email:',
+          error,
+        );
+        return false;
+      }
+
+      this.logger.log(
+        `Appointment cancellation email sent to ${to}. Message ID: ${data?.id}`,
+      );
+      return true;
+    } catch (error) {
+      this.logger.error('Error sending appointment cancellation email:', error);
+      return false;
+    }
+  }
+
+  private generateAppointmentCancellationTemplate(params: {
+    patientName?: string;
+    appointmentCode?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    doctorName?: string;
+    reason?: string;
+  }): string {
+    const {
+      patientName,
+      appointmentCode,
+      date,
+      startTime,
+      endTime,
+      doctorName,
+      reason,
+    } = params;
+
+    return `
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Thông báo hủy lịch hẹn</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f6fb;
+          }
+          .container {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.1);
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 22px;
+          }
+          .logo {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1d4ed8;
+          }
+          .badge {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: #fee2e2;
+            color: #b91c1c;
+            font-weight: 600;
+            font-size: 12px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+          }
+          .hero {
+            background: linear-gradient(135deg, #ef4444, #f97316);
+            color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 18px;
+            text-align: center;
+          }
+          .card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 16px;
+            margin: 16px 0;
+          }
+          .card h3 {
+            margin: 0 0 10px 0;
+            font-size: 15px;
+            color: #0f172a;
+          }
+          ul {
+            padding-left: 18px;
+            margin: 0;
+          }
+          li {
+            margin-bottom: 6px;
+          }
+          .reason {
+            margin-top: 8px;
+            padding: 12px 14px;
+            border-left: 4px solid #ef4444;
+            background: #fff7f7;
+            border-radius: 8px;
+            color: #991b1b;
+          }
+          .footer {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #6b7280;
+            text-align: center;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="badge">Lịch hẹn đã hủy</div>
+            <div class="logo">🏥 Revita Healthcare</div>
+          </div>
+          <div class="hero">
+            <h2 style="margin: 0;">Xin lỗi về sự bất tiện, ${
+              patientName || 'Quý khách'
+            }</h2>
+            <p style="margin: 6px 0 0 0; font-size: 14px;">
+              Lịch hẹn của bạn đã được hủy. Vui lòng xem chi tiết bên dưới.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>Chi tiết lịch hẹn</h3>
+            <ul>
+              ${
+                appointmentCode
+                  ? `<li><strong>Mã lịch hẹn:</strong> ${appointmentCode}</li>`
+                  : ''
+              }
+              ${date ? `<li><strong>Ngày:</strong> ${date}</li>` : ''}
+              ${
+                startTime || endTime
+                  ? `<li><strong>Thời gian:</strong> ${startTime || ''}${
+                      startTime && endTime ? ' - ' : ''
+                    }${endTime || ''}</li>`
+                  : ''
+              }
+              ${
+                doctorName
+                  ? `<li><strong>Bác sĩ:</strong> ${doctorName}</li>`
+                  : ''
+              }
+            </ul>
+            <div class="reason">
+              <strong>Lý do:</strong>
+              <span>${
+                reason ||
+                'Lịch hẹn được hủy theo yêu cầu hoặc điều chỉnh từ phòng khám.'
+              }</span>
+            </div>
+          </div>
+
+          <p>
+            Chúng tôi rất tiếc về sự bất tiện này. Nếu cần đặt lại lịch hoặc hỗ trợ thêm,
+            vui lòng liên hệ hotline hoặc phản hồi lại email này.
+          </p>
+          <p>Cảm ơn bạn đã tin tưởng Revita Healthcare.</p>
+          <div class="footer">
+            Đây là email tự động, vui lòng không trả lời trực tiếp.
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
   }
 
   /**
@@ -296,15 +542,26 @@ export class EmailService {
     const { email, name, username, password, role } = params;
     try {
       if (this.isDryRun()) {
-        // eslint-disable-next-line no-console
-        console.log('[EMAIL_DRY_RUN] sendAccountCredentials', { to: email, subject: 'Thông tin tài khoản nhân viên - Revita Healthcare', name, username, password, role });
+        console.log('[EMAIL_DRY_RUN] sendAccountCredentials', {
+          to: email,
+          subject: 'Thông tin tài khoản nhân viên - Revita Healthcare',
+          name,
+          username,
+          password,
+          role,
+        });
         return true;
       }
       const { data, error } = await this.resend.emails.send({
         from: 'Revita Healthcare <noreply@revita.io.vn>',
         to: [email],
         subject: 'Thông tin tài khoản nhân viên - Revita Healthcare',
-        html: this.generateCredentialsTemplate({ name, username, password, role }),
+        html: this.generateCredentialsTemplate({
+          name,
+          username,
+          password,
+          role,
+        }),
       });
       if (error) {
         this.logger.error('Failed to send credentials email:', error);

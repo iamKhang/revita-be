@@ -247,7 +247,11 @@ export class WorkSessionController {
       }
     }
 
-    return this.workSessionService.updateWorkSession(id, updateWorkSessionDto);
+    return this.workSessionService.updateWorkSession(
+      id,
+      updateWorkSessionDto,
+      userRole,
+    );
   }
 
   /**

@@ -4,7 +4,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient, Role, Prisma } from '@prisma/client';
 import { RedisService } from '../cache/redis.service';
 import { EmailService } from '../email/email.service';
 import { SmsService } from '../sms/sms.service';
@@ -195,19 +195,37 @@ export class RegisterService {
       // Tạo auth và patient trong transaction
       const result = await this.prisma.$transaction(async (prisma) => {
         // Tạo Auth (main user table)
+        const authData: {
+          name: string;
+          dateOfBirth: Date;
+          gender: string;
+          address: string;
+          citizenId?: string;
+          avatar?: string;
+          role: Role;
+          password: string;
+          phone?: string;
+          email?: string;
+        } = {
+          name,
+          dateOfBirth: new Date(dateOfBirth),
+          gender,
+          address,
+          citizenId,
+          avatar,
+          role: Role.PATIENT, // Mặc định là PATIENT
+          password: hashedPassword,
+        };
+
+        if (sessionData.phone) {
+          authData.phone = sessionData.phone;
+        }
+        if (sessionData.email) {
+          authData.email = sessionData.email;
+        }
+
         const auth = await prisma.auth.create({
-          data: {
-            name,
-            dateOfBirth: new Date(dateOfBirth),
-            gender,
-            address,
-            citizenId,
-            avatar,
-            role: Role.PATIENT, // Mặc định là PATIENT
-            phone: sessionData.phone,
-            email: sessionData.email,
-            password: hashedPassword,
-          },
+          data: authData,
         });
 
         // Tạo Patient record
@@ -244,6 +262,16 @@ export class RegisterService {
         userId: result.id,
       };
     } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002' && Array.isArray(error.meta?.target)) {
+          if (error.meta.target.includes('phone')) {
+            throw new ConflictException('Số điện thoại đã được đăng ký');
+          }
+          if (error.meta.target.includes('email')) {
+            throw new ConflictException('Email đã được đăng ký');
+          }
+        }
+      }
       console.error('Error during registration:', error);
       throw new BadRequestException('Có lỗi xảy ra trong quá trình đăng ký');
     }

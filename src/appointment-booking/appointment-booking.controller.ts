@@ -11,12 +11,16 @@ import {
   Post,
   Body,
   Req,
+  Patch,
 } from '@nestjs/common';
 import { AppointmentBookingService } from './appointment-booking.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Public } from '../rbac/public.decorator';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { BookAppointmentDto, PatientAppointmentDto } from './dto';
+import { Roles } from '../rbac/roles.decorator';
+import { Role } from '../rbac/roles.enum';
+import { RolesGuard } from '../rbac/roles.guard';
 
 @Controller('appointment-booking')
 export class AppointmentBookingController {
@@ -270,6 +274,31 @@ export class AppointmentBookingController {
   }
 
   /**
+   * Lấy tất cả lịch hẹn (ADMIN)
+   * GET /appointment-booking/appointments?doctorId=&date=YYYY-MM-DD
+   */
+  @Get('appointments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getAllAppointments(
+    @Query('doctorId') doctorId?: string,
+    @Query('date') date?: string,
+  ): Promise<{
+    totalAppointments: number;
+    appointments: PatientAppointmentDto[];
+  }> {
+    if (date) {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(date)) {
+        throw new BadRequestException('Date must be in YYYY-MM-DD format');
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return this.appointmentBookingService.getAllAppointments(doctorId, date);
+  }
+
+  /**
    * Lấy danh sách tất cả lịch hẹn của bác sĩ hiện tại (từ JWT)
    * GET /appointment-booking/doctor/appointments
    */
@@ -313,5 +342,36 @@ export class AppointmentBookingController {
       throw new BadRequestException('Appointment code is required');
     }
     return this.appointmentBookingService.getAppointmentByCode(code);
+  }
+
+  /**
+   * Hủy lịch hẹn
+   * PATCH /appointment-booking/appointments/:id/cancel
+   */
+  @Patch('appointments/:id/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.DOCTOR, Role.RECEPTIONIST)
+  async cancelAppointment(
+    @Param('id') id: string,
+    @Req() req: any,
+  ): Promise<{
+    appointmentId: string;
+    appointmentCode?: string;
+    status: string;
+    message: string;
+  }> {
+    if (!id) {
+      throw new BadRequestException('Appointment ID is required');
+    }
+
+    const actorRole = req.user?.role as Role;
+    const actorAuthId = req.user?.sub as string;
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return await this.appointmentBookingService.cancelAppointment(
+      id,
+      actorRole,
+      actorAuthId,
+    );
   }
 }
