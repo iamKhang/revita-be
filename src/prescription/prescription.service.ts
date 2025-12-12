@@ -13,6 +13,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
+import { UpdatePrescriptionServicesDto } from './dto/update-prescription-services.dto';
 import { PrescriptionStatus, WorkSessionStatus } from '@prisma/client';
 import { CodeGeneratorService } from '../user-management/patient-profile/code-generator.service';
 import { JwtUserPayload } from '../medical-record/dto/jwt-user-payload.dto';
@@ -527,6 +528,26 @@ export class PrescriptionService {
     }
   }
 
+  /**
+   * Tìm prescriptionServiceId từ prescriptionId và serviceId
+   */
+  async findPrescriptionServiceId(
+    prescriptionId: string,
+    serviceId: string,
+  ): Promise<string | null> {
+    const prescriptionService = await this.prisma.prescriptionService.findUnique({
+      where: {
+        prescriptionId_serviceId: {
+          prescriptionId,
+          serviceId,
+        },
+      },
+      select: { id: true },
+    });
+    
+    return prescriptionService?.id || null;
+  }
+
   async markServiceSkipped(
     prescriptionServiceId: string,
     user: JwtUserPayload,
@@ -537,6 +558,9 @@ export class PrescriptionService {
       select: {
         skipCount: true,
         prescriptionId: true,
+        doctorId: true,
+        technicianId: true,
+        status: true,
         prescription: {
           select: { doctorId: true },
         },
@@ -547,6 +571,28 @@ export class PrescriptionService {
       throw new NotFoundException('Prescription service not found');
     }
 
+    // Không cho phép skip nếu service đang ở trạng thái SERVING
+    if (currentService.status === PrescriptionStatus.SERVING) {
+      return {
+        success: false,
+        message: 'Không thể bỏ qua bệnh nhân đang được phục vụ',
+      };
+    }
+
+    // Kiểm tra số lượng bệnh nhân trong queue trước khi skip
+    const queueData = await this.buildQueueFromDatabase(user);
+    const waitingPatients = queueData.patients.filter(
+      (p) => p.overallStatus === 'WAITING' || p.overallStatus === 'SKIPPED',
+    );
+
+    // Nếu chỉ có 1 bệnh nhân trong queue, không cho phép skip
+    if (waitingPatients.length <= 1) {
+      return {
+        success: false,
+        message: 'Không thể bỏ qua bệnh nhân này vì đây là bệnh nhân duy nhất trong hàng chờ',
+      };
+    }
+
     await this.prisma.prescriptionService.update({
       where: { id: prescriptionServiceId },
       data: {
@@ -555,10 +601,19 @@ export class PrescriptionService {
       },
     });
 
-    // Cập nhật queue trong Redis
-    if (currentService.prescription?.doctorId) {
-      await this.updateQueueInRedis(currentService.prescription.doctorId, 'DOCTOR');
+    // Rebuild lại queue trong Redis để đảm bảo thứ tự đúng sau khi skip
+    // Bệnh nhân bị skip sẽ được đưa xuống sau các bệnh nhân WAITING nhưng vẫn ở trên RETURNING và WAITING_RESULT
+    if (currentService.doctorId) {
+      await this.updateQueueInRedis(currentService.doctorId, 'DOCTOR');
     }
+    if (currentService.technicianId) {
+      await this.updateQueueInRedis(currentService.technicianId, 'TECHNICIAN');
+    }
+
+    return {
+      success: true,
+      message: 'Đã bỏ qua bệnh nhân thành công',
+    };
   }
 
   async updateServiceStatus(
@@ -1453,24 +1508,73 @@ export class PrescriptionService {
         );
       }
 
-      // Gán từng service cho work session phù hợp
+      // Gán từng service cho work session phù hợp với load balancing
       for (const service of otherServices) {
-        // Tìm session có service này
-        const suitableSession = sessions.find((session) =>
+        // Tìm tất cả sessions có service này
+        const suitableSessions = sessions.filter((session) =>
           session.services.some((ws) => ws.serviceId === service.serviceId),
         );
 
-        if (!suitableSession) {
+        if (suitableSessions.length === 0) {
           throw new BadRequestException(
             `No suitable work session found for service: ${service.serviceId}`,
           );
         }
 
+        // Load balancing: Chọn session có ít bệnh nhân đang chờ nhất
+        let suitableSession = suitableSessions[0];
+        
+        if (suitableSessions.length > 1) {
+          // Đếm số lượng PrescriptionService đang chờ cho mỗi session
+          const sessionQueueCounts = await Promise.all(
+            suitableSessions.map(async (session) => {
+              const queueCount = await this.prisma.prescriptionService.count({
+                where: {
+                  workSessionId: session.id,
+                  serviceId: service.serviceId,
+                  status: {
+                    in: [
+                      PrescriptionStatus.WAITING,
+                      PrescriptionStatus.PREPARING,
+                      PrescriptionStatus.SERVING,
+                    ],
+                  },
+                },
+              });
+              return { session, queueCount };
+            }),
+          );
+
+          // Sắp xếp theo số lượng queue (tăng dần) và chọn session có ít nhất
+          sessionQueueCounts.sort((a, b) => a.queueCount - b.queueCount);
+          suitableSession = sessionQueueCounts[0].session;
+
+          // Nếu có nhiều session có cùng số lượng queue nhỏ nhất, ưu tiên doctor hơn technician
+          const minQueueCount = sessionQueueCounts[0].queueCount;
+          const sessionsWithMinQueue = sessionQueueCounts.filter(
+            (item) => item.queueCount === minQueueCount,
+          );
+          
+          if (sessionsWithMinQueue.length > 1) {
+            // Tìm session có doctorId (ưu tiên doctor)
+            const doctorSession = sessionsWithMinQueue.find(
+              (item) => item.session.doctorId !== null,
+            );
+            if (doctorSession) {
+              suitableSession = doctorSession.session;
+            } else {
+              // Nếu không có doctor, chọn session đầu tiên
+              suitableSession = sessionsWithMinQueue[0].session;
+            }
+          }
+        }
+
         // Xác định status mới: WAITING cho PENDING/RESCHEDULED (theo đúng trình tự: PENDING → WAITING → SERVING)
         const newStatus = PrescriptionStatus.WAITING;
 
-        // Lấy boothId từ work session
+        // Lấy boothId và clinicRoomId từ work session
         const boothId = suitableSession.boothId ?? null;
+        const clinicRoomId = suitableSession.booth?.room?.id ?? null;
 
         const updated = await this.prisma.prescriptionService.update({
           where: { id: service.id },
@@ -1480,6 +1584,7 @@ export class PrescriptionService {
             technicianId: suitableSession.technicianId ?? null,
             workSessionId: suitableSession.id,
             boothId: boothId,
+            clinicRoomId: clinicRoomId,
             // Không set startedAt ở đây vì chưa bắt đầu phục vụ (chỉ mới WAITING)
           },
           include: { service: true },
@@ -1642,9 +1747,35 @@ export class PrescriptionService {
 
   async getQueueForUser(user: JwtUserPayload): Promise<QueueResponseDto> {
     // Lấy queue từ Redis cho user cụ thể
-    const userId =
-      user.role === 'DOCTOR' ? user.doctor?.id : user.technician?.id;
+    let userId = user.role === 'DOCTOR' ? user.doctor?.id : user.technician?.id;
+    
+    // Fallback: Nếu userId không có trong JWT (do token cũ), lấy từ database
+    if (!userId && user.id) {
+      if (user.role === 'DOCTOR') {
+        const doctor = await this.prisma.doctor.findUnique({
+          where: { authId: user.id },
+          select: { id: true },
+        });
+        userId = doctor?.id;
+      } else if (user.role === 'TECHNICIAN') {
+        const technician = await this.prisma.technician.findUnique({
+          where: { authId: user.id },
+          select: { id: true },
+        });
+        userId = technician?.id;
+      }
+    }
+    
+    console.log(`[getQueueForUser] User role: ${user.role}, userId: ${userId}`);
+    console.log(`[getQueueForUser] User object:`, JSON.stringify({
+      id: user.id,
+      role: user.role,
+      doctor: user.doctor,
+      technician: user.technician,
+    }, null, 2));
+    
     if (!userId) {
+      console.warn(`[getQueueForUser] No userId found for role ${user.role}`);
       return { patients: [], totalCount: 0 };
     }
 
@@ -1701,17 +1832,45 @@ export class PrescriptionService {
       PrescriptionStatus.RETURNING,
     ];
 
+    // Build where condition
+    const whereCondition: any = {
+      status: { in: queueStatuses },
+    };
+    
+    // Lấy userId từ JWT hoặc từ database nếu không có trong JWT
+    let userId: string | undefined;
+    if (user.role === 'DOCTOR') {
+      userId = user.doctor?.id;
+      if (!userId && user.id) {
+        const doctor = await this.prisma.doctor.findUnique({
+          where: { authId: user.id },
+          select: { id: true },
+        });
+        userId = doctor?.id;
+      }
+      if (userId) {
+        whereCondition.doctorId = userId;
+      }
+    } else if (user.role === 'TECHNICIAN') {
+      userId = user.technician?.id;
+      if (!userId && user.id) {
+        const technician = await this.prisma.technician.findUnique({
+          where: { authId: user.id },
+          select: { id: true },
+        });
+        userId = technician?.id;
+      }
+      if (userId) {
+        whereCondition.technicianId = userId;
+      }
+    }
+    
+    console.log(`[buildQueueFromDatabase] User role: ${user.role}, userId: ${userId}`);
+    console.log(`[buildQueueFromDatabase] Where condition:`, JSON.stringify(whereCondition, null, 2));
+    
     const prescriptionServices = await this.prisma.prescriptionService.findMany(
       {
-        where: {
-          status: { in: queueStatuses },
-          ...(user.role === 'DOCTOR' && user.doctor?.id
-            ? { doctorId: user.doctor.id }
-            : {}),
-          ...(user.role === 'TECHNICIAN' && user.technician?.id
-            ? { technicianId: user.technician.id }
-            : {}),
-        },
+        where: whereCondition,
         include: {
           prescription: {
             include: {
@@ -1749,6 +1908,17 @@ export class PrescriptionService {
         orderBy: [{ order: 'asc' }, { prescription: { id: 'asc' } }],
       },
     );
+
+    console.log(`[buildQueueFromDatabase] Found ${prescriptionServices.length} prescription services`);
+    if (prescriptionServices.length > 0) {
+      console.log(`[buildQueueFromDatabase] First service sample:`, JSON.stringify({
+        id: prescriptionServices[0].id,
+        status: prescriptionServices[0].status,
+        doctorId: prescriptionServices[0].doctorId,
+        technicianId: prescriptionServices[0].technicianId,
+        prescriptionCode: prescriptionServices[0].prescription.prescriptionCode,
+      }, null, 2));
+    }
 
     // Gom nhóm theo bệnh nhân và tính toán độ ưu tiên
     const patientMap = new Map<string, any>();
@@ -3335,5 +3505,509 @@ export class PrescriptionService {
       }
     }
     return Array.from(doctorMap.values());
+  }
+
+  async getAvailableDoctorsForService(
+    prescriptionId: string,
+    serviceId: string,
+  ) {
+    // Verify prescription exists
+    const prescription = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      include: {
+        services: {
+          where: { serviceId },
+          include: {
+            service: true,
+          },
+        },
+      },
+    });
+
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found');
+    }
+
+    if (prescription.services.length === 0) {
+      throw new BadRequestException('Service not found in prescription');
+    }
+
+    const prescriptionService = prescription.services[0];
+    
+    // If service is completed, return empty list
+    if (prescriptionService.status === PrescriptionStatus.COMPLETED) {
+      return [];
+    }
+
+    // Get current time
+    const now = new Date();
+
+    // Find all active WorkSessions with doctors that have this service
+    const doctorWorkSessions = await this.prisma.workSession.findMany({
+      where: {
+        status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
+        startTime: { lte: now },
+        endTime: { gte: now },
+        doctorId: { not: null },
+        services: {
+          some: {
+            serviceId: serviceId,
+          },
+        },
+      },
+      include: {
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        booth: {
+          include: {
+            room: {
+              select: {
+                id: true,
+                roomCode: true,
+                roomName: true,
+              },
+            },
+          },
+        },
+        services: {
+          where: {
+            serviceId: serviceId,
+          },
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceCode: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Find all active WorkSessions with technicians that have this service
+    const technicianWorkSessions = await this.prisma.workSession.findMany({
+      where: {
+        status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
+        startTime: { lte: now },
+        endTime: { gte: now },
+        technicianId: { not: null },
+        services: {
+          some: {
+            serviceId: serviceId,
+          },
+        },
+      },
+      include: {
+        technician: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        booth: {
+          include: {
+            room: {
+              select: {
+                id: true,
+                roomCode: true,
+                roomName: true,
+              },
+            },
+          },
+        },
+        services: {
+          where: {
+            serviceId: serviceId,
+          },
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceCode: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Transform doctors to response format
+    const doctors = doctorWorkSessions
+      .filter(ws => ws.doctor && ws.doctor.auth)
+      .map(ws => ({
+        type: 'doctor' as const,
+        doctorId: ws.doctor!.id,
+        doctorCode: ws.doctor!.doctorCode,
+        name: ws.doctor!.auth!.name,
+        boothId: ws.boothId,
+        boothCode: ws.booth?.boothCode || null,
+        boothName: ws.booth?.name || null,
+        clinicRoomId: ws.booth?.room?.id || null,
+        clinicRoomCode: ws.booth?.room?.roomCode || null,
+        clinicRoomName: ws.booth?.room?.roomName || null,
+        workSessionId: ws.id,
+        workSessionStartTime: ws.startTime,
+        workSessionEndTime: ws.endTime,
+      }));
+
+    // Transform technicians to response format
+    const technicians = technicianWorkSessions
+      .filter(ws => ws.technician && ws.technician.auth)
+      .map(ws => ({
+        type: 'technician' as const,
+        technicianId: ws.technician!.id,
+        technicianCode: ws.technician!.technicianCode,
+        name: ws.technician!.auth!.name,
+        boothId: ws.boothId,
+        boothCode: ws.booth?.boothCode || null,
+        boothName: ws.booth?.name || null,
+        clinicRoomId: ws.booth?.room?.id || null,
+        clinicRoomCode: ws.booth?.room?.roomCode || null,
+        clinicRoomName: ws.booth?.room?.roomName || null,
+        workSessionId: ws.id,
+        workSessionStartTime: ws.startTime,
+        workSessionEndTime: ws.endTime,
+      }));
+
+    // Remove duplicates based on id
+    const uniqueDoctors = Array.from(
+      new Map(doctors.map(d => [d.doctorId, d])).values()
+    );
+
+    const uniqueTechnicians = Array.from(
+      new Map(technicians.map(t => [t.technicianId, t])).values()
+    );
+
+    return [...uniqueDoctors, ...uniqueTechnicians];
+  }
+
+  async getById(prescriptionId: string) {
+    const prescription = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      include: {
+        services: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceCode: true,
+                name: true,
+                description: true,
+              },
+            },
+            doctor: {
+              include: {
+                auth: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+            technician: {
+              include: {
+                auth: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            order: 'asc',
+          },
+        },
+        patientProfile: {
+          select: {
+            id: true,
+            profileCode: true,
+            name: true,
+            dateOfBirth: true,
+            gender: true,
+          },
+        },
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        medicalRecord: {
+          select: {
+            id: true,
+            medicalRecordCode: true,
+          },
+        },
+      },
+    });
+
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found');
+    }
+
+    return prescription;
+  }
+
+  async updatePrescriptionServices(
+    prescriptionId: string,
+    dto: UpdatePrescriptionServicesDto,
+    user: JwtUserPayload,
+  ) {
+    // Verify prescription exists
+    const prescription = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      include: {
+        services: {
+          include: {
+            service: true,
+            doctor: {
+              include: {
+                auth: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found');
+    }
+
+    // Update prescription status if provided
+    if (dto.prescriptionStatus) {
+      await this.prisma.prescription.update({
+        where: { id: prescriptionId },
+        data: {
+          status: dto.prescriptionStatus,
+        },
+      });
+    }
+
+    // Update prescription services if provided
+    if (dto.services && dto.services.length > 0) {
+      for (const serviceUpdate of dto.services) {
+        const prescriptionService = prescription.services.find(
+          ps => ps.id === serviceUpdate.prescriptionServiceId,
+        );
+
+        if (!prescriptionService) {
+          throw new NotFoundException(
+            `PrescriptionService ${serviceUpdate.prescriptionServiceId} not found`,
+          );
+        }
+
+        // Check if service is completed - cannot update doctor if completed
+        if (
+          prescriptionService.status === PrescriptionStatus.COMPLETED &&
+          serviceUpdate.doctorId &&
+          serviceUpdate.doctorId !== prescriptionService.doctorId
+        ) {
+          throw new BadRequestException(
+            'Cannot change doctor for completed service',
+          );
+        }
+
+        const updateData: any = {};
+
+        if (serviceUpdate.status) {
+          updateData.status = serviceUpdate.status;
+          
+          // Update timestamps based on status
+          if (serviceUpdate.status === PrescriptionStatus.SERVING && !prescriptionService.startedAt) {
+            updateData.startedAt = new Date();
+          }
+          if (serviceUpdate.status === PrescriptionStatus.COMPLETED && !prescriptionService.completedAt) {
+            updateData.completedAt = new Date();
+          }
+        }
+
+        // Handle doctor assignment
+        if (serviceUpdate.doctorId) {
+          // If switching from technician to doctor, clear technician info
+          updateData.technicianId = null;
+
+          // Verify doctor exists and has active work session for this service
+          const now = new Date();
+          const workSessions = await this.prisma.workSession.findMany({
+            where: {
+              doctorId: serviceUpdate.doctorId,
+              status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
+              startTime: { lte: now },
+              endTime: { gte: now },
+              services: {
+                some: {
+                  serviceId: prescriptionService.serviceId,
+                },
+              },
+            },
+            include: {
+              booth: {
+                include: {
+                  room: {
+                    select: {
+                      id: true,
+                    },
+                  },
+                },
+              },
+            },
+            take: 1,
+          });
+
+          if (workSessions.length === 0) {
+            // Verify doctor exists
+            const doctor = await this.prisma.doctor.findUnique({
+              where: { id: serviceUpdate.doctorId },
+            });
+
+            if (!doctor) {
+              throw new NotFoundException('Doctor not found');
+            }
+
+            throw new BadRequestException(
+              'Doctor does not have active work session for this service',
+            );
+          }
+
+          const workSession = workSessions[0];
+          updateData.doctorId = serviceUpdate.doctorId;
+          updateData.workSessionId = workSession.id;
+          updateData.boothId = workSession.boothId;
+          updateData.clinicRoomId = workSession.booth?.roomId || null;
+        }
+
+        // Handle technician assignment
+        if (serviceUpdate.technicianId) {
+          // If switching from doctor to technician, clear doctor info
+          updateData.doctorId = null;
+
+          // Verify technician exists and has active work session for this service
+          const now = new Date();
+          const workSessions = await this.prisma.workSession.findMany({
+            where: {
+              technicianId: serviceUpdate.technicianId,
+              status: { in: [WorkSessionStatus.APPROVED, WorkSessionStatus.IN_PROGRESS] },
+              startTime: { lte: now },
+              endTime: { gte: now },
+              services: {
+                some: {
+                  serviceId: prescriptionService.serviceId,
+                },
+              },
+            },
+            include: {
+              booth: {
+                include: {
+                  room: {
+                    select: {
+                      id: true,
+                    },
+                  },
+                },
+              },
+            },
+            take: 1,
+          });
+
+          if (workSessions.length === 0) {
+            // Verify technician exists
+            const technician = await this.prisma.technician.findUnique({
+              where: { id: serviceUpdate.technicianId },
+            });
+
+            if (!technician) {
+              throw new NotFoundException('Technician not found');
+            }
+
+            throw new BadRequestException(
+              'Technician does not have active work session for this service',
+            );
+          }
+
+          const workSession = workSessions[0];
+          updateData.technicianId = serviceUpdate.technicianId;
+          updateData.workSessionId = workSession.id;
+          updateData.boothId = workSession.boothId;
+          updateData.clinicRoomId = workSession.booth?.roomId || null;
+        }
+
+        await this.prisma.prescriptionService.update({
+          where: { id: serviceUpdate.prescriptionServiceId },
+          data: updateData,
+        });
+      }
+    }
+
+    // Return updated prescription
+    const updatedPrescription = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      include: {
+        services: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                serviceCode: true,
+                name: true,
+              },
+            },
+            doctor: {
+              include: {
+                auth: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        patientProfile: {
+          select: {
+            id: true,
+            profileCode: true,
+            name: true,
+          },
+        },
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return updatedPrescription;
   }
 }

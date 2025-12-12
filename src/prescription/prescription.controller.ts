@@ -11,6 +11,7 @@ import {
   Request,
   Query,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Roles } from 'src/rbac/roles.decorator';
 import { Public } from 'src/rbac/public.decorator';
@@ -35,6 +36,7 @@ import {
   UpdateServiceStatusResponseDto,
   UpdateResultsResponseDto,
 } from '../service/dto';
+import { UpdatePrescriptionServicesDto } from './dto/update-prescription-services.dto';
 
 @Controller('prescriptions')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -249,11 +251,32 @@ export class PrescriptionController {
   @Put('prescription-service/skip')
   @Roles(Role.DOCTOR, Role.TECHNICIAN)
   async skipService(
-    @Body() body: { prescriptionServiceId: string },
+    @Body() body: { prescriptionServiceId?: string; prescriptionId?: string; serviceId?: string },
     @Request() req: { user: JwtUserPayload },
   ) {
+    // Support both formats: prescriptionServiceId or prescriptionId + serviceId
+    let prescriptionServiceId: string | undefined = body.prescriptionServiceId;
+    
+    if (!prescriptionServiceId && body.prescriptionId && body.serviceId) {
+      // Find prescriptionServiceId from prescriptionId and serviceId using service method
+      const foundId = await this.prescriptionService.findPrescriptionServiceId(
+        body.prescriptionId,
+        body.serviceId,
+      );
+      
+      if (!foundId) {
+        throw new NotFoundException('Prescription service not found');
+      }
+      
+      prescriptionServiceId = foundId || undefined;
+    }
+    
+    if (!prescriptionServiceId) {
+      throw new BadRequestException('Either prescriptionServiceId or (prescriptionId + serviceId) is required');
+    }
+    
     return this.prescriptionService.markServiceSkipped(
-      body.prescriptionServiceId,
+      prescriptionServiceId,
       req.user,
     );
   }
@@ -325,6 +348,40 @@ export class PrescriptionController {
   ) {
     return this.prescriptionService.createPrescriptionFromAppointment(
       appointmentCode,
+      req.user,
+    );
+  }
+
+  @Get('by-id/:id')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async getById(
+    @Param('id') prescriptionId: string,
+  ) {
+    return this.prescriptionService.getById(prescriptionId);
+  }
+
+  @Get(':id/available-doctors/:serviceId')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async getAvailableDoctors(
+    @Param('id') prescriptionId: string,
+    @Param('serviceId') serviceId: string,
+  ) {
+    return this.prescriptionService.getAvailableDoctorsForService(
+      prescriptionId,
+      serviceId,
+    );
+  }
+
+  @Patch(':id/update-services')
+  @Roles(Role.RECEPTIONIST, Role.DOCTOR)
+  async updatePrescriptionServices(
+    @Param('id') prescriptionId: string,
+    @Body() dto: UpdatePrescriptionServicesDto,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return this.prescriptionService.updatePrescriptionServices(
+      prescriptionId,
+      dto,
       req.user,
     );
   }

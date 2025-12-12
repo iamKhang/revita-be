@@ -11,8 +11,10 @@ interface JwtPayload {
   role?: string;
   patient?: { id: string; patientCode: string };
   doctor?: { id: string; doctorCode: string };
+  technician?: { id: string; technicianCode: string };
   receptionist?: { id: string };
   admin?: { id: string };
+  cashier?: { id: string; cashierCode: string };
 }
 
 interface GoogleUser {
@@ -95,6 +97,14 @@ export class LoginService {
       if (doctor) {
         payload.doctor = doctor;
       }
+    } else if (user.role === 'TECHNICIAN') {
+      const technician = await this.prisma.technician.findUnique({
+        where: { authId: auth.id },
+        select: { id: true, technicianCode: true },
+      });
+      if (technician) {
+        payload.technician = technician;
+      }
     } else if (user.role === 'RECEPTIONIST') {
       const receptionist = await this.prisma.receptionist.findUnique({
         where: { authId: auth.id },
@@ -110,6 +120,14 @@ export class LoginService {
       });
       if (admin) {
         payload.admin = { id: admin.id };
+      }
+    } else if (user.role === 'CASHIER') {
+      const cashier = await this.prisma.cashier.findUnique({
+        where: { authId: auth.id },
+        select: { id: true, cashierCode: true },
+      });
+      if (cashier) {
+        payload.cashier = cashier;
       }
     }
 
@@ -215,6 +233,14 @@ export class LoginService {
       if (doctor) {
         payload.doctor = doctor;
       }
+    } else if (auth.role === 'TECHNICIAN') {
+      const technician = await this.prisma.technician.findUnique({
+        where: { authId: auth.id },
+        select: { id: true, technicianCode: true },
+      });
+      if (technician) {
+        payload.technician = technician;
+      }
     } else if (auth.role === 'RECEPTIONIST') {
       const receptionist = await this.prisma.receptionist.findUnique({
         where: { authId: auth.id },
@@ -230,6 +256,14 @@ export class LoginService {
       });
       if (admin) {
         payload.admin = { id: admin.id };
+      }
+    } else if (auth.role === 'CASHIER') {
+      const cashier = await this.prisma.cashier.findUnique({
+        where: { authId: auth.id },
+        select: { id: true, cashierCode: true },
+      });
+      if (cashier) {
+        payload.cashier = cashier;
       }
     }
 
@@ -328,6 +362,12 @@ export class LoginService {
               description: true,
             },
           },
+          technician: {
+            select: {
+              id: true,
+              technicianCode: true,
+            },
+          },
           receptionist: {
             select: {
               id: true,
@@ -337,6 +377,12 @@ export class LoginService {
             select: {
               id: true,
               adminCode: true,
+            },
+          },
+          cashier: {
+            select: {
+              id: true,
+              cashierCode: true,
             },
           },
         },
