@@ -306,18 +306,30 @@ export class PrismaService
                   // Lazy import để tránh circular dependency
                   const { WebSocketService } = await import('../websocket/websocket.service');
                   const ws = this.moduleRef.get(WebSocketService, { strict: false });
-                const payload = {
-                  patientProfileId: updated.prescription.patientProfileId,
-                  patientName: updated.prescription.patientProfile.name,
-                  prescriptionCode: updated.prescription.prescriptionCode,
-                  oldStatus: oldStatus ?? 'UNKNOWN',
-                  newStatus: newStatus,
-                  doctorId: updated.doctorId ?? undefined,
-                  technicianId: updated.technicianId ?? undefined,
-                  serviceIds: [updated.serviceId],
-                  clinicRoomIds: updated.clinicRoomId ? [updated.clinicRoomId] : [],
-                  boothIds: updated.boothId ? [updated.boothId] : [],
-                };
+                  
+                  // Lấy clinicRoomId từ booth nếu clinicRoomId là null
+                  let clinicRoomId = updated.clinicRoomId;
+                  if (!clinicRoomId && updated.booth?.room?.id) {
+                    clinicRoomId = updated.booth.room.id;
+                  }
+                  
+                  const payload = {
+                    patientProfileId: updated.prescription.patientProfileId,
+                    patientName: updated.prescription.patientProfile.name,
+                    prescriptionCode: updated.prescription.prescriptionCode,
+                    oldStatus: oldStatus ?? 'UNKNOWN',
+                    newStatus: newStatus,
+                    doctorId: updated.doctorId ?? undefined,
+                    technicianId: updated.technicianId ?? undefined,
+                    serviceIds: [updated.serviceId],
+                    clinicRoomIds: clinicRoomId ? [clinicRoomId] : [],
+                    boothIds: updated.boothId ? [updated.boothId] : [],
+                  };
+                  
+                  this.logger.log(
+                    `[PrescriptionService UPDATE] Emitting socket - doctorId: ${payload.doctorId || 'null'}, technicianId: ${payload.technicianId || 'null'}, status: ${oldStatus} -> ${newStatus}`,
+                  );
+                  
                   if (ws) {
                     await ws.notifyPatientStatusChanged(payload);
                   }
@@ -492,6 +504,13 @@ export class PrismaService
                     if (rec.technicianId) {
                       await domainSvc.updateQueueInRedis(rec.technicianId, 'TECHNICIAN');
                     }
+                    
+                    // Lấy clinicRoomId từ booth nếu clinicRoomId là null
+                    let clinicRoomId = rec.clinicRoomId;
+                    if (!clinicRoomId && rec.booth?.room?.id) {
+                      clinicRoomId = rec.booth.room.id;
+                    }
+                    
                     await ws.notifyPatientStatusChanged({
                       patientProfileId: rec.prescription.patientProfileId,
                       patientName: rec.prescription.patientProfile.name,
@@ -501,7 +520,7 @@ export class PrismaService
                       doctorId: rec.doctorId ?? undefined,
                       technicianId: rec.technicianId ?? undefined,
                       serviceIds: [rec.serviceId],
-                      clinicRoomIds: rec.clinicRoomId ? [rec.clinicRoomId] : [],
+                      clinicRoomIds: clinicRoomId ? [clinicRoomId] : [],
                       boothIds: rec.boothId ? [rec.boothId] : [],
                     });
                   }
