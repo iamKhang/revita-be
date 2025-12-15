@@ -271,7 +271,6 @@ export class AdminController {
       phone,
       password,
       // Doctor specific fields
-      degrees,
       yearsExperience,
       workHistory,
       description,
@@ -305,7 +304,6 @@ export class AdminController {
     switch (user.role) {
       case Role.DOCTOR: {
         const doctorUpdateData: Record<string, any> = {};
-        if (degrees) doctorUpdateData.degrees = degrees;
         if (yearsExperience) doctorUpdateData.yearsExperience = yearsExperience;
         if (workHistory) doctorUpdateData.workHistory = workHistory;
         if (description) doctorUpdateData.description = description;

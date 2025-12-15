@@ -114,11 +114,6 @@ export class UpdateUserDto {
   @IsString()
   phone?: string;
 
-  // Doctor specific fields
-  @IsOptional()
-  @IsArray()
-  degrees?: any[];
-
   @IsOptional()
   @IsNumber()
   yearsExperience?: number;

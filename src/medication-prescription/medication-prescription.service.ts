@@ -6,12 +6,15 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { DrugCatalogService } from '../drug-catalog/drug-catalog.service';
 import { MedicationPrescriptionStatus } from '@prisma/client';
+import { EmailService } from '../email/email.service';
+import { Role } from '../rbac/roles.enum';
 
 @Injectable()
 export class MedicationPrescriptionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly drugCatalog: DrugCatalogService,
+    private readonly emailService: EmailService,
   ) {}
 
   async create(data: {
@@ -72,6 +75,139 @@ export class MedicationPrescriptionService {
         doctor: true,
         medicalRecord: true,
         items: { include: { drug: true } },
+      },
+    });
+  }
+
+  async createFeedback(options: {
+    prescriptionId: string;
+    message: string;
+    isUrgent?: boolean;
+    actor: {
+      authId: string;
+      role: Role;
+      patientId?: string | null;
+      doctorId?: string | null;
+    };
+  }) {
+    const { prescriptionId, message, isUrgent = false, actor } = options;
+
+    const prescription = await this.prisma.medicationPrescription.findUnique({
+      where: { id: prescriptionId },
+      include: {
+        doctor: {
+          include: {
+            auth: true,
+          },
+        },
+        patientProfile: {
+          include: {
+            patient: {
+              include: { auth: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!prescription) {
+      throw new NotFoundException('Medication prescription not found');
+    }
+
+    // Only patient who owns the profile or the doctor/admin can submit
+    if (actor.role === Role.PATIENT) {
+      const patientId = prescription.patientProfile.patientId;
+      if (!patientId || patientId !== actor.patientId) {
+        throw new BadRequestException('Bạn không có quyền phản hồi đơn thuốc này');
+      }
+    }
+
+    const feedback = await this.prisma.medicationPrescription.update({
+      where: { id: prescription.id },
+      data: {
+        feedbackMessage: message,
+        feedbackIsUrgent: isUrgent,
+        feedbackById: actor.authId,
+        feedbackByRole: actor.role,
+        feedbackAt: new Date(),
+      },
+      include: {
+        doctor: { include: { auth: true } },
+        patientProfile: { include: { patient: { include: { auth: true } } } },
+      },
+    });
+
+    // Send email to doctor if email exists
+    const doctorEmail = prescription.doctor.auth?.email;
+    if (doctorEmail) {
+      const patientName =
+        prescription.patientProfile?.name ||
+        prescription.patientProfile?.patient?.auth?.name ||
+        'Bệnh nhân';
+      void this.emailService
+        .sendPrescriptionFeedbackEmail({
+          to: doctorEmail,
+          doctorName: prescription.doctor.auth?.name,
+          patientName,
+          prescriptionCode: prescription.code,
+          message,
+          isUrgent,
+          createdDate: feedback.feedbackAt
+            ? feedback.feedbackAt.toISOString().split('T')[0]
+            : undefined,
+        })
+        .catch((err) => {
+          console.error('Failed to send prescription feedback email:', err);
+        });
+    }
+
+    return {
+      success: true,
+      message: 'Đã gửi phản hồi đơn thuốc',
+      data: feedback,
+    };
+  }
+
+  async listFeedbackForDoctor(doctorId: string, date?: string) {
+    const where: any = {
+      doctorId,
+      feedbackMessage: { not: null },
+    };
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      where.feedbackAt = { gte: start, lte: end };
+    }
+
+    return this.prisma.medicationPrescription.findMany({
+      where,
+      orderBy: { feedbackAt: 'desc' },
+      include: {
+        patientProfile: true,
+      },
+    });
+  }
+
+  async listFeedbackForAdmin(date?: string) {
+    const where: any = {
+      feedbackMessage: { not: null },
+    };
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      where.feedbackAt = { gte: start, lte: end };
+    }
+
+    return this.prisma.medicationPrescription.findMany({
+      where,
+      orderBy: { feedbackAt: 'desc' },
+      include: {
+        patientProfile: true,
+        doctor: { include: { auth: true } },
       },
     });
   }
