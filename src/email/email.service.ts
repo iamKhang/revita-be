@@ -171,6 +171,74 @@ export class EmailService {
     }
   }
 
+  /**
+   * Gửi email thông báo phản hồi đơn thuốc tới bác sĩ
+   */
+  async sendPrescriptionFeedbackEmail(params: {
+    to: string;
+    doctorName?: string;
+    patientName?: string;
+    prescriptionCode?: string;
+    message: string;
+    isUrgent?: boolean;
+    createdDate?: string;
+  }): Promise<boolean> {
+    const {
+      to,
+      doctorName,
+      patientName,
+      prescriptionCode,
+      message,
+      isUrgent,
+      createdDate,
+    } = params;
+
+    const subject = `${isUrgent ? '[KHẨN] ' : ''}Phản hồi về đơn thuốc${
+      prescriptionCode ? ` ${prescriptionCode}` : ''
+    } - Revita Healthcare`;
+    const html = this.generatePrescriptionFeedbackTemplate({
+      doctorName,
+      patientName,
+      prescriptionCode,
+      message,
+      isUrgent,
+      createdDate,
+    });
+
+    try {
+      if (this.isDryRun()) {
+        console.log('[EMAIL_DRY_RUN] sendPrescriptionFeedbackEmail', {
+          to,
+          subject,
+          prescriptionCode,
+          isUrgent,
+          patientName,
+        });
+        return true;
+      }
+
+      const { data, error } = await this.resend.emails.send({
+        from: 'Revita Healthcare <noreply@revita.io.vn>',
+        to: [to],
+        subject,
+        html,
+      });
+
+      if (error) {
+        this.logger.error('Failed to send prescription feedback email:', error);
+        return false;
+      }
+
+      this.logger.log(
+        `Prescription feedback email sent to ${to}. Message ID: ${data?.id}`,
+      );
+      return true;
+    } catch (error) {
+      this.logger.error('Error sending prescription feedback email:', error);
+      return false;
+    }
+  }
+
   private generateAppointmentCancellationTemplate(params: {
     patientName?: string;
     appointmentCode?: string;
@@ -328,6 +396,124 @@ export class EmailService {
             vui lòng liên hệ hotline hoặc phản hồi lại email này.
           </p>
           <p>Cảm ơn bạn đã tin tưởng Revita Healthcare.</p>
+          <div class="footer">
+            Đây là email tự động, vui lòng không trả lời trực tiếp.
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  private generatePrescriptionFeedbackTemplate(params: {
+    doctorName?: string;
+    patientName?: string;
+    prescriptionCode?: string;
+    message: string;
+    isUrgent?: boolean;
+    createdDate?: string;
+  }): string {
+    const {
+      doctorName,
+      patientName,
+      prescriptionCode,
+      message,
+      isUrgent,
+      createdDate,
+    } = params;
+    const urgency = isUrgent ? 'Khẩn cấp' : 'Thông thường';
+
+    return `
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Phản hồi đơn thuốc</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f6fb;
+          }
+          .container {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.1);
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 20px;
+          }
+          .logo {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1d4ed8;
+          }
+          .badge {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: ${isUrgent ? '#fee2e2' : '#e0f2fe'};
+            color: ${isUrgent ? '#b91c1c' : '#075985'};
+            font-weight: 600;
+            font-size: 12px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+          }
+          .card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 16px;
+            margin: 16px 0;
+          }
+          ul { padding-left: 18px; margin: 0; }
+          li { margin-bottom: 6px; }
+          .message-box {
+            margin-top: 10px;
+            padding: 14px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            white-space: pre-wrap;
+          }
+          .footer {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #6b7280;
+            text-align: center;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="badge">${urgency}</div>
+            <div class="logo">🏥 Revita Healthcare</div>
+            <h2 style="margin: 8px 0 0 0;">Phản hồi đơn thuốc</h2>
+          </div>
+
+          <div class="card">
+            <ul>
+              ${doctorName ? `<li><strong>Bác sĩ nhận:</strong> ${doctorName}</li>` : ''}
+              ${patientName ? `<li><strong>Bệnh nhân:</strong> ${patientName}</li>` : ''}
+              ${prescriptionCode ? `<li><strong>Mã đơn thuốc:</strong> ${prescriptionCode}</li>` : ''}
+              ${createdDate ? `<li><strong>Ngày tạo đơn thuốc:</strong> ${createdDate}</li>` : ''}
+            </ul>
+            <div class="message-box">
+              <strong>Nội dung phản hồi:</strong><br/>
+              ${message.replace(/\n/g, '<br/>')}
+            </div>
+          </div>
+
+          <p>Vui lòng kiểm tra và liên hệ với bệnh nhân nếu cần hỗ trợ thêm.</p>
           <div class="footer">
             Đây là email tự động, vui lòng không trả lời trực tiếp.
           </div>

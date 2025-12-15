@@ -50,9 +50,9 @@ export class ServiceManagementQueryDto {
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(100)
-  @Transform(({ value }) => (value !== undefined ? parseInt(value, 10) : 20))
-  limit?: number = 20;
+  @Max(10000)
+  @Transform(({ value }) => (value !== undefined ? parseInt(value, 10) : undefined))
+  limit?: number;
 
   @IsOptional()
   @IsNumber()
@@ -77,6 +77,10 @@ export class ServiceManagementQueryDto {
   @IsBoolean()
   @Transform(transformBoolean)
   requiresDoctor?: boolean;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }
 
 export class CreateServiceDto {

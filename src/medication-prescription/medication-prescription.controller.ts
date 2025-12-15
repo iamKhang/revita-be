@@ -8,6 +8,7 @@ import {
   Post,
   Query,
   Req,
+  BadRequestException,
   UseGuards,
 } from '@nestjs/common';
 import { MedicationPrescriptionService } from './medication-prescription.service';
@@ -150,6 +151,65 @@ export class MedicationPrescriptionController {
   @Roles(Role.DOCTOR)
   async remove(@Param('id') id: string): Promise<unknown> {
     return this.service.delete(id);
+  }
+
+  /**
+   * Gửi phản hồi (khẩn cấp) về đơn thuốc
+   */
+  @Post(':id/feedback')
+  @Roles(Role.PATIENT, Role.DOCTOR)
+  async createFeedback(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      message: string;
+      isUrgent?: boolean;
+    },
+    @Req() req: { user: JwtUserPayload },
+  ) {
+    if (!body?.message || !body.message.trim()) {
+      throw new BadRequestException('Nội dung phản hồi không được để trống');
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return await this.service.createFeedback({
+      prescriptionId: id,
+      message: body.message.trim(),
+      isUrgent: body.isUrgent ?? false,
+      actor: {
+        authId: req.user.id,
+        role: req.user.role as Role,
+        patientId: req.user.patient?.id,
+        doctorId: req.user.doctor?.id,
+      },
+    });
+  }
+
+  /**
+   * Admin xem tất cả feedback theo ngày (optional date=YYYY-MM-DD)
+   */
+  @Get('feedback/admin')
+  @Roles(Role.ADMIN)
+  async listFeedbackAdmin(@Query('date') date?: string) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return await this.service.listFeedbackForAdmin(date);
+  }
+
+  /**
+   * Bác sĩ xem feedback của mình theo ngày (optional date=YYYY-MM-DD)
+   */
+  @Get('feedback/mine')
+  @Roles(Role.DOCTOR)
+  async listFeedbackDoctor(
+    @Req() req: { user: JwtUserPayload },
+    @Query('date') date?: string,
+  ) {
+    const doctorId = req.user.doctor?.id;
+    if (!doctorId) {
+      throw new BadRequestException('Doctor not found in token');
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return await this.service.listFeedbackForDoctor(doctorId, date);
   }
 
   @Get('drugs/search/:query')

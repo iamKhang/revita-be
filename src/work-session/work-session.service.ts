@@ -231,80 +231,96 @@ export class WorkSessionService {
 
   /**
    * Tự động tìm booth phù hợp dựa vào services và thời gian
+   * QUAN TRỌNG: Kiểm tra booth có cho phép thực hiện các dịch vụ thông qua BoothService
    */
   private async findSuitableBooth(
     serviceIds: string[],
     startTime: string,
     endTime: string,
   ): Promise<string | null> {
-    // Tìm các phòng có tất cả services cần thiết
-    const roomsWithAllServices = await this.prisma.clinicRoom.findMany({
+    // Tìm tất cả các buồng đang hoạt động và có ít nhất một trong các dịch vụ cần thiết
+    const candidateBooths = await this.prisma.booth.findMany({
       where: {
-        services: {
-          every: {
+        isActive: true,
+        isDeleted: { not: true },
+        boothServices: {
+          some: {
             serviceId: {
               in: serviceIds,
             },
+            isActive: true,
           },
         },
       },
       include: {
-        booth: {
-          include: {
-            workSessions: {
-              where: {
-                status: {
-                  not: WorkSessionStatus.CANCELED,
-                },
-                OR: [
-                  {
-                    startTime: { lte: new Date(startTime) },
-                    endTime: { gt: new Date(startTime) },
-                  },
-                  {
-                    startTime: { lt: new Date(endTime) },
-                    endTime: { gte: new Date(endTime) },
-                  },
-                  {
-                    startTime: { gte: new Date(startTime) },
-                    endTime: { lte: new Date(endTime) },
-                  },
-                  {
-                    startTime: { lte: new Date(startTime) },
-                    endTime: { gte: new Date(endTime) },
-                  },
-                ],
-              },
+        boothServices: {
+          where: {
+            isActive: true,
+          },
+          select: {
+            serviceId: true,
+          },
+        },
+        workSessions: {
+          where: {
+            status: {
+              not: WorkSessionStatus.CANCELED,
             },
+            OR: [
+              {
+                startTime: { lte: new Date(startTime) },
+                endTime: { gt: new Date(startTime) },
+              },
+              {
+                startTime: { lt: new Date(endTime) },
+                endTime: { gte: new Date(endTime) },
+              },
+              {
+                startTime: { gte: new Date(startTime) },
+                endTime: { lte: new Date(endTime) },
+              },
+              {
+                startTime: { lte: new Date(startTime) },
+                endTime: { gte: new Date(endTime) },
+              },
+            ],
           },
         },
       },
     });
 
-    if (roomsWithAllServices.length === 0) {
+    // Lọc lại các buồng có ĐẦY ĐỦ TẤT CẢ các dịch vụ cần thiết
+    const suitableBooths = candidateBooths.filter((booth) => {
+      const boothServiceIds = booth.boothServices.map((bs) => bs.serviceId);
+      // Kiểm tra booth có tất cả các dịch vụ cần thiết
+      const hasAllServices = serviceIds.every((serviceId) =>
+        boothServiceIds.includes(serviceId),
+      );
+      return hasAllServices;
+    });
+
+    if (suitableBooths.length === 0) {
       throw new BadRequestException(
-        `Không tìm được phòng khám phù hợp. ` +
+        `Không tìm được buồng khám phù hợp. ` +
           `Các dịch vụ yêu cầu: ${serviceIds.join(', ')}. ` +
-          `Không có phòng nào có đầy đủ tất cả các dịch vụ này.`,
+          `Không có buồng nào có đầy đủ tất cả các dịch vụ này thông qua BoothService.`,
       );
     }
 
-    // Tìm booth trống trong các phòng phù hợp
-    for (const room of roomsWithAllServices) {
-      for (const booth of room.booth) {
-        if (booth.workSessions.length === 0) {
-          return booth.id; // Tìm thấy booth trống
-        }
+    // Tìm booth trống (không có work session trùng lịch)
+    for (const booth of suitableBooths) {
+      if (booth.workSessions.length === 0) {
+        return booth.id; // Tìm thấy booth trống
       }
     }
 
     // Nếu không tìm thấy booth trống
-    const roomNames = roomsWithAllServices
-      .map((room) => room.roomName)
+    const boothCodes = suitableBooths
+      .map((booth) => `${booth.name} (${booth.boothCode})`)
       .join(', ');
     throw new BadRequestException(
-      `Không tìm được booth trống trong khoảng thời gian ${startTime} - ${endTime}. ` +
-        `Các phòng phù hợp: ${roomNames} đều đã có lịch trong khoảng thời gian này.`,
+      `Không tìm được buồng trống trong khoảng thời gian ${startTime} - ${endTime}. ` +
+        `Các buồng phù hợp: ${boothCodes} đều đã có lịch trong khoảng thời gian này.`,
     );
   }
 

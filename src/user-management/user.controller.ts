@@ -209,7 +209,6 @@ export class UserController {
       phone,
       password,
       // role-specific below
-      degrees,
       yearsExperience,
       workHistory,
       description,
@@ -240,7 +239,6 @@ export class UserController {
     switch (currentUser.role) {
       case Role.DOCTOR: {
         const doctorUpdateData: Record<string, any> = {};
-        if (degrees !== undefined) doctorUpdateData.degrees = degrees;
         if (yearsExperience !== undefined)
           doctorUpdateData.yearsExperience = yearsExperience;
         if (workHistory !== undefined)

@@ -53,6 +53,7 @@ model Auth {
   comments     Comment[]
   likes        PostLike[]
   commentLikes CommentLike[]
+  feedbacksGiven MedicationPrescription[] @relation("FeedbackByAuth")
 
   @@map("auths")
 }
@@ -621,7 +622,13 @@ model MedicationPrescription {
   createdAt        DateTime                     @default(now()) @map("created_at")
   updatedAt        DateTime                     @updatedAt @map("updated_at")
 
-  items MedicationPrescriptionItem[]
+  items                 MedicationPrescriptionItem[]
+  feedbackMessage       String?   @map("feedback_message")
+  feedbackIsUrgent      Boolean   @default(false) @map("feedback_is_urgent")
+  feedbackById          String?   @map("feedback_by_id")
+  feedbackAt            DateTime? @map("feedback_at")
+  feedbackByRole        String?   @map("feedback_by_role")
+  feedbackBy            Auth?     @relation("FeedbackByAuth", fields: [feedbackById], references: [id])
 
   @@map("medication_prescriptions")
 }
@@ -658,6 +665,7 @@ model MedicationPrescriptionItem {
 
   @@map("medication_prescription_items")
 }
+
 
 model Drug {
   id         String  @id @default(uuid())
