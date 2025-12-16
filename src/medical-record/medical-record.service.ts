@@ -850,8 +850,17 @@ export class MedicalRecordService {
   }
 
   async getTemplates() {
-     
-    return await this.prisma.template.findMany();
+    return await this.prisma.template.findMany({
+      include: {
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+            specialtyCode: true,
+          },
+        },
+      },
+    });
   }
 
   async getTemplateByMedicalRecord(medicalRecordId: string) {
