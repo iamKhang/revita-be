@@ -186,30 +186,72 @@ export class MedicationPrescriptionController {
   }
 
   /**
-   * Admin xem tất cả feedback theo ngày (optional date=YYYY-MM-DD)
+   * Admin xem tất cả feedback theo ngày (optional date=YYYY-MM-DD) và lọc theo khẩn cấp (optional isUrgent=true/false)
    */
   @Get('feedback/admin')
   @Roles(Role.ADMIN)
-  async listFeedbackAdmin(@Query('date') date?: string) {
+  async listFeedbackAdmin(
+    @Query('date') date?: string,
+    @Query('isUrgent') isUrgent?: string,
+  ) {
+    const isUrgentFilter =
+      isUrgent !== undefined ? isUrgent === 'true' : undefined;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
-    return await this.service.listFeedbackForAdmin(date);
+    return await this.service.listFeedbackForAdmin(date, isUrgentFilter);
   }
 
   /**
-   * Bác sĩ xem feedback của mình theo ngày (optional date=YYYY-MM-DD)
+   * Bác sĩ xem feedback của mình theo ngày (optional date=YYYY-MM-DD) và lọc theo khẩn cấp (optional isUrgent=true/false)
    */
   @Get('feedback/mine')
   @Roles(Role.DOCTOR)
   async listFeedbackDoctor(
     @Req() req: { user: JwtUserPayload },
     @Query('date') date?: string,
+    @Query('isUrgent') isUrgent?: string,
   ) {
     const doctorId = req.user.doctor?.id;
     if (!doctorId) {
       throw new BadRequestException('Doctor not found in token');
     }
+    const isUrgentFilter =
+      isUrgent !== undefined ? isUrgent === 'true' : undefined;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
-    return await this.service.listFeedbackForDoctor(doctorId, date);
+    return await this.service.listFeedbackForDoctor(
+      doctorId,
+      date,
+      isUrgentFilter,
+    );
+  }
+
+  /**
+   * Bác sĩ xử lý feedback: ghi note phản hồi và đánh dấu đã xử lý
+   */
+  @Post(':id/feedback/respond')
+  @Roles(Role.DOCTOR)
+  async respondToFeedback(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      responseNote: string;
+    },
+    @Req() req: { user: JwtUserPayload },
+  ) {
+    const doctorId = req.user.doctor?.id;
+    if (!doctorId) {
+      throw new BadRequestException('Doctor not found in token');
+    }
+
+    if (!body?.responseNote || !body.responseNote.trim()) {
+      throw new BadRequestException('Nội dung phản hồi không được để trống');
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    return await this.service.handleFeedback({
+      prescriptionId: id,
+      responseNote: body.responseNote.trim(),
+      doctorId,
+    });
   }
 
   @Get('drugs/search/:query')

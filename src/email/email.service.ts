@@ -172,6 +172,80 @@ export class EmailService {
   }
 
   /**
+   * Gửi email thông báo phản hồi của bác sĩ về feedback đơn thuốc tới bệnh nhân
+   */
+  async sendPrescriptionFeedbackResponseEmail(params: {
+    to: string;
+    patientName?: string;
+    doctorName?: string;
+    prescriptionCode?: string;
+    originalMessage: string;
+    responseNote: string;
+    isUrgent?: boolean;
+  }): Promise<boolean> {
+    const {
+      to,
+      patientName,
+      doctorName,
+      prescriptionCode,
+      originalMessage,
+      responseNote,
+      isUrgent,
+    } = params;
+
+    const subject = `${isUrgent ? '[KHẨN] ' : ''}Phản hồi từ bác sĩ về đơn thuốc${
+      prescriptionCode ? ` ${prescriptionCode}` : ''
+    } - Revita Healthcare`;
+    const html = this.generatePrescriptionFeedbackResponseTemplate({
+      patientName,
+      doctorName,
+      prescriptionCode,
+      originalMessage,
+      responseNote,
+      isUrgent,
+    });
+
+    try {
+      if (this.isDryRun()) {
+        console.log('[EMAIL_DRY_RUN] sendPrescriptionFeedbackResponseEmail', {
+          to,
+          subject,
+          prescriptionCode,
+          isUrgent,
+          patientName,
+        });
+        return true;
+      }
+
+      const { data, error } = await this.resend.emails.send({
+        from: 'Revita Healthcare <noreply@revita.io.vn>',
+        to: [to],
+        subject,
+        html,
+      });
+
+      if (error) {
+        this.logger.error(
+          'Failed to send prescription feedback response email:',
+          error,
+        );
+        return false;
+      }
+
+      this.logger.log(
+        `Prescription feedback response email sent to ${to}. Message ID: ${data?.id}`,
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(
+        'Error sending prescription feedback response email:',
+        error,
+      );
+      return false;
+    }
+  }
+
+  /**
    * Gửi email thông báo phản hồi đơn thuốc tới bác sĩ
    */
   async sendPrescriptionFeedbackEmail(params: {
@@ -396,6 +470,140 @@ export class EmailService {
             vui lòng liên hệ hotline hoặc phản hồi lại email này.
           </p>
           <p>Cảm ơn bạn đã tin tưởng Revita Healthcare.</p>
+          <div class="footer">
+            Đây là email tự động, vui lòng không trả lời trực tiếp.
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  private generatePrescriptionFeedbackResponseTemplate(params: {
+    patientName?: string;
+    doctorName?: string;
+    prescriptionCode?: string;
+    originalMessage: string;
+    responseNote: string;
+    isUrgent?: boolean;
+  }): string {
+    const {
+      patientName,
+      doctorName,
+      prescriptionCode,
+      originalMessage,
+      responseNote,
+      isUrgent,
+    } = params;
+    const urgency = isUrgent ? 'Khẩn cấp' : 'Thông thường';
+
+    return `
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Phản hồi từ bác sĩ</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f6fb;
+          }
+          .container {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.1);
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 20px;
+          }
+          .logo {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1d4ed8;
+          }
+          .badge {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: ${isUrgent ? '#fee2e2' : '#e0f2fe'};
+            color: ${isUrgent ? '#b91c1c' : '#075985'};
+            font-weight: 600;
+            font-size: 12px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+          }
+          .card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 16px;
+            margin: 16px 0;
+          }
+          ul { padding-left: 18px; margin: 0; }
+          li { margin-bottom: 6px; }
+          .message-box {
+            margin-top: 10px;
+            padding: 14px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            white-space: pre-wrap;
+          }
+          .response-box {
+            margin-top: 16px;
+            padding: 16px;
+            background: #f0fdf4;
+            border: 2px solid #22c55e;
+            border-radius: 10px;
+            white-space: pre-wrap;
+          }
+          .response-box strong {
+            color: #15803d;
+            display: block;
+            margin-bottom: 8px;
+          }
+          .footer {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #6b7280;
+            text-align: center;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="badge">${urgency}</div>
+            <div class="logo">🏥 Revita Healthcare</div>
+            <h2 style="margin: 8px 0 0 0;">Phản hồi từ bác sĩ</h2>
+          </div>
+
+          <div class="card">
+            <ul>
+              ${patientName ? `<li><strong>Bệnh nhân:</strong> ${patientName}</li>` : ''}
+              ${doctorName ? `<li><strong>Bác sĩ:</strong> ${doctorName}</li>` : ''}
+              ${prescriptionCode ? `<li><strong>Mã đơn thuốc:</strong> ${prescriptionCode}</li>` : ''}
+            </ul>
+            <div class="message-box">
+              <strong>Phản hồi của bạn:</strong><br/>
+              ${originalMessage.replace(/\n/g, '<br/>')}
+            </div>
+            <div class="response-box">
+              <strong>Phản hồi từ bác sĩ:</strong>
+              ${responseNote.replace(/\n/g, '<br/>')}
+            </div>
+          </div>
+
+          <p>Bác sĩ đã xem xét và phản hồi về đơn thuốc của bạn. Vui lòng kiểm tra và liên hệ với phòng khám nếu cần hỗ trợ thêm.</p>
           <div class="footer">
             Đây là email tự động, vui lòng không trả lời trực tiếp.
           </div>

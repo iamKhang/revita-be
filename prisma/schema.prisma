@@ -629,6 +629,9 @@ model MedicationPrescription {
   feedbackAt            DateTime? @map("feedback_at")
   feedbackByRole        String?   @map("feedback_by_role")
   feedbackBy            Auth?     @relation("FeedbackByAuth", fields: [feedbackById], references: [id])
+  feedbackResponseNote  String?   @map("feedback_response_note")
+  feedbackResponseAt    DateTime? @map("feedback_response_at")
+  feedbackProcessed     Boolean   @default(false) @map("feedback_processed")
 
   @@map("medication_prescriptions")
 }

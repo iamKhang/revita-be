@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DrugCatalogService } from '../drug-catalog/drug-catalog.service';
-import { MedicationPrescriptionStatus } from '@prisma/client';
+import { MedicationPrescriptionStatus, Prisma } from '@prisma/client';
 import { EmailService } from '../email/email.service';
 import { Role } from '../rbac/roles.enum';
 
@@ -118,7 +118,9 @@ export class MedicationPrescriptionService {
     if (actor.role === Role.PATIENT) {
       const patientId = prescription.patientProfile.patientId;
       if (!patientId || patientId !== actor.patientId) {
-        throw new BadRequestException('Bạn không có quyền phản hồi đơn thuốc này');
+        throw new BadRequestException(
+          'Bạn không có quyền phản hồi đơn thuốc này',
+        );
       }
     }
 
@@ -168,8 +170,12 @@ export class MedicationPrescriptionService {
     };
   }
 
-  async listFeedbackForDoctor(doctorId: string, date?: string) {
-    const where: any = {
+  async listFeedbackForDoctor(
+    doctorId: string,
+    date?: string,
+    isUrgent?: boolean,
+  ) {
+    const where: Prisma.MedicationPrescriptionWhereInput = {
       doctorId,
       feedbackMessage: { not: null },
     };
@@ -179,6 +185,9 @@ export class MedicationPrescriptionService {
       const end = new Date(date);
       end.setHours(23, 59, 59, 999);
       where.feedbackAt = { gte: start, lte: end };
+    }
+    if (isUrgent !== undefined) {
+      where.feedbackIsUrgent = isUrgent;
     }
 
     return this.prisma.medicationPrescription.findMany({
@@ -190,8 +199,8 @@ export class MedicationPrescriptionService {
     });
   }
 
-  async listFeedbackForAdmin(date?: string) {
-    const where: any = {
+  async listFeedbackForAdmin(date?: string, isUrgent?: boolean) {
+    const where: Prisma.MedicationPrescriptionWhereInput = {
       feedbackMessage: { not: null },
     };
     if (date) {
@@ -200,6 +209,9 @@ export class MedicationPrescriptionService {
       const end = new Date(date);
       end.setHours(23, 59, 59, 999);
       where.feedbackAt = { gte: start, lte: end };
+    }
+    if (isUrgent !== undefined) {
+      where.feedbackIsUrgent = isUrgent;
     }
 
     return this.prisma.medicationPrescription.findMany({
@@ -210,6 +222,107 @@ export class MedicationPrescriptionService {
         doctor: { include: { auth: true } },
       },
     });
+  }
+
+  async handleFeedback(options: {
+    prescriptionId: string;
+    responseNote: string;
+    doctorId: string;
+  }) {
+    const { prescriptionId, responseNote, doctorId } = options;
+
+    if (!responseNote || !responseNote.trim()) {
+      throw new BadRequestException('Nội dung phản hồi không được để trống');
+    }
+
+    const prescription = await this.prisma.medicationPrescription.findUnique({
+      where: { id: prescriptionId },
+      include: {
+        doctor: {
+          include: {
+            auth: true,
+          },
+        },
+        patientProfile: {
+          include: {
+            patient: {
+              include: { auth: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!prescription) {
+      throw new NotFoundException('Medication prescription not found');
+    }
+
+    // Verify doctor owns this prescription
+    if (prescription.doctorId !== doctorId) {
+      throw new BadRequestException(
+        'Bạn không có quyền xử lý feedback cho đơn thuốc này',
+      );
+    }
+
+    // Check if feedback exists
+    if (!prescription.feedbackMessage) {
+      throw new BadRequestException('Đơn thuốc này chưa có feedback');
+    }
+
+    // Update prescription with doctor's response
+    const updated = await this.prisma.medicationPrescription.update({
+      where: { id: prescription.id },
+      data: {
+        feedbackResponseNote: responseNote.trim(),
+        feedbackResponseAt: new Date(),
+        feedbackProcessed: true,
+      },
+      include: {
+        doctor: { include: { auth: true } },
+        patientProfile: {
+          include: { patient: { include: { auth: true } } },
+        },
+      },
+    });
+
+    // Send email to patient if email exists
+    const patientEmail = prescription.patientProfile?.patient?.auth?.email;
+    if (patientEmail) {
+      const patientName =
+        prescription.patientProfile?.name ||
+        prescription.patientProfile?.patient?.auth?.name ||
+        'Bệnh nhân';
+      const doctorName = prescription.doctor.auth?.name || 'Bác sĩ';
+
+      // Method exists in EmailService - TypeScript server may need reload
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const emailService = this.emailService as any;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      void emailService
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        .sendPrescriptionFeedbackResponseEmail({
+          to: patientEmail,
+          patientName,
+          doctorName,
+          prescriptionCode: prescription.code,
+          originalMessage: prescription.feedbackMessage,
+          responseNote: responseNote.trim(),
+          isUrgent: prescription.feedbackIsUrgent,
+        })
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        .catch((err: unknown) => {
+          console.error(
+            'Failed to send prescription feedback response email:',
+            err,
+          );
+        });
+    }
+
+    return {
+      success: true,
+      message: 'Đã gửi phản hồi feedback thành công',
+      data: updated,
+    };
   }
 
   async findByCode(code: string): Promise<unknown> {
