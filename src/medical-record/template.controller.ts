@@ -3,8 +3,11 @@ import {
   Post,
   Put,
   Delete,
+  Get,
+  Patch,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -15,7 +18,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { TemplateService } from './template.service';
-import { CreateTemplateDto, UpdateTemplateDto } from './dto/template.dto';
+import { CreateTemplateDto, UpdateTemplateDto, TemplateQueryDto } from './dto/template.dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
@@ -28,6 +31,32 @@ import { JwtUserPayload } from './dto/jwt-user-payload.dto';
 @Controller('templates')
 export class TemplateController {
   constructor(private readonly templateService: TemplateService) {}
+
+  @Get()
+  @Roles(Role.ADMIN, Role.DOCTOR)
+  @ApiOperation({ summary: 'Lấy danh sách templates' })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách templates',
+  })
+  async findAll(
+    @Query() query: TemplateQueryDto,
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return await this.templateService.findAll(query, req.user);
+  }
+
+  @Get(':id')
+  @Roles(Role.ADMIN, Role.DOCTOR)
+  @ApiOperation({ summary: 'Lấy template theo ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Thông tin template',
+  })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy template' })
+  async findOne(@Param('id') id: string) {
+    return await this.templateService.findOne(id);
+  }
 
   @Post()
   @Roles(Role.ADMIN)
@@ -60,6 +89,23 @@ export class TemplateController {
     @Request() req: { user: JwtUserPayload },
   ) {
     return await this.templateService.update(id, updateTemplateDto, req.user);
+  }
+
+  @Patch(':id/auto-diagnosis')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Cập nhật cấu hình chuẩn đoán tự động cho template (chỉ ADMIN)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cấu hình đã được cập nhật thành công',
+  })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy template' })
+  @ApiResponse({ status: 403, description: 'Không có quyền' })
+  async updateAutoDiagnosis(
+    @Param('id') id: string,
+    @Body() body: { enableAutoDiagnosis: boolean },
+    @Request() req: { user: JwtUserPayload },
+  ) {
+    return await this.templateService.update(id, { enableAutoDiagnosis: body.enableAutoDiagnosis }, req.user);
   }
 
   @Delete(':id')

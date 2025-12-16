@@ -61,6 +61,14 @@ export class CreateTemplateDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Cho phép sử dụng chuẩn đoán tự động',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  enableAutoDiagnosis?: boolean;
 }
 
 export class UpdateTemplateDto {
@@ -92,6 +100,13 @@ export class UpdateTemplateDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Cho phép sử dụng chuẩn đoán tự động',
+  })
+  @IsOptional()
+  @IsBoolean()
+  enableAutoDiagnosis?: boolean;
 }
 
 export class TemplateQueryDto {

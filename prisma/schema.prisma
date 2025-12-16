@@ -50,9 +50,9 @@ model Auth {
   cashier      Cashier?
   technician   Technician?
 
-  comments     Comment[]
-  likes        PostLike[]
-  commentLikes CommentLike[]
+  comments       Comment[]
+  likes          PostLike[]
+  commentLikes   CommentLike[]
   feedbacksGiven MedicationPrescription[] @relation("FeedbackByAuth")
 
   @@map("auths")
@@ -319,19 +319,19 @@ model Service {
 }
 
 model ServicePromotion {
-  id                   String  @id @default(uuid())
-  serviceId            String  @unique @map("service_id")
-  service              Service @relation(fields: [serviceId], references: [id])
-  name                 String? @map("name")
-  description          String? @map("description")
-  allowLoyaltyDiscount Boolean @default(true) @map("allow_loyalty_discount")
-  maxDiscountPercent   Float?  @map("max_discount_percent")
-  maxDiscountAmount    Float?  @map("max_discount_amount")
-  isActive             Boolean @default(true) @map("is_active")
+  id                   String    @id @default(uuid())
+  serviceId            String    @unique @map("service_id")
+  service              Service   @relation(fields: [serviceId], references: [id])
+  name                 String?   @map("name")
+  description          String?   @map("description")
+  allowLoyaltyDiscount Boolean   @default(true) @map("allow_loyalty_discount")
+  maxDiscountPercent   Float?    @map("max_discount_percent")
+  maxDiscountAmount    Float?    @map("max_discount_amount")
+  isActive             Boolean   @default(true) @map("is_active")
   startDate            DateTime? @map("start_date")
   endDate              DateTime? @map("end_date")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   @@map("service_promotions")
 }
@@ -444,19 +444,19 @@ model AppointmentService {
 }
 
 model Invoice {
-  id           String @id @default(uuid())
-  invoiceCode  String @map("invoice_code")
-  totalAmount  Float  @map("total_amount") // Tổng tiền phải thanh toán
+  id                  String @id @default(uuid())
+  invoiceCode         String @map("invoice_code")
+  totalAmount         Float  @map("total_amount") // Tổng tiền phải thanh toán
   originalTotalAmount Float? @map("original_total_amount") // Tổng giá gốc trước giảm
   totalDiscountAmount Float? @map("total_discount_amount") // Tổng số tiền được giảm
-  amountPaid   Float  @default(0) @map("amount_paid") // Số tiền bệnh nhân đã đưa
-  changeAmount Float  @default(0) @map("change_amount") // Tiền thối lại cho bệnh nhân
+  amountPaid          Float  @default(0) @map("amount_paid") // Số tiền bệnh nhân đã đưa
+  changeAmount        Float  @default(0) @map("change_amount") // Tiền thối lại cho bệnh nhân
 
-  paymentMethod PaymentMethod @default(CASH) @map("payment_method") // Tiền mặt, thẻ, chuyển khoản...
-  paymentStatus String        @map("payment_status") // Pending, Paid, Refunded...
-  discountReason String?      @map("discount_reason") // Lý do giảm giá tổng
-  createdAt     DateTime      @default(now()) @map("created_at")
-  isPaid        Boolean       @default(false) @map("is_paid")
+  paymentMethod  PaymentMethod @default(CASH) @map("payment_method") // Tiền mặt, thẻ, chuyển khoản...
+  paymentStatus  String        @map("payment_status") // Pending, Paid, Refunded...
+  discountReason String?       @map("discount_reason") // Lý do giảm giá tổng
+  createdAt      DateTime      @default(now()) @map("created_at")
+  isPaid         Boolean       @default(false) @map("is_paid")
 
   patientProfileId String
   patientProfile   PatientProfile @relation(fields: [patientProfileId], references: [id])
@@ -528,16 +528,17 @@ model InvoiceDetail {
 
 // Bảng Template cho mẫu bệnh án
 model Template {
-  id             String          @id @default(uuid())
-  templateCode   String          @map("template_code")
-  name           String // Tên template, ví dụ: "Nội khoa", "Răng hàm mặt"
-  fields         Json // Cấu trúc động của template, ví dụ: danh sách fields
-  isActive       Boolean         @default(true) // Trạng thái sử dụng
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  specialtyId    String
-  specialty      Specialty       @relation(fields: [specialtyId], references: [id])
-  medicalRecords MedicalRecord[] // Liên kết với bệnh án sử dụng template này
+  id                  String          @id @default(uuid())
+  templateCode        String          @map("template_code")
+  name                String // Tên template, ví dụ: "Nội khoa", "Răng hàm mặt"
+  fields              Json // Cấu trúc động của template, ví dụ: danh sách fields
+  isActive            Boolean         @default(true) // Trạng thái sử dụng
+  enableAutoDiagnosis Boolean         @default(false) @map("enable_auto_diagnosis") // Cho phép sử dụng chuẩn đoán tự động
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  specialtyId         String
+  specialty           Specialty       @relation(fields: [specialtyId], references: [id])
+  medicalRecords      MedicalRecord[] // Liên kết với bệnh án sử dụng template này
 
   @@map("templates")
 }
@@ -601,8 +602,8 @@ model Prescription {
   medicalRecord    MedicalRecord?        @relation(fields: [medicalRecordId], references: [id])
 
   // Chỉ định để làm rõ dịch vụ (một Prescription chỉ thuộc về một PrescriptionService)
-  belongsToServiceId String? @map("belongs_to_service_id")
-  belongsToService PrescriptionService? @relation("IssuedPrescriptions", fields: [belongsToServiceId], references: [id])
+  belongsToServiceId String?              @map("belongs_to_service_id")
+  belongsToService   PrescriptionService? @relation("IssuedPrescriptions", fields: [belongsToServiceId], references: [id])
 
   @@map("prescriptions")
 }
@@ -622,16 +623,16 @@ model MedicationPrescription {
   createdAt        DateTime                     @default(now()) @map("created_at")
   updatedAt        DateTime                     @updatedAt @map("updated_at")
 
-  items                 MedicationPrescriptionItem[]
-  feedbackMessage       String?   @map("feedback_message")
-  feedbackIsUrgent      Boolean   @default(false) @map("feedback_is_urgent")
-  feedbackById          String?   @map("feedback_by_id")
-  feedbackAt            DateTime? @map("feedback_at")
-  feedbackByRole        String?   @map("feedback_by_role")
-  feedbackBy            Auth?     @relation("FeedbackByAuth", fields: [feedbackById], references: [id])
-  feedbackResponseNote  String?   @map("feedback_response_note")
-  feedbackResponseAt    DateTime? @map("feedback_response_at")
-  feedbackProcessed     Boolean   @default(false) @map("feedback_processed")
+  items                MedicationPrescriptionItem[]
+  feedbackMessage      String?                      @map("feedback_message")
+  feedbackIsUrgent     Boolean                      @default(false) @map("feedback_is_urgent")
+  feedbackById         String?                      @map("feedback_by_id")
+  feedbackAt           DateTime?                    @map("feedback_at")
+  feedbackByRole       String?                      @map("feedback_by_role")
+  feedbackBy           Auth?                        @relation("FeedbackByAuth", fields: [feedbackById], references: [id])
+  feedbackResponseNote String?                      @map("feedback_response_note")
+  feedbackResponseAt   DateTime?                    @map("feedback_response_at")
+  feedbackProcessed    Boolean                      @default(false) @map("feedback_processed")
 
   @@map("medication_prescriptions")
 }
@@ -669,7 +670,6 @@ model MedicationPrescriptionItem {
   @@map("medication_prescription_items")
 }
 
-
 model Drug {
   id         String  @id @default(uuid())
   name       String
@@ -687,28 +687,28 @@ model Drug {
 
 // Bảng trung gian PrescriptionService cho quan hệ nhiều-nhiều giữa Phiếu chỉ định và Dịch vụ
 model PrescriptionService {
-  id             String             @id @default(uuid())
-  prescriptionId String
-  serviceId      String
-  prescription   Prescription       @relation("PrescriptionServices", fields: [prescriptionId], references: [id]) 
-  service        Service            @relation(fields: [serviceId], references: [id])
-  doctorId       String?
-  doctor         Doctor?            @relation(fields: [doctorId], references: [id])
-  technicianId   String?
-  technician     Technician?        @relation(fields: [technicianId], references: [id])
-  status         PrescriptionStatus @default(NOT_STARTED)
-  results        String[]           @map("results")
-  order          Int                @default(1)
-  callCount      Int                @default(0)
-  skipCount      Int                @default(0)
-  appointmentId  String?
-  appointment    Appointment?       @relation(fields: [appointmentId], references: [id])
-  note           String?
-  startedAt      DateTime?          @map("started_at")
-  completedAt    DateTime?          @map("completed_at")
+  id                    String             @id @default(uuid())
+  prescriptionId        String
+  serviceId             String
+  prescription          Prescription       @relation("PrescriptionServices", fields: [prescriptionId], references: [id])
+  service               Service            @relation(fields: [serviceId], references: [id])
+  doctorId              String?
+  doctor                Doctor?            @relation(fields: [doctorId], references: [id])
+  technicianId          String?
+  technician            Technician?        @relation(fields: [technicianId], references: [id])
+  status                PrescriptionStatus @default(NOT_STARTED)
+  results               String[]           @map("results")
+  order                 Int                @default(1)
+  callCount             Int                @default(0)
+  skipCount             Int                @default(0)
+  appointmentId         String?
+  appointment           Appointment?       @relation(fields: [appointmentId], references: [id])
+  note                  String?
+  startedAt             DateTime?          @map("started_at")
+  completedAt           DateTime?          @map("completed_at")
   // Danh sách các phiếu chỉ định để phục vụ cho dịch vụ này (lưu dưới dạng array IDs, không dùng relation vì Prisma không hỗ trợ array foreign keys)
-  issuedPrescriptionIds String[]            @default([]) @map("issued_prescription_ids")
-  
+  issuedPrescriptionIds String[]           @default([]) @map("issued_prescription_ids")
+
   // Danh sách các phiếu chỉ định được phát hành để làm rõ dịch vụ này (one-to-many: một PrescriptionService có nhiều Prescription)
   issuedPrescriptions Prescription[] @relation("IssuedPrescriptions")
 
@@ -846,17 +846,17 @@ enum CertificateType {
 
 // Bảng đánh giá bác sĩ từ bệnh nhân
 model DoctorRating {
-  id        String   @id @default(uuid())
-  doctorId  String   @map("doctor_id")
-  patientId String   @map("patient_id")
-  medicalRecordId String @map("medical_record_id")
-  rating    Int      @map("rating") // 1-5 sao
-  comment   String?  @map("comment") // Bình luận của bệnh nhân
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(uuid())
+  doctorId        String   @map("doctor_id")
+  patientId       String   @map("patient_id")
+  medicalRecordId String   @map("medical_record_id")
+  rating          Int      @map("rating") // 1-5 sao
+  comment         String?  @map("comment") // Bình luận của bệnh nhân
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
-  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor        Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient       Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
   medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
 
   @@unique([medicalRecordId, patientId]) // Mỗi patient chỉ đánh giá 1 lần cho 1 hồ sơ khám

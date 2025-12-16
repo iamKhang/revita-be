@@ -48,6 +48,7 @@ export class TemplateService {
         fields: dto.fields as any,
         specialtyId: dto.specialtyId,
         isActive: dto.isActive ?? true,
+        enableAutoDiagnosis: dto.enableAutoDiagnosis ?? false,
       },
       include: {
         specialty: {
@@ -208,6 +209,10 @@ export class TemplateService {
 
     if (dto.isActive !== undefined) {
       updateData.isActive = dto.isActive;
+    }
+
+    if (dto.enableAutoDiagnosis !== undefined) {
+      updateData.enableAutoDiagnosis = dto.enableAutoDiagnosis;
     }
 
     return await this.prisma.template.update({
