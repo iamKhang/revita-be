@@ -35,6 +35,7 @@ export interface TakeNumberResult {
     name: string;
     age: number;
     gender: string;
+    profileCode?: string;
     appointmentDetails?: any;
   };
 }
@@ -77,7 +78,7 @@ export class TakeNumberService {
     let hasAppointment = false;
     let appointmentDetails: any = null;
 
-    // Tìm thông tin bệnh nhân từ mã hồ sơ hoặc mã lịch khám
+    // Tìm thông tin bệnh nhân từ mã hồ sơ, mã lịch khám, hoặc số điện thoại
     // QUAN TRỌNG: Nếu có appointmentCode, luôn ưu tiên lấy từ appointment để có appointmentDetails
     if (request.appointmentCode) {
       const result = await this.withTimeout(
@@ -91,6 +92,13 @@ export class TakeNumberService {
     } else if (request.patientProfileCode) {
       patientInfo = await this.withTimeout(
         this.getPatientByProfileCode(request.patientProfileCode),
+        500,
+        () => null,
+      );
+    } else if (request.patientPhone) {
+      // Tìm PatientProfile theo số điện thoại
+      patientInfo = await this.withTimeout(
+        this.getPatientByPhone(request.patientPhone),
         500,
         () => null,
       );
@@ -238,6 +246,7 @@ export class TakeNumberService {
         name: patientInfo.name,
         age: patientInfo.age,
         gender: patientInfo.gender,
+        profileCode: patientInfo.profileCode,
         appointmentDetails,
       },
     };
@@ -264,6 +273,54 @@ export class TakeNumberService {
 
     if (!profile) {
       throw new NotFoundException('Không tìm thấy hồ sơ bệnh nhân');
+    }
+
+    const age = this.calculateAge(profile.dateOfBirth);
+
+    return {
+      name: profile.name,
+      age,
+      gender: profile.gender,
+      dateOfBirth: profile.dateOfBirth,
+      phone: profile.phone,
+      address: profile.address,
+      emergencyContact: profile.emergencyContact,
+      profileCode: profile.profileCode,
+      isPregnant: profile.isPregnant,
+      isDisabled: profile.isDisabled,
+    };
+  }
+
+  /**
+   * Lấy thông tin bệnh nhân từ số điện thoại
+   */
+  private async getPatientByPhone(phone: string): Promise<any> {
+    // Tìm PatientProfile theo số điện thoại (lấy profile mới nhất nếu có nhiều)
+    const profile = await this.prisma.patientProfile.findFirst({
+      where: { 
+        phone: {
+          contains: phone,
+        },
+        isActive: true,
+      },
+      select: {
+        name: true,
+        gender: true,
+        dateOfBirth: true,
+        phone: true,
+        address: true,
+        emergencyContact: true,
+        profileCode: true,
+        isPregnant: true,
+        isDisabled: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (!profile) {
+      return null;
     }
 
     const age = this.calculateAge(profile.dateOfBirth);
@@ -489,13 +546,18 @@ export class TakeNumberService {
       TicketStatus.WAITING, // status ban đầu
     );
 
-    // Tạo metadata với thông tin appointment nếu có
+    // Tạo metadata với thông tin appointment và patient profile
     const metadata: Record<string, any> = {
       isPregnant: priorityFlags.isPregnant,
       isDisabled: priorityFlags.isDisabled,
       isElderly: priorityFlags.isElderly,
       isChild: typeof patientInfo.age === 'number' ? patientInfo.age < 6 : false,
     };
+    
+    // Thêm patientProfileCode vào metadata
+    if (patientInfo.profileCode) {
+      metadata.patientProfileCode = patientInfo.profileCode;
+    }
     
     // Thêm thông tin appointment vào metadata để frontend có thể nhận diện
     if (appointmentDetails) {

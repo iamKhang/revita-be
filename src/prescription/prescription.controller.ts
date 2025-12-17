@@ -70,8 +70,26 @@ export class PrescriptionController {
     @Request() req: { user: JwtUserPayload },
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
+    @Query('patientName') patientName?: string,
+    @Query('patientPhone') patientPhone?: string,
+    @Query('doctorId') doctorId?: string,
+    @Query('status') status?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
   ) {
-    return this.prescriptionService.findAll(req.user, page, limit);
+    return this.prescriptionService.findAll(
+      req.user,
+      page,
+      limit,
+      {
+        patientName,
+        patientPhone,
+        doctorId,
+        status,
+        dateFrom,
+        dateTo,
+      },
+    );
   }
 
   @Get('services')
@@ -366,7 +384,7 @@ export class PrescriptionController {
     @Param('id') prescriptionId: string,
     @Param('serviceId') serviceId: string,
   ) {
-    return this.prescriptionService.getAvailableDoctorsForService(
+    return this.prescriptionService.getAvailableAssigneesForService(
       prescriptionId,
       serviceId,
     );

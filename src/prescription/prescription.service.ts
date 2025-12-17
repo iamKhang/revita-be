@@ -3191,82 +3191,6 @@ export class PrescriptionService {
   }
 
   /**
-   * Lấy danh sách tất cả phiếu chỉ định theo người tạo
-   * - DOCTOR: chỉ lấy phiếu chỉ định do bác sĩ đó tạo
-   * - RECEPTIONIST: lấy tất cả phiếu chỉ định
-   * @param user - Thông tin user từ JWT token
-   * @param page - Số trang (bắt đầu từ 1)
-   * @param limit - Số lượng items mỗi trang
-   * @returns Danh sách phiếu chỉ định với thông tin phân trang
-   */
-  async findAll(
-    user: JwtUserPayload,
-    page: string = '1',
-    limit: string = '10',
-  ) {
-    const pageNum = Math.max(parseInt(page || '1', 10) || 1, 1);
-    const limitNum = Math.min(
-      Math.max(parseInt(limit || '10', 10) || 10, 1),
-      100,
-    );
-    const skip = (pageNum - 1) * limitNum;
-
-    // Build where condition based on user role
-    const where: any = {};
-
-    if (user.role === 'DOCTOR') {
-      if (!user.doctor?.id) {
-        throw new ForbiddenException('Không tìm thấy thông tin bác sĩ');
-      }
-      // Doctor chỉ lấy prescriptions do mình tạo
-      where.doctorId = user.doctor.id;
-    }
-    // RECEPTIONIST và ADMIN có thể xem tất cả
-
-    const [total, data] = await this.prisma.$transaction([
-      this.prisma.prescription.count({ where }),
-      this.prisma.prescription.findMany({
-        where,
-        include: {
-          services: {
-            include: { service: true },
-            orderBy: { order: 'asc' as const },
-          },
-          medicalRecord: true,
-          patientProfile: true,
-          doctor: {
-            include: {
-              auth: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  phone: true,
-                  avatar: true,
-                  gender: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: { id: 'desc' },
-        skip,
-        take: limitNum,
-      }),
-    ]);
-
-    return {
-      data,
-      meta: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        totalPages: Math.ceil(total / limitNum),
-      },
-    };
-  }
-
-  /**
    * Lấy danh sách doctors đang có work session với service cụ thể
    * @param serviceId - ID của service
    * @param serviceCode - Code của service (alternative to serviceId)
@@ -3730,6 +3654,32 @@ export class PrescriptionService {
                 },
               },
             },
+            workSession: {
+              include: {
+                booth: {
+                  include: {
+                    room: {
+                      select: {
+                        id: true,
+                        roomCode: true,
+                        roomName: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            booth: {
+              include: {
+                room: {
+                  select: {
+                    id: true,
+                    roomCode: true,
+                    roomName: true,
+                  },
+                },
+              },
+            },
           },
           orderBy: {
             order: 'asc',
@@ -4009,5 +3959,388 @@ export class PrescriptionService {
     });
 
     return updatedPrescription;
+  }
+
+  /**
+   * Lấy danh sách bác sĩ/kỹ thuật viên khả dụng cho một dịch vụ (bao gồm cả người đang thực hiện)
+   * Chỉ trả về những người đang làm việc (WorkSession status = IN_PROGRESS)
+   * và có dịch vụ đó trong WorkSessionService
+   * Luôn bao gồm người đang thực hiện dịch vụ (nếu có) trong danh sách
+   */
+  async getAvailableAssigneesForService(
+    prescriptionId: string,
+    serviceId: string,
+  ) {
+    // Kiểm tra prescription tồn tại và lấy thông tin PrescriptionService
+    const prescription = await this.prisma.prescription.findUnique({
+      where: { id: prescriptionId },
+      include: {
+        services: {
+          where: { serviceId: serviceId },
+          include: {
+            doctor: {
+              include: {
+                auth: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+            technician: {
+              include: {
+                auth: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+            workSession: {
+              include: {
+                booth: {
+                  include: {
+                    room: {
+                      select: {
+                        id: true,
+                        roomCode: true,
+                        roomName: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            booth: {
+              include: {
+                room: {
+                  select: {
+                    id: true,
+                    roomCode: true,
+                    roomName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found');
+    }
+
+    // Kiểm tra service tồn tại
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { id: true },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    const now = new Date();
+
+    // Tìm các WorkSession đang IN_PROGRESS và có dịch vụ này
+    const workSessions = await this.prisma.workSession.findMany({
+      where: {
+        status: WorkSessionStatus.IN_PROGRESS,
+        startTime: { lte: now },
+        endTime: { gte: now },
+        services: {
+          some: {
+            serviceId: serviceId,
+          },
+        },
+      },
+      include: {
+        doctor: {
+          include: {
+            auth: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        technician: {
+          include: {
+            auth: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        booth: {
+          include: {
+            room: {
+              select: {
+                id: true,
+                roomCode: true,
+                roomName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Tạo danh sách bác sĩ và kỹ thuật viên khả dụng
+    const availableOptions: Array<{
+      type: 'doctor' | 'technician';
+      doctorId?: string;
+      doctorCode?: string;
+      doctorName?: string;
+      technicianId?: string;
+      technicianCode?: string;
+      name: string;
+      boothId: string | null;
+      boothCode: string | null;
+      boothName: string | null;
+      clinicRoomId: string | null;
+      clinicRoomCode: string | null;
+      clinicRoomName: string | null;
+      workSessionId: string | null;
+      workSessionStartTime: Date | null;
+      workSessionEndTime: Date | null;
+    }> = [];
+
+    // Set để tránh trùng lặp (key = doctorId hoặc technicianId)
+    const addedPersonIds = new Set<string>();
+
+    // Thêm người đang thực hiện dịch vụ (nếu có) vào đầu danh sách
+    const currentPrescriptionService = prescription.services.find(ps => ps.serviceId === serviceId);
+    if (currentPrescriptionService) {
+      if (currentPrescriptionService.doctorId && currentPrescriptionService.doctor) {
+        const ws = currentPrescriptionService.workSession;
+        availableOptions.push({
+          type: 'doctor',
+          doctorId: currentPrescriptionService.doctor.id,
+          doctorCode: currentPrescriptionService.doctor.doctorCode,
+          doctorName: currentPrescriptionService.doctor.auth?.name || '',
+          name: currentPrescriptionService.doctor.auth?.name || '',
+          boothId: ws?.boothId || currentPrescriptionService.boothId || null,
+          boothCode: ws?.booth?.name || null,
+          boothName: ws?.booth?.name || null,
+          clinicRoomId: ws?.booth?.room?.id || currentPrescriptionService.clinicRoomId || null,
+          clinicRoomCode: ws?.booth?.room?.roomCode || null,
+          clinicRoomName: ws?.booth?.room?.roomName || null,
+          workSessionId: ws?.id || null,
+          workSessionStartTime: ws?.startTime || null,
+          workSessionEndTime: ws?.endTime || null,
+        });
+        addedPersonIds.add(`doctor-${currentPrescriptionService.doctor.id}`);
+      }
+
+      if (currentPrescriptionService.technicianId && currentPrescriptionService.technician) {
+        const ws = currentPrescriptionService.workSession;
+        availableOptions.push({
+          type: 'technician',
+          technicianId: currentPrescriptionService.technician.id,
+          technicianCode: (currentPrescriptionService.technician as any).technicianCode || currentPrescriptionService.technician.id,
+          name: currentPrescriptionService.technician.auth?.name || '',
+          boothId: ws?.boothId || currentPrescriptionService.boothId || null,
+          boothCode: ws?.booth?.name || null,
+          boothName: ws?.booth?.name || null,
+          clinicRoomId: ws?.booth?.room?.id || currentPrescriptionService.clinicRoomId || null,
+          clinicRoomCode: ws?.booth?.room?.roomCode || null,
+          clinicRoomName: ws?.booth?.room?.roomName || null,
+          workSessionId: ws?.id || null,
+          workSessionStartTime: ws?.startTime || null,
+          workSessionEndTime: ws?.endTime || null,
+        });
+        addedPersonIds.add(`technician-${currentPrescriptionService.technician.id}`);
+      }
+    }
+
+    // Thêm các WorkSession đang IN_PROGRESS (tránh trùng với người đang thực hiện)
+    workSessions.forEach((ws) => {
+      if (ws.doctor && !addedPersonIds.has(`doctor-${ws.doctor.id}`)) {
+        availableOptions.push({
+          type: 'doctor',
+          doctorId: ws.doctor.id,
+          doctorCode: ws.doctor.doctorCode,
+          doctorName: ws.doctor.auth?.name || '',
+          name: ws.doctor.auth?.name || '',
+          boothId: ws.boothId,
+          boothCode: ws.booth?.name || null,
+          boothName: ws.booth?.name || null,
+          clinicRoomId: ws.booth?.room?.id || null,
+          clinicRoomCode: ws.booth?.room?.roomCode || null,
+          clinicRoomName: ws.booth?.room?.roomName || null,
+          workSessionId: ws.id,
+          workSessionStartTime: ws.startTime,
+          workSessionEndTime: ws.endTime,
+        });
+        addedPersonIds.add(`doctor-${ws.doctor.id}`);
+      }
+
+      if (ws.technician && !addedPersonIds.has(`technician-${ws.technician.id}`)) {
+        availableOptions.push({
+          type: 'technician',
+          technicianId: ws.technician.id,
+          technicianCode: (ws.technician as any).technicianCode || ws.technician.id,
+          name: ws.technician.auth?.name || '',
+          boothId: ws.boothId,
+          boothCode: ws.booth?.name || null,
+          boothName: ws.booth?.name || null,
+          clinicRoomId: ws.booth?.room?.id || null,
+          clinicRoomCode: ws.booth?.room?.roomCode || null,
+          clinicRoomName: ws.booth?.room?.roomName || null,
+          workSessionId: ws.id,
+          workSessionStartTime: ws.startTime,
+          workSessionEndTime: ws.endTime,
+        });
+        addedPersonIds.add(`technician-${ws.technician.id}`);
+      }
+    });
+
+    return availableOptions;
+  }
+
+  /**
+   * Lấy danh sách prescriptions với pagination và filters
+   */
+  async findAll(
+    user: JwtUserPayload,
+    page: string = '1',
+    limit: string = '10',
+    filters?: {
+      patientName?: string;
+      patientPhone?: string;
+      doctorId?: string;
+      status?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) {
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = Math.min(parseInt(limit, 10) || 10, 100);
+    const offset = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+
+    // Filter theo patientProfile (tên và số điện thoại)
+    if (filters?.patientName || filters?.patientPhone) {
+      where.patientProfile = {};
+      if (filters.patientName) {
+        where.patientProfile.name = {
+          contains: filters.patientName,
+          mode: 'insensitive',
+        };
+      }
+      if (filters.patientPhone) {
+        where.patientProfile.phone = {
+          contains: filters.patientPhone,
+        };
+      }
+    }
+
+    // Filter theo bác sĩ thực hiện (doctorId trong PrescriptionService)
+    if (filters?.doctorId) {
+      where.services = {
+        some: {
+          doctorId: filters.doctorId,
+        },
+      };
+    }
+
+    // Filter theo trạng thái
+    if (filters?.status) {
+      where.status = filters.status as PrescriptionStatus;
+    }
+
+    // Filter theo khoảng thời gian (createdAt)
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.createdAt = {};
+      if (filters.dateFrom) {
+        const dateFrom = new Date(filters.dateFrom);
+        dateFrom.setUTCHours(0, 0, 0, 0);
+        where.createdAt.gte = dateFrom;
+      }
+      if (filters.dateTo) {
+        const dateTo = new Date(filters.dateTo);
+        dateTo.setUTCHours(23, 59, 59, 999);
+        where.createdAt.lte = dateTo;
+      }
+    }
+
+    // Role-based filtering
+    if (user.role === 'DOCTOR' && user.doctor?.id) {
+      // Doctors can only see prescriptions assigned to them
+      where.OR = [
+        { doctorId: user.doctor.id },
+        {
+          services: {
+            some: {
+              doctorId: user.doctor.id,
+            },
+          },
+        },
+      ];
+    }
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.prescription.count({ where }),
+      this.prisma.prescription.findMany({
+        where,
+        include: {
+          services: {
+            include: {
+              service: {
+                select: {
+                  id: true,
+                  serviceCode: true,
+                  name: true,
+                },
+              },
+            },
+            orderBy: {
+              order: 'asc',
+            },
+          },
+          patientProfile: {
+            select: {
+              id: true,
+              profileCode: true,
+              name: true,
+            },
+          },
+          doctor: {
+            include: {
+              auth: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+          medicalRecord: {
+            select: {
+              id: true,
+              medicalRecordCode: true,
+            },
+          },
+        },
+        orderBy: {
+          id: 'desc',
+        },
+        take: limitNum,
+        skip: offset,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    };
   }
 }
