@@ -7,4 +7,5 @@ export * from './book-appointment.dto';
 export * from './book-appointment-response.dto';
 export * from './doctor-working-days.dto';
 export * from './patient-appointments.dto';
+export * from './doctor-appointments.dto';
 

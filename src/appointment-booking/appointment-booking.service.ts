@@ -20,6 +20,7 @@ import {
   PatientAppointmentsResponseDto,
   PatientAppointmentDto,
   PatientAppointmentServiceDto,
+  DoctorAppointmentsResponseDto,
 } from './dto';
 import { Role } from '../rbac/roles.enum';
 import { EmailService } from '../email/email.service';
@@ -1796,6 +1797,225 @@ export class AppointmentBookingService {
     return {
       totalAppointments: transformedAppointments.length,
       appointments: transformedAppointments,
+    };
+  }
+
+  /**
+   * Lấy danh sách lịch hẹn của bác sĩ với phân trang và thông tin chi tiết
+   */
+  async getDoctorAppointmentsPaginated(
+    doctorAuthId: string,
+    limit: number = 10,
+    offset: number = 0,
+    filters?: {
+      patientName?: string;
+      patientPhone?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      serviceId?: string;
+      status?: string;
+    },
+  ): Promise<DoctorAppointmentsResponseDto> {
+    // Tìm doctor bằng authId từ JWT
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { authId: doctorAuthId },
+      include: {
+        auth: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    // Xây dựng where clause với filters
+    const where: any = {
+      doctorId: doctor.id,
+    };
+
+    // Filter theo patientProfile (tên và số điện thoại)
+    if (filters?.patientName || filters?.patientPhone) {
+      where.patientProfile = {};
+      if (filters.patientName) {
+        where.patientProfile.name = {
+          contains: filters.patientName,
+          mode: 'insensitive',
+        };
+      }
+      if (filters.patientPhone) {
+        where.patientProfile.phone = {
+          contains: filters.patientPhone,
+        };
+      }
+    }
+
+    // Filter theo khoảng thời gian
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.date = {};
+      if (filters.dateFrom) {
+        const dateFrom = new Date(filters.dateFrom);
+        dateFrom.setUTCHours(0, 0, 0, 0);
+        where.date.gte = dateFrom;
+      }
+      if (filters.dateTo) {
+        const dateTo = new Date(filters.dateTo);
+        dateTo.setUTCHours(23, 59, 59, 999);
+        where.date.lte = dateTo;
+      }
+    }
+
+    // Filter theo dịch vụ (có thể là serviceId chính hoặc trong appointmentServices)
+    if (filters?.serviceId) {
+      where.OR = [
+        { serviceId: filters.serviceId },
+        {
+          appointmentServices: {
+            some: {
+              serviceId: filters.serviceId,
+            },
+          },
+        },
+      ];
+    }
+
+    // Filter theo trạng thái
+    if (filters?.status) {
+      where.status = filters.status;
+    }
+
+    // Đếm tổng số appointments với filters
+    const total = await this.prisma.appointment.count({ where });
+
+    // Lấy appointments với phân trang và filters
+    const appointments = await this.prisma.appointment.findMany({
+      where,
+      include: {
+        patientProfile: true,
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            serviceCode: true,
+            price: true,
+            durationMinutes: true,
+          },
+        },
+        appointmentServices: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                name: true,
+                serviceCode: true,
+                price: true,
+                durationMinutes: true,
+              },
+            },
+          },
+        },
+        workSession: {
+          select: {
+            id: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
+      orderBy: {
+        date: 'desc',
+      },
+      take: limit,
+      skip: offset,
+    });
+
+    const transformedAppointments: PatientAppointmentDto[] = appointments.map(
+      (apt) => {
+        const services: PatientAppointmentServiceDto[] =
+          apt.appointmentServices.map((as) => ({
+            serviceId: as.service.id,
+            serviceName: as.service.name,
+            serviceCode: as.service.serviceCode,
+            price: as.service.price,
+            timePerPatient: as.service.durationMinutes ?? 15,
+          }));
+
+        if (services.length === 0 && apt.service) {
+          services.push({
+            serviceId: apt.service.id,
+            serviceName: apt.service.name,
+            serviceCode: apt.service.serviceCode,
+            price: apt.service.price,
+            timePerPatient: apt.service.durationMinutes ?? 15,
+          });
+        }
+
+        // Tính toán age từ dateOfBirth
+        let age: number | undefined;
+        if (apt.patientProfile.dateOfBirth) {
+          const birthDate = new Date(apt.patientProfile.dateOfBirth);
+          const today = new Date();
+          age = today.getFullYear() - birthDate.getFullYear();
+          const monthDiff = today.getMonth() - birthDate.getMonth();
+          if (
+            monthDiff < 0 ||
+            (monthDiff === 0 && today.getDate() < birthDate.getDate())
+          ) {
+            age--;
+          }
+        }
+
+        return {
+          appointmentId: apt.id,
+          appointmentCode: apt.appointmentCode,
+          patientProfileCode: apt.patientProfile.profileCode,
+          patientProfile: {
+            id: apt.patientProfile.id,
+            profileCode: apt.patientProfile.profileCode,
+            name: apt.patientProfile.name,
+            age: age,
+            gender: apt.patientProfile.gender,
+            dateOfBirth: apt.patientProfile.dateOfBirth
+              ? apt.patientProfile.dateOfBirth.toISOString().split('T')[0]
+              : undefined,
+            phone: apt.patientProfile.phone || undefined,
+            isPregnant: apt.patientProfile.isPregnant ?? undefined,
+            isDisabled: apt.patientProfile.isDisabled ?? undefined,
+          },
+          doctorId: apt.doctorId,
+          doctorName: doctor.auth.name,
+          specialtyId: apt.specialtyId,
+          specialtyName: apt.specialty.name,
+          date: apt.date.toISOString().split('T')[0],
+          startTime: apt.startTime,
+          endTime: apt.endTime,
+          status: apt.status,
+          services: services,
+          createdAt: apt.date.toISOString(),
+        };
+      },
+    );
+
+    return {
+      doctorId: doctor.id,
+      doctorName: doctor.auth.name,
+      totalAppointments: total,
+      appointments: transformedAppointments,
+      meta: {
+        total,
+        limit,
+        offset,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 

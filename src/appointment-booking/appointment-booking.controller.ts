@@ -311,6 +311,68 @@ export class AppointmentBookingController {
   }
 
   /**
+   * Lấy danh sách lịch hẹn của bác sĩ với phân trang và thông tin chi tiết
+   * GET /appointment-booking/doctor/my-appointments?limit=10&offset=0&patientName=...&patientPhone=...&dateFrom=...&dateTo=...&serviceId=...&status=...
+   */
+  @Get('doctor/my-appointments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.DOCTOR)
+  async getDoctorMyAppointments(
+    @Req() req: any,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('patientName') patientName?: string,
+    @Query('patientPhone') patientPhone?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('serviceId') serviceId?: string,
+    @Query('status') status?: string,
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const doctorAuthId = req.user.id; // Auth ID từ JWT
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    const offsetNum = offset ? parseInt(offset, 10) : 0;
+
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+      throw new BadRequestException('Limit must be between 1 and 100');
+    }
+
+    if (isNaN(offsetNum) || offsetNum < 0) {
+      throw new BadRequestException('Offset must be >= 0');
+    }
+
+    // Validate date formats if provided
+    if (dateFrom) {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(dateFrom)) {
+        throw new BadRequestException('dateFrom must be in YYYY-MM-DD format');
+      }
+    }
+
+    if (dateTo) {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(dateTo)) {
+        throw new BadRequestException('dateTo must be in YYYY-MM-DD format');
+      }
+    }
+
+    const filters: any = {};
+    if (patientName) filters.patientName = patientName;
+    if (patientPhone) filters.patientPhone = patientPhone;
+    if (dateFrom) filters.dateFrom = dateFrom;
+    if (dateTo) filters.dateTo = dateTo;
+    if (serviceId) filters.serviceId = serviceId;
+    if (status) filters.status = status;
+
+    return this.appointmentBookingService.getDoctorAppointmentsPaginated(
+      doctorAuthId,
+      limitNum,
+      offsetNum,
+      Object.keys(filters).length > 0 ? filters : undefined,
+    );
+  }
+
+  /**
    * Đặt lịch khám bệnh
    * POST /appointment-booking/appointments
    */
