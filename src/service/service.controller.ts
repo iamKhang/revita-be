@@ -43,6 +43,7 @@ import {
   ServiceLocationQueryDto,
   UpsertServicePromotionDto,
   ServicePromotionQueryDto,
+  PatientServiceHistoryQueryDto,
 } from './dto';
 import { JwtAuthGuard } from '../login/jwt-auth.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -1021,6 +1022,113 @@ Tìm các dịch vụ có cùng booth/phòng với các dịch vụ tham chiếu
       }
       throw new HttpException(
         'Lỗi khi lấy danh sách chờ của phòng',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('patient-history/:patientProfileId')
+  @ApiOperation({
+    summary: 'Lấy lịch sử khám bệnh của bệnh nhân',
+    description: `
+Lấy danh sách các dịch vụ đã hoàn thành (status = COMPLETED) của bệnh nhân.
+- Chỉ hiển thị các dịch vụ đã bắt đầu (startedAt không null)
+- Sắp xếp theo startedAt DESC (mới nhất trước)
+- Hỗ trợ filter theo:
+  - specialtyId: Lọc theo khoa của dịch vụ
+  - doctorId: Lọc theo bác sĩ thực hiện
+  - technicianId: Lọc theo kỹ thuật viên thực hiện
+    `,
+  })
+  @ApiParam({
+    name: 'patientProfileId',
+    description: 'ID của bệnh nhân',
+    example: 'uuid-patient-profile-id',
+  })
+  @ApiQuery({
+    name: 'specialtyId',
+    description: 'Lọc theo khoa (tùy chọn)',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'doctorId',
+    description: 'Lọc theo bác sĩ thực hiện (tùy chọn)',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'technicianId',
+    description: 'Lọc theo kỹ thuật viên thực hiện (tùy chọn)',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Số lượng items per page',
+    required: false,
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'offset',
+    description: 'Số lượng items để skip',
+    required: false,
+    example: 0,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy lịch sử khám bệnh thành công',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            services: {
+              type: 'array',
+              items: { type: 'object' },
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                limit: { type: 'number' },
+                offset: { type: 'number' },
+                hasMore: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getPatientServiceHistory(
+    @Param('patientProfileId') patientProfileId: string,
+    @Query() query: PatientServiceHistoryQueryDto,
+  ) {
+    try {
+      const result = await this.serviceService.getPatientServiceHistory(
+        patientProfileId,
+        query,
+      );
+      return {
+        success: true,
+        message: 'Lấy lịch sử khám bệnh thành công',
+        data: result,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Get patient service history error: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Có lỗi xảy ra khi lấy lịch sử khám bệnh',
+          error: error.message,
+        },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

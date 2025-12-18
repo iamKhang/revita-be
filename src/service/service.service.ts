@@ -3,7 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, PrescriptionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ServiceManagementQueryDto,
@@ -16,6 +16,7 @@ import {
   ServiceLocationQueryDto,
   UpsertServicePromotionDto,
   ServicePromotionQueryDto,
+  PatientServiceHistoryQueryDto,
 } from './dto';
 
 type DoctorServiceQueryOptions = {
@@ -1806,6 +1807,104 @@ export class ServiceService {
       })),
       pagination: this.buildPagination(total, limit, offset),
       keyword: searchTerm,
+    };
+  }
+
+  /**
+   * Lấy lịch sử khám bệnh của bệnh nhân (danh sách PrescriptionService đã hoàn thành)
+   * @param patientProfileId ID của bệnh nhân
+   * @param query Query parameters với filters
+   * @returns Danh sách PrescriptionService đã hoàn thành, sắp xếp theo startedAt DESC
+   */
+  async getPatientServiceHistory(
+    patientProfileId: string,
+    query: PatientServiceHistoryQueryDto,
+  ) {
+    const { specialtyId, doctorId, technicianId, limit = 20, offset = 0 } = query;
+
+    // Build where clause
+    const where: Prisma.PrescriptionServiceWhereInput = {
+      prescription: {
+        patientProfileId,
+      },
+      status: PrescriptionStatus.COMPLETED, // Chỉ lấy các dịch vụ đã hoàn thành
+      startedAt: {
+        not: null, // Chỉ lấy các dịch vụ đã bắt đầu
+      },
+    };
+
+    // Filter by specialty (through Service)
+    if (specialtyId) {
+      where.service = {
+        specialtyId,
+      };
+    }
+
+    // Filter by doctor
+    if (doctorId) {
+      where.doctorId = doctorId;
+    }
+
+    // Filter by technician
+    if (technicianId) {
+      where.technicianId = technicianId;
+    }
+
+    // Query with includes
+    const [prescriptionServices, total] = await Promise.all([
+      this.prisma.prescriptionService.findMany({
+        where,
+        include: {
+          service: {
+            include: {
+              specialty: {
+                select: {
+                  id: true,
+                  name: true,
+                  specialtyCode: true,
+                },
+              },
+            },
+          },
+          doctor: {
+            include: {
+              auth: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          technician: {
+            include: {
+              auth: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          prescription: {
+            select: {
+              id: true,
+              prescriptionCode: true,
+            },
+          },
+        },
+        orderBy: {
+          startedAt: 'desc', // Sắp xếp theo startedAt DESC
+        },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.prescriptionService.count({ where }),
+    ]);
+
+    return {
+      services: prescriptionServices,
+      pagination: this.buildPagination(total, limit, offset),
     };
   }
 }
